@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "velync"
+  },
+  "targets": {},
+  "etags": {
+    "velync": {
+      "extensionInstances": {
+        "firestore-send-email": "061c629c704b4fa652f6c15f4c0ad7ae6736938e540c3dc585431837d528be78"
+      }
+    }
+  }
+}

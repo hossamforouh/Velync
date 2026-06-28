@@ -1,0 +1,24 @@
+require('dotenv').config();
+
+const config = {
+  port: parseInt(process.env.PORT, 10) || 8080,
+  logLevel: process.env.LOG_LEVEL || 'info',
+  encryptionKey: process.env.ENCRYPTION_KEY,
+  notionToken: process.env.NOTION_INTEGRATION_TOKEN,
+  notionDatabaseId: process.env.NOTION_DATABASE_ID,
+  ticktick: {
+    clientId: process.env.TICKTICK_CLIENT_ID,
+    clientSecret: process.env.TICKTICK_CLIENT_SECRET,
+    accessToken: process.env.TICKTICK_ACCESS_TOKEN,
+    username: process.env.TICKTICK_USERNAME,
+    password: process.env.TICKTICK_PASSWORD,
+    cookie: process.env.TICKTICK_COOKIE,
+  },
+  firebase: {
+    projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  },
+  isCloudRun: !!process.env.PORT,
+  nodeEnv: process.env.NODE_ENV || 'development',
+};
+
+module.exports = config;

@@ -1,0 +1,17 @@
+{
+  "name": "Velync",
+  "short_name": "Velync",
+  "description": "Your apps, perfectly synchronized. Route data instantly between your favorite tools.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0c29",
+  "theme_color": "#0f0c29",
+  "icons": [
+    {
+      "src": "velync-icon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

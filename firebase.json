@@ -1,0 +1,45 @@
+{
+  "hosting": {
+    "public": "dashboard/public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**/*",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/auth-callback.html",
+        "destination": "/auth-callback.html"
+      },
+      {
+        "source": "/privacy.html",
+        "destination": "/privacy.html"
+      },
+      {
+        "source": "/google7d74775a46a2ed27.html",
+        "destination": "/google7d74775a46a2ed27.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "extensions": {
+    "firestore-send-email": "firebase/firestore-send-email@0.2.9"
+  }
+}

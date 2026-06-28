@@ -1,0 +1,20 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "sync_configs",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "enabled", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sync_configs",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "enabled", "order": "ASCENDING" },
+        { "fieldPath": "cronSchedule", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy | Velync</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', -apple-system, sans-serif;
+      background: #0F0F1A;
+      color: #E2E4F0;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: #E2E4F0;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 1.3rem;
+      margin-bottom: 24px;
+    }
+    .logo svg { flex-shrink: 0; }
+    h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #818CF8, #06B6D4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    .effective-date {
+      font-size: 0.9rem;
+      color: rgba(229, 233, 240, 0.5);
+    }
+    .toc {
+      background: rgba(129, 140, 248, 0.05);
+      border: 1px solid rgba(129, 140, 248, 0.15);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+    .toc h2 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(229, 233, 240, 0.4);
+      margin-bottom: 12px;
+    }
+    .toc ol {
+      list-style: none;
+      counter-reset: toc;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .toc li {
+      counter-increment: toc;
+      font-size: 0.9rem;
+    }
+    .toc li::before {
+      content: counter(toc) ". ";
+      color: #818CF8;
+      font-weight: 600;
+    }
+    .toc a {
+      color: #818CF8;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .toc a:hover { color: #A5B4FC; text-decoration: underline; }
+    section {
+      margin-bottom: 36px;
+    }
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #E2E4F0;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #C8CCE0;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+    p { margin-bottom: 12px; color: rgba(229, 233, 240, 0.8); font-size: 0.95rem; }
+    ul, ol { margin-bottom: 12px; padding-left: 20px; color: rgba(229, 233, 240, 0.8); font-size: 0.95rem; }
+    li { margin-bottom: 4px; }
+    strong { color: #E2E4F0; }
+    a { color: #818CF8; }
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 48px;
+      color: rgba(229, 233, 240, 0.5);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .back:hover { color: #818CF8; }
+    address { font-style: normal; color: rgba(229, 233, 240, 0.8); font-size: 0.95rem; }
+    /* Responsive: Fluid h1 title */
+    h1 { font-size: clamp(1.25rem, 5vw, 2rem); }
+    @media (max-width: 600px) {
+      .page { padding: 24px 16px 60px; }
+    }
+    /* Responsive: Small phones */
+    @media (max-width: 480px) {
+      .page { padding: 16px 12px 48px; }
+      h1 { font-size: 1.4rem; }
+      h2 { font-size: 1.1rem; }
+    }
+    /* Responsive: Minimum supported width */
+    @media (max-width: 320px) {
+      .page { padding: 12px 8px 40px; }
+      h1 { font-size: 1.2rem; }
+      h2 { font-size: 1rem; }
+      body { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <a href="/" class="logo">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="url(#g)"/>
+          <path d="M10 16l4 4 8-8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#818CF8"/><stop offset="1" stop-color="#06B6D4"/></linearGradient></defs>
+        </svg>
+        Velync
+      </a>
+      <h1>Privacy Policy</h1>
+      <p class="effective-date">Last updated: June 24, 2026</p>
+    </header>
+
+    <div class="toc">
+      <h2>Table of Contents</h2>
+      <ol>
+        <li><a href="#info">Information We Collect</a></li>
+        <li><a href="#use">How We Use Your Information</a></li>
+        <li><a href="#share">How We Share Your Information</a></li>
+        <li><a href="#data">Data Retention & Deletion</a></li>
+        <li><a href="#security">Security</a></li>
+        <li><a href="#third">Third-Party Services</a></li>
+        <li><a href="#rights">Your Rights</a></li>
+        <li><a href="#cookies">Cookies</a></li>
+        <li><a href="#changes">Changes to This Policy</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ol>
+    </div>
+
+    <section id="info">
+      <h2>1. Information We Collect</h2>
+      <p>Velync collects information to provide and improve our integration platform. When you use our service, we collect:</p>
+      <h3>Account Information</h3>
+      <p>When you sign up, we collect your email address, display name, and authentication credentials (handled securely via Firebase Authentication).</p>
+      <h3>Integration Data</h3>
+      <p>To perform syncs between your connected platforms, we temporarily access and process data through the OAuth tokens you authorize. This includes reading, writing, and syncing records such as tasks, contacts, notes, or other entities you choose to integrate. We do not store the full content of your records beyond what is necessary to perform the sync.</p>
+      <h3>OAuth Credentials</h3>
+      <p>When you connect a third-party platform (e.g., Google Contacts, TickTick, Notion), we store encrypted OAuth tokens to maintain the connection. These tokens are stored securely in Firestore and are used solely to facilitate the integrations you configure.</p>
+      <h3>Usage Data</h3>
+      <p>We collect anonymous usage statistics such as sync frequency, error rates, and feature usage to improve the platform. This data does not contain personal information.</p>
+    </section>
+
+    <section id="use">
+      <h2>2. How We Use Your Information</h2>
+      <p>We use your information solely to:</p>
+      <ul>
+        <li>Operate, maintain, and improve the Velync platform</li>
+        <li>Execute the sync configurations you create between your connected platforms</li>
+        <li>Send service-related communications (e.g., sync failure alerts, policy updates)</li>
+        <li>Provide customer support and troubleshoot issues</li>
+        <li>Prevent abuse, fraud, or unauthorized access</li>
+      </ul>
+      <p>We never use your data for advertising, profiling, or any purpose unrelated to the operation of the integration service.</p>
+    </section>
+
+    <section id="share">
+      <h2>3. How We Share Your Information</h2>
+      <p>We do not sell your personal information. We share your data only in the following circumstances:</p>
+      <ul>
+        <li><strong>With your consent</strong> — When you authorize a sync between platforms, data flows directly between those platforms according to your configuration.</li>
+        <li><strong>Service providers</strong> — We use Firebase (Google Cloud Platform) as our infrastructure provider. They process data in accordance with their DPA and are GDPR-compliant.</li>
+        <li><strong>Legal requirements</strong> — If required by law, court order, or governmental regulation.</li>
+      </ul>
+    </section>
+
+    <section id="data">
+      <h2>4. Data Retention & Deletion</h2>
+      <p>We retain your data only as long as your account is active. Specifically:</p>
+      <ul>
+        <li><strong>Account data</strong> — Retained until you delete your account.</li>
+        <li><strong>Sync configurations</strong> — Retained until deleted by you or when your account is deleted.</li>
+        <li><strong>Execution logs</strong> — Retained for 90 days for debugging and monitoring purposes.</li>
+        <li><strong>OAuth tokens</strong> — Retained until you revoke the connection or delete your account.</li>
+      </ul>
+      <p>You can delete your account and all associated data at any time. Contact us and we will process the deletion within 30 days.</p>
+    </section>
+
+    <section id="security">
+      <h2>5. Security</h2>
+      <p>We implement industry-standard security measures to protect your data:</p>
+      <ul>
+        <li>All data transmitted via TLS 1.3 encryption</li>
+        <li>OAuth tokens encrypted at rest in Firestore</li>
+        <li>Authentication handled by Firebase Auth (Google Cloud)</li>
+        <li>Regular security audits and dependency updates</li>
+        <li>Minimal data access principle — we only access data required to perform the sync</li>
+      </ul>
+    </section>
+
+    <section id="third">
+      <h2>6. Third-Party Services</h2>
+      <p>Velync integrates with third-party platforms you explicitly authorize. Each third party has its own privacy policy governing how they handle your data:</p>
+      <ul>
+        <li><strong>Google</strong> — <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a></li>
+        <li><strong>TickTick</strong> — <a href="https://ticktick.com/about/privacy" target="_blank">TickTick Privacy Policy</a></li>
+        <li><strong>Notion</strong> — <a href="https://www.notion.so/privacy" target="_blank">Notion Privacy Policy</a></li>
+      </ul>
+      <p>We are not responsible for the privacy practices of these third-party services. You should review their policies before connecting them to Velync.</p>
+    </section>
+
+    <section id="rights">
+      <h2>7. Your Rights</h2>
+      <p>Depending on your jurisdiction, you may have the following rights regarding your personal data:</p>
+      <ul>
+        <li><strong>Right to access</strong> — Request a copy of the data we hold about you.</li>
+        <li><strong>Right to rectification</strong> — Correct inaccurate or incomplete data.</li>
+        <li><strong>Right to erasure</strong> — Request deletion of your data.</li>
+        <li><strong>Right to data portability</strong> — Receive your data in a structured, machine-readable format.</li>
+        <li><strong>Right to withdraw consent</strong> — Revoke OAuth tokens at any time.</li>
+      </ul>
+      <p>To exercise any of these rights, contact us using the information below.</p>
+    </section>
+
+    <section id="cookies">
+      <h2>8. Cookies</h2>
+      <p>Velync uses minimal cookies essential for authentication and platform functionality. We do not use tracking cookies, analytics cookies, or third-party advertising cookies. Firebase Authentication uses session cookies to maintain your login state.</p>
+    </section>
+
+    <section id="changes">
+      <h2>9. Changes to This Policy</h2>
+      <p>We may update this Privacy Policy from time to time. Material changes will be communicated via email or through the platform. Continued use of Velync after changes constitutes acceptance of the updated policy.</p>
+    </section>
+
+    <section id="contact">
+      <h2>10. Contact</h2>
+      <p>If you have questions about this Privacy Policy or wish to exercise your data rights, please contact us:</p>
+      <address>
+        Velync<br>
+        Email: <a href="mailto:privacy@velync.io">privacy@velync.io</a>
+      </address>
+    </section>
+
+    <a href="/" class="back">&larr; Return to Velync</a>
+  </div>
+</body>
+</html>

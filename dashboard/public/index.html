@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Favicons with Cache Busting for Safari -->
+  <link rel="icon" type="image/png" href="velync-logo.png?v=2" />
+  <link rel="apple-touch-icon" href="velync-logo.png?v=2" />
+  <link rel="mask-icon" href="velync-logo.svg?v=2" color="#4F46E5" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f0c29" />
+
+  <!-- Preconnect to critical origins -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+  <link rel="dns-prefetch" href="https://unpkg.com" />
+  <link rel="dns-prefetch" href="https://www.gstatic.com" />
+
+  <!-- Meta & Open Graph Tags -->
+  <title>Velync — The Future of Integration</title>
+  <meta name="description"
+    content="Your apps, perfectly synchronized. Route data instantly between your favorite tools to create a flawless, automated ecosystem—zero coding required." />
+  <meta property="og:title" content="Velync — The Future of Integration" />
+  <meta property="og:description"
+    content="Your apps, perfectly synchronized. Route data instantly between your favorite tools to create a flawless, automated ecosystem—zero coding required." />
+  <meta property="og:image" content="https://velync.web.app/velync-logo.png" />
+  <meta property="og:url" content="https://velync.web.app/" />
+  <meta property="og:type" content="website" />
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="responsive.css?v=2" />
+  <script>
+    window.VELYNC_CONFIG = {
+      apiBase: window.VELYNC_API_URL || 'https://velync-backend-632548720073.us-central1.run.app',
+      projectId: 'velync',
+    };
+    (function() {
+      var KEY = 'message channel closed';
+      function handler(e) {
+        try {
+          var m = (e.reason && e.reason.message) || String(e.reason || '');
+          if (m.indexOf(KEY) !== -1) e.preventDefault();
+        } catch(_) {}
+      }
+      window.addEventListener('unhandledrejection', handler);
+      window.onunhandledrejection = handler;
+    })();
+  </script>
+</head>
+
+<body>
+
+  <!-- ── Landing Page ───────────────────────────────────────── -->
+  <div class="landing-page" id="auth-overlay" style="display: none;">
+    <!-- Animated background orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="landing-content">
+      <div class="landing-main">
+        <!-- Marketing Section -->
+        <div class="landing-marketing">
+          <div class="landing-logo-container">
+            <div class="landing-logo" style="background: transparent; border: none; padding: 0;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" style="width: 100%; height: 100%;"><defs><linearGradient id="icon-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#88C0D0" /><stop offset="100%" stop-color="#81A1C1" /></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#icon-grad)" /><path d="M8 9l8 14 8-14" stroke="#1A1D24" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <span class="landing-brand">Velync</span>
+          </div>
+          <h1 class="landing-title">The Future of<br /><span class="text-gradient">Integration</span></h1>
+          <p class="landing-subtitle">Your apps, perfectly synchronized. Route data instantly between your favorite tools
+            to create a flawless, automated ecosystem—zero coding required.</p>
+
+          <div class="landing-features">
+            <div class="feature-item">
+              <div class="feature-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                  stroke="url(#feature-grad-1)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <defs>
+                    <linearGradient id="feature-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#818CF8" />
+                      <stop offset="100%" stop-color="#06B6D4" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+              </div>
+              <div>
+                <h3>Real-Time Sync</h3>
+                <p>Instant bidirectional updates between your tools.</p>
+              </div>
+            </div>
+            <div class="feature-item">
+              <div class="feature-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                  stroke="url(#feature-grad-2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <defs>
+                    <linearGradient id="feature-grad-2" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#A78BFA" />
+                      <stop offset="100%" stop-color="#818CF8" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2-1 4-2 7-2 2.89 0 4.7 1.14 6.81 2.05A1 1 0 0 1 20 6Z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </div>
+              <div>
+                <h3>Enterprise Security</h3>
+                <p>Your data stays yours with secure isolation and granular permissions.</p>
+              </div>
+            </div>
+            <div class="feature-item">
+              <div class="feature-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                  stroke="url(#feature-grad-3)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <defs>
+                    <linearGradient id="feature-grad-3" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#818CF8" />
+                      <stop offset="100%" stop-color="#6366F1" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+                  <path
+                    d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+                  <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+                  <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+                </svg>
+              </div>
+              <div>
+                <h3>Effortless Setup</h3>
+                <p>Connect your apps and map your data fields in seconds.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="social-proof" style="margin-top: 32px; display: flex; align-items: center; gap: 12px;">
+            <div class="avatars" style="display: flex;">
+              <div
+                style="width: 24px; height: 24px; border-radius: 50%; background: #4F46E5; display: flex; align-items: center; justify-content: center; font-size: 10px; border: 2px solid #0f0c29; z-index: 3;">
+                A</div>
+              <div
+                style="width: 24px; height: 24px; border-radius: 50%; background: #06B6D4; display: flex; align-items: center; justify-content: center; font-size: 10px; border: 2px solid #0f0c29; z-index: 2; margin-left: -8px;">
+                M</div>
+              <div
+                style="width: 24px; height: 24px; border-radius: 50%; background: #EC4899; display: flex; align-items: center; justify-content: center; font-size: 10px; border: 2px solid #0f0c29; z-index: 1; margin-left: -8px;">
+                J</div>
+            </div>
+            <span style="font-size: 14px; color: var(--text-2);">Syncing 10,000+ tasks daily</span>
+          </div>
+
+          <!-- Data Usage Transparency — required for Google OAuth verification -->
+          <div class="data-transparency">
+            <div class="transparency-icon"><i data-feather="lock"></i></div>
+            <div>
+              <strong>How we use your data:</strong> Velync requests access solely to sync your data between the platforms you connect (e.g., Google Contacts, TickTick, Notion). We never store your data permanently, never share it with third parties, and never use it for advertising. You can revoke access at any time.
+            </div>
+          </div>
+        </div>
+
+        <!-- Auth Section -->
+        <div class="landing-auth">
+          <div class="auth-glass-box">
+            <h2 id="auth-box-title">Welcome Back</h2>
+            <p id="auth-box-subtitle">Sign in to manage your workspace.</p>
+
+            <form id="auth-form" class="auth-form" onsubmit="return false;">
+              <div class="form-group">
+                <label for="auth-email">Email Address</label>
+                <input type="email" id="auth-email" placeholder="you@example.com" required autocomplete="email" />
+              </div>
+              <div class="form-group" id="auth-password-group">
+                <label for="auth-password">Password</label>
+                <input type="password" id="auth-password" placeholder="8+ characters" required
+                  autocomplete="current-password" minlength="8" />
+              </div>
+              <div id="forgot-password-link" class="forgot-password-container">
+                <a href="#" class="forgot-password-link">Forgot Password?</a>
+              </div>
+              <button type="submit" class="btn btn-primary btn-auth" id="btn-auth-submit">
+                Sign In
+              </button>
+            </form>
+
+            <div class="auth-divider" id="auth-divider">
+              <span>or</span>
+            </div>
+
+            <button class="btn btn-secondary btn-auth-google" id="btn-login" type="button">
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="18"
+                height="18" />
+              Continue with Google
+            </button>
+
+            <div id="auth-error" class="auth-error-msg" style="display: none;"></div>
+
+            <div class="auth-toggle">
+              <span id="auth-toggle-text">Don't have an account?</span>
+              <a href="#" id="auth-toggle-link">Sign Up</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Landing Footer — inside landing-content so normal flow applies -->
+      <footer class="landing-footer">
+        <div class="landing-footer-inner">
+          <span class="landing-footer-brand">© 2026 Velync</span>
+          <a href="/privacy.html" class="landing-footer-link" target="_blank">Privacy Policy</a>
+        </div>
+      </footer>
+    </div>
+  <!-- WhatsApp Support FAB -->
+  <a href="https://wa.me/201018988989" id="whatsapp-fab-link" target="_blank" class="whatsapp-fab"
+    aria-label="Chat with Support on WhatsApp">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+      <path
+        d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.82 9.82 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+    </svg>
+  </a>
+</div>
+
+  <!-- ── Platform Shell ─────────────────────────────────────── -->
+  <div class="platform-shell" id="app-container" style="display: flex;">
+
+    <!-- ── Top Bar ─────────────────────────────────────────── -->
+    <div class="top-bar" id="top-bar">
+      <div class="top-bar-brand">
+        <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="top-bar-logo" style="background: transparent; border: none; padding: 0;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" style="width: 100%; height: 100%;"><defs><linearGradient id="icon-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#88C0D0" /><stop offset="100%" stop-color="#81A1C1" /></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#icon-grad)" /><path d="M8 9l8 14 8-14" stroke="#1A1D24" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="top-bar-title">Velync</div>
+      </div>
+
+      <div class="top-bar-center">
+        <div class="top-bar-workspace-picker">
+          <select id="workspace-selector" title="Switch Workspace" style="display: none;"></select>
+        </div>
+      </div>
+
+      <div class="top-bar-actions">
+        <!-- User Avatar Dropdown -->
+        <div class="user-avatar-container" id="user-avatar-container">
+          <div class="user-avatar" id="user-avatar" role="button" tabindex="0">
+            <!-- Initials will be injected here -->
+          </div>
+          <div class="avatar-dropdown" id="avatar-dropdown">
+            <div class="dropdown-header">
+              <span id="dropdown-user-email" class="dropdown-email"></span>
+            </div>
+            <div class="dropdown-divider"></div>
+            <a href="#" class="dropdown-item" id="menu-settings">
+              <span class="icon"><i data-feather="settings"></i></span> Settings
+            </a>
+            <div class="dropdown-divider"></div>
+            <a href="#" class="dropdown-item text-danger" id="btn-logout">
+              <span class="icon">🚪</span> Log Out
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Platform Body: Sidebar + Content Area ──────────── -->
+    <div class="platform-body">
+      <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+      <!-- ── Left Sidebar ──────────────────────────────────── -->
+      <nav class="sidebar" id="sidebar" role="navigation" aria-label="Main Navigation">
+        <div class="sidebar-section-label">PLATFORM</div>
+        <a class="nav-item active" id="nav-flows" data-view="flows" role="button" tabindex="0">
+          <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              class="feather feather-zap">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg></span>
+          <span class="nav-label">Active Flows</span>
+        </a>
+        <a class="nav-item" id="nav-connections" data-view="connections" role="button" tabindex="0">
+          <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              class="feather feather-link">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg></span>
+          <span class="nav-label">Connections</span>
+        </a>
+        <a class="nav-item" id="nav-logs" data-view="logs" role="button" tabindex="0">
+          <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              class="feather feather-terminal">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg></span>
+          <span class="nav-label">Exec Logs</span>
+        </a>
+        <a class="nav-item" id="nav-hub" data-view="hub" role="button" tabindex="0">
+          <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              class="feather feather-grid">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg></span>
+          <span class="nav-label">Marketplace</span>
+        </a>
+
+        <!-- Workspace selector moved to top bar -->
+        <div id="admin-sidebar-section" style="display: none;">
+          <div class="sidebar-divider"></div>
+          <div class="sidebar-section-label">SUPERADMIN</div>
+          <a class="nav-item" id="nav-admin" data-view="admin" role="button" tabindex="0">
+            <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="feather feather-settings">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
+              </svg></span>
+            <span class="nav-label">Admin Panel</span>
+          </a>
+        </div>
+      </nav>
+
+      <!-- ── Content Area ──────────────────────────────────── -->
+      <main class="content-area" id="content-area">
+
+        <!-- ═══════════════════════════════════════════════════
+             VIEW: Marketplace
+        ════════════════════════════════════════════════════ -->
+        <section class="view-panel" id="view-hub" style="display: none;" aria-label="Marketplace">
+          <div class="hub-hero">
+            <div class="hub-hero-text">
+              <h1 class="section-title" style="display: flex; align-items: center; gap: 12px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Marketplace
+              </h1>
+              <p class="hub-hero-sub">
+                Browse and manage your integrations. Each integration connects two platforms
+                and syncs data automatically on your configured schedule.
+              </p>
+            </div>
+          </div>
+          
+          <div id="marketplace-grid" class="hub-grid">
+            <!-- SKELETON LOADERS -->
+            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
+                <div style="flex: 1;">
+                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
+                  <div class="skeleton-line short" style="height: 14px;"></div>
+                </div>
+              </div>
+              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
+              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
+                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+              </div>
+            </div>
+            
+            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
+                <div style="flex: 1;">
+                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
+                  <div class="skeleton-line short" style="height: 14px;"></div>
+                </div>
+              </div>
+              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
+              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
+                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+              </div>
+            </div>
+            
+            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
+                <div style="flex: 1;">
+                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
+                  <div class="skeleton-line short" style="height: 14px;"></div>
+                </div>
+              </div>
+              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
+              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
+                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+              </div>
+            </div>
+            
+            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
+                <div style="flex: 1;">
+                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
+                  <div class="skeleton-line short" style="height: 14px;"></div>
+                </div>
+              </div>
+              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
+              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
+                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+              </div>
+            </div>
+            
+            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
+                <div style="flex: 1;">
+                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
+                  <div class="skeleton-line short" style="height: 14px;"></div>
+                </div>
+              </div>
+              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
+              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
+                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+              </div>
+            </div>
+            
+            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
+                <div style="flex: 1;">
+                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
+                  <div class="skeleton-line short" style="height: 14px;"></div>
+                </div>
+              </div>
+              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
+              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
+                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+              </div>
+            </div>
+            <!-- END SKELETON LOADERS -->
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             VIEW: Integration Setup
+        ════════════════════════════════════════════════════ -->
+        <section class="view-panel" id="view-integration-setup" style="display: none;" aria-label="Integration Setup">
+          <div class="setup-page">
+            <div class="setup-hero">
+              <div class="setup-hero-badge">New Configuration</div>
+              <h1 class="setup-hero-title" id="setup-integration-name">Integration Setup</h1>
+              <p class="setup-hero-desc" id="setup-integration-desc">Configure your sync integration</p>
+              <div class="setup-platforms-row" id="setup-platforms-row">
+                <div class="setup-platform-card" id="setup-platform1-card">
+                  <div class="setup-platform-logo" id="setup-platform1-logo"></div>
+                  <span class="setup-platform-name" id="setup-platform1-name">Platform 1</span>
+                  <span class="setup-platform-status" id="setup-platform1-status">Pending</span>
+                </div>
+                <div class="setup-arrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </div>
+                <div class="setup-platform-card" id="setup-platform2-card">
+                  <div class="setup-platform-logo" id="setup-platform2-logo"></div>
+                  <span class="setup-platform-name" id="setup-platform2-name">Platform 2</span>
+                  <span class="setup-platform-status" id="setup-platform2-status">Pending</span>
+                </div>
+              </div>
+              <div class="setup-tags" id="setup-tags-container"></div>
+            </div>
+            <div class="setup-actions">
+              <button class="btn btn-primary setup-configure-btn" id="setup-configure-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                Configure Sync
+              </button>
+              <p class="setup-actions-hint">Opens the sync configuration panel to set up your integration</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             VIEW: Active Flows (existing grid lives here)
+        ════════════════════════════════════════════════════ -->
+        <section class="view-panel" id="view-flows" aria-label="Active Flows">
+
+          <!-- Section header -->
+          <div class="section-header">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <h1 class="section-title">Sync Configurations</h1>
+              <p class="section-desc">Create and manage data synchronization flows between your connected platforms. Each configuration defines what data to sync, how often, and between which sources.</p>
+            </div>
+          </div>
+
+          <!-- Spreadsheet Utility Toolbar -->
+          <div class="grid-toolbar" id="grid-toolbar">
+            <div class="toolbar-right">
+              <button class="btn btn-primary btn-sm" id="btn-add-config" type="button" style="margin-right:8px;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New Config
+              </button>
+              <div class="search-box">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="tb-search" placeholder="Search by name, ID, status..." />
+                <button class="search-clear" id="tb-search-clear" type="button" aria-label="Clear search">&times;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- High-Density Spreadsheet Table Container -->
+          <div class="grid-table-wrapper" id="grid-table-wrapper">
+            <div class="grid-table-scroll">
+            <table class="configs-table" id="configs-table">
+              <thead>
+                <tr id="table-headers">
+                  <th class="col-checkbox"><input type="checkbox" id="select-all-configs" /></th>
+                  <th class="sortable sort-asc" data-col="description">Name <span class="sort-icon"><i data-feather="chevron-up"></i></span></th>
+                  <th class="col-apps">Apps <span class="sort-icon"></span></th>
+                  <th class="sortable" data-col="enabled">Status <span class="sort-icon"></span></th>
+                  <th>Schedule</th>
+                  <th class="sortable" data-col="lastRunAt">Last Run <span class="sort-icon"></span></th>
+                  <th class="sortable" data-col="owner">Owner <span class="sort-icon"></span></th>
+                  <th class="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <tr>
+                  <td class="col-checkbox"><div class="skeleton-line" style="width: 16px; height: 16px; border-radius: 4px;"></div></td>
+                  <td data-label="Name"><div class="skeleton-line long" style="height: 18px; width: 200px; border-radius: 6px;"></div></td>
+                  <td data-label="Apps"><div style="display: flex; gap: 8px; justify-content: flex-end;"><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div></div></td>
+                  <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
+                  <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 150px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td data-label="Last Run"><div class="skeleton-line" style="width: 80px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td data-label="Owner"><div class="skeleton-line" style="width: 100px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+                </tr>
+                <tr>
+                  <td class="col-checkbox"><div class="skeleton-line" style="width: 16px; height: 16px; border-radius: 4px;"></div></td>
+                  <td data-label="Name"><div class="skeleton-line long" style="height: 18px; width: 160px; border-radius: 6px;"></div></td>
+                  <td data-label="Apps"><div style="display: flex; gap: 8px; justify-content: flex-end;"><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div></div></td>
+                  <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
+                  <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 130px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td data-label="Last Run"><div class="skeleton-line" style="width: 80px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td data-label="Owner"><div class="skeleton-line" style="width: 90px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+                </tr>
+                <tr>
+                  <td class="col-checkbox"><div class="skeleton-line" style="width: 16px; height: 16px; border-radius: 4px;"></div></td>
+                  <td data-label="Name"><div class="skeleton-line long" style="height: 18px; width: 220px; border-radius: 6px;"></div></td>
+                  <td data-label="Apps"><div style="display: flex; gap: 8px; justify-content: flex-end;"><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div></div></td>
+                  <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
+                  <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 140px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td data-label="Last Run"><div class="skeleton-line" style="width: 70px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td data-label="Owner"><div class="skeleton-line" style="width: 100px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+                </tr>
+                <tr>
+                  <td class="col-checkbox"><div class="skeleton-line" style="width: 16px; height: 16px; border-radius: 4px;"></div></td>
+                  <td data-label="Name"><div class="skeleton-line long" style="height: 18px; width: 180px; border-radius: 6px;"></div></td>
+                  <td data-label="Apps"><div style="display: flex; gap: 8px; justify-content: flex-end;"><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div></div></td>
+                  <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
+                  <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 160px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td data-label="Last Run"><div class="skeleton-line" style="width: 80px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td data-label="Owner"><div class="skeleton-line" style="width: 110px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+                  <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+
+          <!-- Multi-Select Floating Action Bar -->
+          <div class="multi-select-bar" id="multi-select-bar" style="display:none;">
+            <span class="multi-select-count" id="multi-select-count">0 selected</span>
+            <div class="multi-select-actions">
+              <button class="btn btn-sm btn-ghost" id="msb-duplicate" type="button" title="Duplicate selected">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Duplicate
+              </button>
+              <button class="btn btn-sm btn-danger" id="msb-delete" type="button" title="Delete selected">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete
+              </button>
+            </div>
+            <button class="multi-select-close" id="msb-close" type="button" title="Deselect all">&times;</button>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             VIEW: Connections
+        ════════════════════════════════════════════════════ -->
+        <section class="view-panel" id="view-connections" style="display: none;" aria-label="Connections">
+          <!-- Section header -->
+          <div class="section-header">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <h1 class="section-title">Connections</h1>
+              <p class="section-desc">Manage your saved API credentials. Once a connection is saved, you can select it from any sync configuration instead of entering credentials manually each time.</p>
+            </div>
+          </div>
+
+          <!-- Spreadsheet Utility Toolbar -->
+          <div class="grid-toolbar" id="conn-grid-toolbar">
+            <div class="toolbar-right">
+              <button class="btn btn-primary btn-sm" id="btn-add-conn" type="button" style="margin-right:8px;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New Connection
+              </button>
+            </div>
+          </div>
+
+          <!-- High-Density Spreadsheet Table Container -->
+          <div class="grid-table-wrapper" id="conn-grid-table-wrapper">
+            <div class="grid-table-scroll">
+            <table class="configs-table" id="connections-table">
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Provider</th>
+                  <th>Created</th>
+                  <th class="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="connections-body">
+                  <tr>
+                    <td data-label="Label"><div class="skeleton-line long" style="height: 18px; width: 150px; border-radius: 6px;"></div></td>
+                    <td data-label="Provider"><div class="skeleton-line" style="width: 100px; height: 24px; border-radius: 12px;"></div></td>
+                    <td data-label="Created"><div class="skeleton-line" style="height: 16px; width: 80px; border-radius: 6px;"></div></td>
+                    <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+                  </tr>
+                  <tr>
+                    <td data-label="Label"><div class="skeleton-line long" style="height: 18px; width: 120px; border-radius: 6px;"></div></td>
+                    <td data-label="Provider"><div class="skeleton-line" style="width: 100px; height: 24px; border-radius: 12px;"></div></td>
+                    <td data-label="Created"><div class="skeleton-line" style="height: 16px; width: 80px; border-radius: 6px;"></div></td>
+                    <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+                  </tr>
+                  <tr>
+                    <td data-label="Label"><div class="skeleton-line long" style="height: 18px; width: 180px; border-radius: 6px;"></div></td>
+                    <td data-label="Provider"><div class="skeleton-line" style="width: 100px; height: 24px; border-radius: 12px;"></div></td>
+                    <td data-label="Created"><div class="skeleton-line" style="height: 16px; width: 80px; border-radius: 6px;"></div></td>
+                    <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+                  </tr>
+                  <tr>
+                    <td data-label="Label"><div class="skeleton-line long" style="height: 18px; width: 140px; border-radius: 6px;"></div></td>
+                    <td data-label="Provider"><div class="skeleton-line" style="width: 100px; height: 24px; border-radius: 12px;"></div></td>
+                    <td data-label="Created"><div class="skeleton-line" style="height: 16px; width: 80px; border-radius: 6px;"></div></td>
+                    <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+                  </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             VIEW: Execution Logs
+        ════════════════════════════════════════════════════ -->
+        <section class="view-panel" id="view-logs" style="display: none;" aria-label="Execution Logs">
+          <!-- Section header -->
+          <div class="section-header">
+            <h1 class="section-title">Execution Logs</h1>
+          </div>
+
+          <!-- Logs Table Container -->
+          <div class="grid-table-wrapper" style="margin-top: 16px;">
+            <table class="configs-table" id="logs-table">
+              <thead>
+                <tr>
+                  <th style="width: 160px;">Timestamp</th>
+                  <th style="width: 200px;">Integration</th>
+                  <th style="width: 120px;">Status</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="logs-tbody">
+                <!-- Populated by logs.js -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             VIEW: Platform Admin
+        ════════════════════════════════════════════════════ -->
+        <section class="view-panel" id="view-admin" style="display: none;" aria-label="Platform Admin">
+
+          <div class="hub-hero-text" style="margin-bottom: 32px;">
+            <h1 class="section-title" style="display: flex; align-items: center; gap: 12px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none"
+                stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="feather feather-settings">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
+              </svg>
+              Admin Panel
+            </h1>
+            <p class="hub-hero-sub">
+              Manage global platform settings, configure marketplace integrations, and monitor system usage statistics.
+            </p>
+          </div>
+
+          <div class="admin-tabs-wrapper">
+            <div class="admin-tabs-inner">
+              <button class="admin-tab active" data-target="admin-pane-overview">Overview</button>
+              <button class="admin-tab" data-target="admin-pane-global">Global Settings</button>
+              <button class="admin-tab" data-target="admin-pane-platforms">Platforms</button>
+              <button class="admin-tab" data-target="admin-pane-marketplace">Marketplace</button>
+            </div>
+          </div>
+
+          <!-- Overview Pane -->
+          <div class="admin-pane" id="admin-pane-overview">
+            <div class="stats-bar" style="margin-bottom: 24px;">
+              <div class="stat-pill">
+                <span class="dot violet"></span>
+                <span>Total Users: <strong id="admin-stat-users">—</strong></span>
+              </div>
+              <div class="stat-pill">
+                <span class="dot green"></span>
+                <span>Total Configs: <strong id="admin-stat-configs">—</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Global Settings Pane -->
+          <div class="admin-pane" id="admin-pane-global" style="display: none;">
+            <div class="surface-card">
+              <h2 style="margin-bottom: 16px;">Global Settings</h2>
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label for="admin-whatsapp-number">WhatsApp Support Number (include country code)</label>
+                <input type="text" id="admin-whatsapp-number" class="admin-input" placeholder="201018988989" />
+              </div>
+              <button id="btn-save-global-settings" class="btn btn-primary"
+                style="padding: 8px 16px; font-size: 14px;">Save</button>
+            </div>
+          </div>
+
+          <!-- Platforms Pane -->
+          <div class="admin-pane" id="admin-pane-platforms" style="display: none;">
+            <div class="surface-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2 style="margin: 0;">Platforms</h2>
+                <button id="btn-admin-add-platform" class="btn btn-primary"
+                  style="padding: 8px 16px; font-size: 14px;">+ New Platform</button>
+              </div>
+
+              <div class="connections-table-wrap">
+                <table class="connections-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Name</th>
+                      <th>Auth Type</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-platforms-tbody">
+                    <tr>
+                      <td colspan="4" style="text-align:center; padding: 20px;">Loading...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Marketplace Pane -->
+          <div class="admin-pane" id="admin-pane-marketplace" style="display: none;">
+            <div class="surface-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2 style="margin: 0;">Marketplace Integrations</h2>
+                <button id="btn-admin-add-integration" class="btn btn-primary"
+                  style="padding: 8px 16px; font-size: 14px;">+ Add New</button>
+              </div>
+
+              <div class="connections-table-wrap">
+                <table class="connections-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Name</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-integrations-tbody">
+                    <!-- Populated dynamically -->
+                    <tr>
+                      <td colspan="4" style="text-align:center; padding: 20px;">Loading...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ── Platform Modal ──────────────────────────────────────── -->
+        <section class="view-panel" id="view-admin-platform-editor" style="display: none;" aria-label="Platform Editor">
+          <div style="width: 100%; height: 100%; padding: 24px; box-sizing: border-box;">
+            <div class="panel-header"
+              style="padding-left: 0; padding-right: 0; background: transparent; border-bottom: 1px solid var(--border); margin-bottom: 24px;">
+              <h2 id="platform-panel-title" style="font-size: 1.5rem;">Create New Platform</h2>
+              <button class="panel-close" id="platform-panel-close"
+                style="position: relative; right: 0; top: 0;">✕</button>
+            </div>
+
+            <div class="panel-body" style="padding: 0; overflow-y: visible;">
+              <form id="platform-form">
+                <input type="hidden" id="f-plat-doc-id" />
+
+                <div id="plat-error" class="auth-error-msg" style="display: none; margin-bottom: 16px;"></div>
+
+                <div class="stepper-wrapper">
+                  <div class="stepper-item active" data-step="0">
+                    <div class="stepper-circle">1</div>
+                    <div class="stepper-label">General</div>
+                  </div>
+                  <div class="stepper-line"></div>
+                  <div class="stepper-item" data-step="1">
+                    <div class="stepper-circle">2</div>
+                    <div class="stepper-label">Authorization</div>
+                  </div>
+                  <div class="stepper-line"></div>
+                  <div class="stepper-item" data-step="2">
+                    <div class="stepper-circle">3</div>
+                    <div class="stepper-label">Sync Schema</div>
+                  </div>
+                </div>
+
+                <div class="form-section tab-pane active" id="tab-general">
+                  <div class="form-row">
+                    <label for="f-plat-name">Display Name (e.g. TickTick) *</label>
+                    <input id="f-plat-name" type="text" required />
+                  </div>
+                  <div class="form-row">
+                    <label for="f-plat-logo">Platform Logo (SVG) *</label>
+                    <textarea id="f-plat-logo" rows="3" placeholder="<svg>...</svg>" required></textarea>
+                  </div>
+                </div>
+
+                <div class="form-section tab-pane" id="tab-auth" style="margin-bottom: 24px;">
+                  <div class="form-row">
+                    <label for="f-plat-auth-type">Auth Type *</label>
+                    <select id="f-plat-auth-type" required>
+                      <option value="manual">Manual Entry (API Key / Personal Token)</option>
+                      <option value="oauth">OAuth 2.0 Authorization Flow</option>
+                    </select>
+                  </div>
+
+                  <div id="oauth-fields-group" class="hidden">
+                    <div class="form-row">
+                      <label for="f-plat-auth-url">OAuth Authorization URL *</label>
+                      <input id="f-plat-auth-url" type="url" placeholder="https://api.example.com/oauth/authorize" />
+                    </div>
+                    <div class="form-row">
+                      <label for="f-plat-token-url">OAuth Token URL *</label>
+                      <input id="f-plat-token-url" type="url" placeholder="https://api.example.com/oauth/token" />
+                    </div>
+                    <div class="form-row">
+                      <label for="f-plat-client-id">Client ID *</label>
+                      <input id="f-plat-client-id" type="text" placeholder="Your app's Client ID" autocomplete="off" />
+                    </div>
+                    <div class="form-row">
+                      <label for="f-plat-client-secret">Client Secret *</label>
+                      <input id="f-plat-client-secret" type="password" autocomplete="new-password"
+                        placeholder="Your app's Client Secret" />
+                    </div>
+                  </div>
+
+                  <div id="manual-fields-group">
+                    <div class="form-row">
+                      <label for="f-plat-guide-url">Integration Guide URL</label>
+                      <input id="f-plat-guide-url" type="url" placeholder="https://docs.example.com/api" />
+                    </div>
+                  </div>
+
+                  <div style="margin-top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                      <button type="button" class="btn btn-secondary btn-sm" id="btn-plat-add-attr">+ Add Attribute</button>
+                    </div>
+                    <p style="color: var(--text-2); font-size: 0.85rem; margin-bottom: 16px;">Define the credentials (like API Key, Token) needed to connect this platform.</p>
+                    <div id="platform-attributes-container" style="display: flex; flex-direction: column; gap: 16px;">
+                      <!-- Dynamically populated attributes -->
+    </div>
+                  </div>
+                </div>
+
+                <div class="form-section tab-pane" id="tab-schema" style="margin-bottom: 24px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-plat-add-schema-field">+ Add Field</button>
+                  </div>
+                  <p style="color: var(--text-2); font-size: 0.85rem; margin-bottom: 16px;">Define the dynamic fields required when setting up a sync (e.g., Target Entity, List Name).</p>
+                  <div id="platform-schema-container" style="display: flex; flex-direction: column; gap: 16px;">
+                    <!-- Dynamically populated schema fields -->
+                  </div>
+                </div>
+
+            <div class="panel-actions" style="display: flex; gap: 8px; width: 100%;">
+              <button type="button" class="btn btn-secondary" id="btn-plat-cancel">Cancel</button>
+              <button type="button" class="btn btn-secondary" id="btn-plat-prev"
+                style="display: none;">Previous</button>
+              <button type="button" class="btn btn-primary" id="btn-plat-next" style="margin-left: auto;">Next</button>
+              <button type="submit" class="btn btn-primary" id="btn-plat-save"
+                style="display: none; margin-left: auto;">Save</button>
+            </div>
+            </form>
+          </div>
+    </div>
+    </section>
+    </main>
+  </div><!-- /platform-body -->
+  </div><!-- /platform-shell -->
+
+  <!-- ── Panel overlay ───────────────────────────────────── -->
+  <div class="panel-overlay" id="panel-overlay"></div>
+
+  <!-- ── Side panel ─────────────────────────────────────── -->
+  <aside class="side-panel" id="side-panel">
+    <div class="panel-header">
+      <h2 id="panel-title">New Config</h2>
+      <button class="panel-close" id="panel-close"><i data-feather="x"></i></button>
+    </div>
+
+    <div class="panel-body">
+      <!-- Wizard Stepper -->
+      <div class="wizard-stepper" id="wizard-stepper">
+        <div class="wizard-step active" data-wiz-step="1">
+          <div class="wiz-step-circle">1</div>
+          <div class="wiz-step-label">Connect</div>
+        </div>
+        <div class="wiz-step-line"></div>
+        <div class="wizard-step" data-wiz-step="2">
+          <div class="wiz-step-circle">2</div>
+          <div class="wiz-step-label">Map Fields</div>
+        </div>
+        <div class="wiz-step-line"></div>
+        <div class="wizard-step" data-wiz-step="3">
+          <div class="wiz-step-circle">3</div>
+          <div class="wiz-step-label">Deploy</div>
+        </div>
+      </div>
+
+      <form id="config-form">
+        <input type="hidden" id="form-id" />
+        <input type="hidden" id="f-integration-id" />
+
+        <!-- Hidden Original Platform Sections (Moved to Modal via JS) -->
+        <div id="hidden-platform-sections" style="display: none;">
+          <div class="form-section" id="section-p1">
+            <div class="form-section-title" id="p1-settings-title">Platform 1 Settings</div>
+            <div class="form-row">
+              <label for="f-tt-connection">Connection</label>
+              <div style="display:flex;gap:8px;width:100%;">
+                <select id="f-tt-connection" required style="flex:1;">
+                  <option value="">— Select Connection —</option>
+                </select>
+                <button type="button" class="btn btn-secondary" id="btn-connect-p1" style="white-space:nowrap;flex-shrink:0;padding:10px 16px;font-size:13.5px;line-height:1.2;border-radius:6px;">+ Connect</button>
+              </div>
+            </div>
+            <div id="p1-dynamic-container"></div>
+            <p id="p1-connect-hint" style="display:none;font-size:0.8rem;color:var(--text-3);margin-top:8px;">
+              No saved accounts yet.
+              <a href="#" id="p1-connect-link" style="color:var(--primary);">Connect a provider</a>
+            </p>
+          </div>
+          <div class="form-section" id="section-p2">
+            <div class="form-section-title" id="p2-settings-title">Platform 2 Settings</div>
+            <div class="form-row">
+              <label for="f-notion-connection">Connection</label>
+              <div style="display:flex;gap:8px;width:100%;">
+                <select id="f-notion-connection" required style="flex:1;">
+                  <option value="">— Select Connection —</option>
+                </select>
+                <button type="button" class="btn btn-secondary" id="btn-connect-p2" style="white-space:nowrap;flex-shrink:0;padding:10px 16px;font-size:13.5px;line-height:1.2;border-radius:6px;">+ Connect</button>
+              </div>
+            </div>
+            <div id="p2-dynamic-container"></div>
+            <p id="p2-connect-hint" style="display:none;font-size:0.8rem;color:var(--text-3);margin-top:8px;">
+              No saved accounts yet.
+              <a href="#" id="p2-connect-link" style="color:var(--primary);">Connect a provider</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- ═══ Step 1: Connect Platforms ═══ -->
+        <div class="step-panel" data-step="1">
+          <div class="step-header">
+            <span class="step-header-icon"><i data-feather="link-2" style="width:20px;height:20px;"></i></span>
+            Connect Platforms
+          </div>
+          <p class="step-desc">Select accounts and configure each platform for syncing.</p>
+
+          <!-- Visual Builder Canvas -->
+          <div id="visual-builder-canvas" class="node-builder-container">
+            <div class="workflow-node" id="node-platform1">
+              <div class="node-header">
+                <span class="node-status-icon" id="node-p1-status"></span>
+                <div class="node-pill platform-pill" id="node-p1-pill">
+                  <span class="node-logo" id="node-p1-logo"></span>
+                  <span class="node-name" id="node-p1-name">Platform 1</span>
+                </div>
+                <div class="node-actions"><i data-feather="more-vertical"></i></div>
+              </div>
+              <div class="node-action-text" id="node-p1-action">Setup Trigger</div>
+            </div>
+
+            <div class="node-connector">
+              <div class="node-line"></div>
+              <div class="node-plus"><i data-feather="arrow-down" style="width:14px;height:14px;"></i></div>
+              <div class="node-line"></div>
+            </div>
+
+            <div class="workflow-node" id="node-platform2">
+              <div class="node-header">
+                <span class="node-status-icon" id="node-p2-status"></span>
+                <div class="node-pill platform-pill" id="node-p2-pill">
+                  <span class="node-logo" id="node-p2-logo"></span>
+                  <span class="node-name" id="node-p2-name">Platform 2</span>
+                </div>
+                <div class="node-actions"><i data-feather="more-vertical"></i></div>
+              </div>
+              <div class="node-action-text" id="node-p2-action">Setup Action</div>
+            </div>
+          </div>
+
+          <p class="step-desc" style="font-size:0.85rem;color:var(--text-3);margin-top:12px;">
+            Click each node to select a connection and configure its settings.
+          </p>
+
+          <div class="step-actions">
+            <div style="flex:1"></div>
+            <button type="button" class="btn btn-primary" id="btn-step1-next">Next Step →</button>
+          </div>
+        </div>
+
+        <!-- ═══ Step 2: Map Fields ═══ -->
+        <div class="step-panel" data-step="2" style="display:none;">
+          <div class="step-header">
+            <span class="step-header-icon"><i data-feather="columns" style="width:20px;height:20px;"></i></span>
+            Map Fields
+          </div>
+          <p class="step-desc">Map fields between your source and destination platforms.</p>
+
+          <div class="form-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+              <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-3);">Field Mappings</span>
+              <button type="button" id="btn-add-mapping" class="btn btn-secondary btn-sm"
+                style="padding: 4px 8px; font-size: 0.75rem;"><i data-feather="plus" style="width:12px;height:12px;"></i>
+                Add Field</button>
+            </div>
+            <div class="form-hint" style="margin-bottom: 0.75rem;">Map fields from the source platform to the destination platform properties.</div>
+            <div id="mappings-container" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+          </div>
+
+          <div class="form-section" id="section-status-mapping" style="display: none;">
+            <div class="form-section-title">Status Value Mappings</div>
+            <div class="form-hint" style="margin-bottom: 0.75rem;">
+              Map status values between states and destination status options.
+            </div>
+            <div class="form-row">
+              <label for="f-status-incomplete">Incomplete *</label>
+              <select id="f-status-incomplete" multiple placeholder="Select status options..."></select>
+            </div>
+            <div class="form-row" style="margin-top: 0.5rem;">
+              <label for="f-status-incomplete-default">Incomplete Default *</label>
+              <select id="f-status-incomplete-default"
+                style="width: 100%; height: 38px; border-radius: 6px; padding: 0 12px; background: var(--bg-card); color: var(--text-1); border: 1px solid var(--border); font-size: 0.9rem;"></select>
+            </div>
+            <div class="form-row" style="margin-top: 1rem;">
+              <label for="f-status-complete">Complete *</label>
+              <select id="f-status-complete" multiple placeholder="Select status options..."></select>
+            </div>
+            <div class="form-row" style="margin-top: 0.5rem;">
+              <label for="f-status-complete-default">Complete Default *</label>
+              <select id="f-status-complete-default"
+                style="width: 100%; height: 38px; border-radius: 6px; padding: 0 12px; background: var(--bg-card); color: var(--text-1); border: 1px solid var(--border); font-size: 0.9rem;"></select>
+            </div>
+          </div>
+
+          <div class="step-actions">
+            <button type="button" class="btn btn-secondary" id="btn-step2-back">← Back</button>
+            <div style="flex:1"></div>
+            <button type="button" class="btn btn-primary" id="btn-step2-next">Next Step →</button>
+          </div>
+        </div>
+
+        <!-- ═══ Step 3: Configure & Deploy ═══ -->
+        <div class="step-panel" data-step="3" style="display:none;">
+          <div class="step-header">
+            <span class="step-header-icon"><i data-feather="settings" style="width:20px;height:20px;"></i></span>
+            Configure & Deploy
+          </div>
+          <p class="step-desc">Set sync behavior, schedule, and deploy your integration.</p>
+
+          <div class="form-section">
+            <div class="form-section-title">Sync Configuration</div>
+
+            <div class="form-row" style="display: none;">
+              <label for="f-description">Config Name *</label>
+              <input id="f-description" type="text" placeholder="e.g. Personal Inbox → Notion" />
+            </div>
+
+            <div class="form-row">
+              <label for="f-sync-type">Sync Directionality *</label>
+              <select id="f-sync-type">
+                <!-- Dynamically populated in app.js -->
+              </select>
+            </div>
+
+            <div class="form-row enabled-row" id="delete-after-row">
+              <label for="f-delete-after">Delete source item after successful sync</label>
+              <label class="toggle">
+                <input type="checkbox" id="f-delete-after" />
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label style="display: flex; justify-content: space-between;">
+                Sync Schedule
+                <a href="https://crontab.guru/" target="_blank" style="font-size: 0.8rem; color: var(--primary);">Advanced Cron</a>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input id="f-interval-value" type="number" min="1" value="5" style="width: 80px; text-align: center;" />
+                <select id="f-interval-unit" style="flex: 1;">
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="advanced">Advanced (Raw Cron)</option>
+                </select>
+              </div>
+              <input id="f-cron" type="text" style="display: none; margin-top: 8px;" placeholder="*/5 * * * *"
+                autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="step-actions">
+            <button type="button" class="btn btn-secondary" id="btn-step3-back">← Back</button>
+            <div style="flex:1"></div>
+            <button type="button" class="btn btn-secondary" id="btn-save">Save Draft</button>
+            <button type="button" class="btn btn-primary" id="btn-submit">Submit (Active)</button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+
+    <div class="panel-footer" id="panel-footer">
+      <div id="unsaved-indicator"
+        style="color: var(--warning); font-size: 0.85rem; display: none; align-items: center; gap: 6px;">
+        <i data-feather="alert-circle" style="width:14px;height:14px;"></i> Unsaved changes
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Node Config Modal ────────────────────────────── -->
+  <div class="modal-overlay" id="node-config-modal">
+    <div class="modal node-modal" role="dialog" aria-modal="true" style="max-width: 500px; padding: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 id="node-modal-title"
+          style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+          Setup Node
+        </h3>
+        <button class="modal-close" id="node-modal-close"
+          style="background: none; border: none; cursor: pointer; color: var(--text-2);"><i
+            data-feather="x"></i></button>
+      </div>
+
+      <div id="node-modal-body" style="max-height: 60vh; overflow-y: auto; padding-right: 8px;">
+        <!-- Dynamic content will be moved here -->
+      </div>
+
+      <div class="modal-actions" style="margin-top: 24px;">
+        <button class="btn btn-primary" id="node-modal-save" style="width: 100%;">Save Node</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Delete confirm modal ────────────────────────────── -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h3 id="modal-title"><i data-feather="trash-2"></i> Delete Config?</h3>
+      <p>You're about to permanently delete <span class="modal-name" id="modal-name"></span>. This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+        <button class="btn btn-danger" id="modal-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Revoke Invite Confirm Modal ────────────────────────────── -->
+  <div class="modal-overlay" id="revoke-invite-modal" style="z-index: 9999 !important;">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="revoke-modal-title">
+      <h3 id="revoke-modal-title"><i data-feather="trash-2"></i> Revoke Invite?</h3>
+      <p>You're about to revoke the invitation for <strong id="revoke-modal-email"></strong>.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="revoke-modal-cancel">Cancel</button>
+        <button class="btn btn-danger" id="revoke-modal-confirm">Revoke</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Offline Banner -->
+  <div class="offline-banner" id="offline-banner" style="display:none;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path><path d="M10.71 5.05A16 16 0 0 1 22.56 9"></path><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+    <span>You are offline. Some features may be unavailable.</span>
+    <button class="offline-dismiss" id="offline-dismiss" aria-label="Dismiss">✕</button>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ── Settings Hub Modal ──────────────────────────────────── -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="settings-hub-container">
+      <button class="modal-close" id="settings-close" title="Close"><i data-feather="x"></i></button>
+
+      <div class="settings-sidebar">
+        <div class="settings-header">Settings</div>
+        <a href="#" class="settings-tab active" data-tab="profile">
+          <span class="icon"><i data-feather="user"></i></span> Profile
+        </a>
+        <a href="#" class="settings-tab" data-tab="workspace">
+          <span class="icon"><i data-feather="briefcase"></i></span> Workspace
+        </a>
+        <a href="#" class="settings-tab" data-tab="billing">
+          <span class="icon"><i data-feather="credit-card"></i></span> Billing & Plan
+        </a>
+      </div>
+
+      <div class="settings-content">
+
+        <!-- Profile Tab -->
+        <div class="settings-pane active" id="pane-profile">
+          <h2>Profile Settings</h2>
+          <p class="settings-subtitle">Manage your personal account details.</p>
+
+          <div class="form-row">
+            <label>Full Name</label>
+            <input type="text" id="settings-name" placeholder="e.g. Hossam Forouh" required />
+          </div>
+          <div class="form-row">
+            <label>Email Address</label>
+            <input type="text" id="settings-email" disabled style="opacity: 0.6; cursor: not-allowed;" />
+          </div>
+          <div style="margin-top: 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px;">
+            <button class="btn btn-primary" id="btn-save-profile">Save</button>
+            <span id="profile-msg" style="font-size: 0.9rem;"></span>
+          </div>
+        </div>
+
+        <!-- Workspace Tab -->
+        <div class="settings-pane" id="pane-workspace" style="display: none;">
+          <h2>Workspace Settings</h2>
+          <p class="settings-subtitle">Manage your current active workspace.</p>
+
+          <div class="form-row">
+            <label>Workspace Name</label>
+            <input type="text" id="settings-workspace-name" placeholder="Personal Workspace" />
+          </div>
+          <div style="margin-top: 16px;">
+            <button class="btn btn-primary btn-sm" id="btn-save-workspace">Save</button>
+            <span id="workspace-msg" style="font-size: 0.9rem; margin-left: 12px;"></span>
+          </div>
+
+          <div class="quota-card" style="margin-top: 24px;">
+            <div class="quota-header">
+              <strong>Active Flows Limit</strong>
+              <span class="badge badge-info">Free Tier</span>
+            </div>
+            <div class="quota-progress-container">
+              <div class="quota-progress" style="width: 50%;"></div>
+            </div>
+            <div class="quota-text">1 of 2 active flows used. Upgrade to unlock unlimited.</div>
+          </div>
+
+          <div style="margin-top: 32px;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 12px;">Collaborators</h3>
+            <p class="settings-subtitle" style="font-size: 0.85rem;">Invite team members to manage integrations
+              together.</p>
+            <div class="collaborator-list" id="collaborator-list-container">
+              <div class="collaborator-item">
+                <div class="collab-avatar">HF</div>
+                <div class="collab-info">
+                  <div class="collab-name">You (Owner)</div>
+                  <div class="collab-email" id="collab-email-display"></div>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-show-invite-form" style="margin-top: 12px;">+ Invite
+              Member</button>
+            <div id="invite-form" style="display: none; margin-top: 12px; gap: 8px;">
+              <input type="email" id="invite-email-input" class="admin-input" placeholder="coworker@example.com"
+                style="flex: 1; margin: 0;" />
+              <button class="btn btn-primary btn-sm" id="btn-send-invite">Send Invite</button>
+            </div>
+            <div id="invite-msg" style="font-size: 0.85rem; margin-top: 8px;"></div>
+          </div>
+        </div>
+
+        <!-- Billing Tab -->
+        <div class="settings-pane" id="pane-billing" style="display: none;">
+          <h2>Billing & Plan</h2>
+          <p class="settings-subtitle">Manage your subscription and billing details.</p>
+
+          <div class="billing-card current-plan">
+            <div class="plan-header">
+              <h3>Free Tier</h3>
+              <span class="plan-price">$0<span>/mo</span></span>
+            </div>
+            <ul class="plan-features">
+              <li>✓ 2 Active Flows maximum</li>
+              <li>✓ 15-minute sync polling velocity</li>
+              <li>✓ Community Support</li>
+            </ul>
+            <button class="btn btn-secondary" disabled>Current Plan</button>
+          </div>
+
+          <div class="billing-card upgrade-plan"
+            style="margin-top: 24px; border: 1px solid var(--primary); background: rgba(110,86,207,0.05);">
+            <div class="plan-header">
+              <h3>Pro Tier</h3>
+              <span class="plan-price">$19<span>/mo</span></span>
+            </div>
+            <ul class="plan-features">
+              <li>✓ <strong>Unlimited</strong> Active Flows</li>
+              <li>✓ <strong>1-minute</strong> sync velocity / Webhooks</li>
+              <li>✓ Priority Support</li>
+              <li>✓ Team Collaboration</li>
+            </ul>
+            <button class="btn btn-primary">Upgrade to Pro</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Marketplace Integration Modal ────────────────────── -->
+  <div class="panel-overlay" id="integration-modal-overlay" style="z-index: 10000;"></div>
+  <aside class="side-panel" id="integration-side-panel" style="z-index: 10001;">
+    <div class="panel-header">
+      <h2 id="integration-panel-title">Add Integration</h2>
+      <button class="panel-close" id="integration-panel-close">✕</button>
+    </div>
+
+    <div class="panel-body">
+      <form id="integration-form">
+        <!-- hidden doc ID to track updates vs creations -->
+        <input type="hidden" id="f-int-doc-id" />
+
+        <div class="form-section">
+
+
+          <div class="form-row">
+            <label for="f-int-name">Display Name *</label>
+            <input id="f-int-name" type="text" placeholder="TickTick ↔ Notion" required />
+          </div>
+
+          <div class="form-row">
+            <label for="f-int-desc">Description</label>
+            <textarea id="f-int-desc" rows="3" placeholder="Route data into a consolidated..."></textarea>
+          </div>
+
+          <div class="form-row">
+            <label for="f-int-status">Status *</label>
+            <select id="f-int-status">
+              <option value="Active">Active</option>
+              <option value="Under development">Under development</option>
+              <option value="Coming soon">Coming soon</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label for="f-int-tags">Tags (comma-separated)</label>
+            <input id="f-int-tags" type="text" placeholder="Tasks, Notes, Bidirectional" />
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Platforms</div>
+          <div class="form-row">
+            <label for="f-int-platform1">Platform 1 *</label>
+            <select id="f-int-platform1" required>
+              <option value="" disabled selected>Select Platform...</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="f-int-platform2">Platform 2 *</label>
+            <select id="f-int-platform2" required>
+              <option value="" disabled selected>Select Platform...</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-actions">
+          <button type="button" class="btn btn-secondary" id="btn-int-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-int-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </aside>
+
+  <!-- ── Marketplace Integration Delete Modal ────────────────── -->
+  <div class="modal-overlay" id="integration-delete-modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="int-del-modal-title">
+      <h3 id="int-del-modal-title" style="display: flex; align-items: center; gap: 10px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          class="feather feather-trash-2" style="color: var(--danger);">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+        Delete Integration?
+      </h3>
+      <p>You're about to permanently delete <strong id="int-del-modal-name"></strong>. This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="int-del-modal-cancel">Cancel</button>
+        <button class="btn btn-danger" id="int-del-modal-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- ── Platform Delete Modal ───────────────────────────────── -->
+  <div class="modal-overlay" id="platform-delete-modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="plat-del-modal-title">
+      <h3 id="plat-del-modal-title" style="display: flex; align-items: center; gap: 10px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          class="feather feather-trash-2" style="color: var(--danger);">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+        Delete Platform?
+      </h3>
+      <p>You're about to permanently delete <strong id="plat-del-modal-name"></strong>. This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="plat-del-modal-cancel">Cancel</button>
+        <button class="btn btn-danger" id="plat-del-modal-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/feather-icons"></script>
+  <script src="js/logs.js"></script>
+  <script type="module" src="app.js?v=5"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      feather.replace();
+    });
+  </script>
+
+
+
+  </body>
+
+</html>
