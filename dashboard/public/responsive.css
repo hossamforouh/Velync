@@ -74,7 +74,6 @@ html, body {
 
 /* Responsive: Modals never overflow viewport */
 .modal {
-  max-width: 90vw;
   max-height: 90vh;
   overflow-y: auto;
 }
