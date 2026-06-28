@@ -301,7 +301,7 @@ export function renderConnectionsView() {
           confirmClass: 'btn-danger'
         })) return;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spin">⟳</span>';
+        btn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>';
         try {
           const deletedConn = connections.find(c => c.id === id);
           await deleteConnection(id);

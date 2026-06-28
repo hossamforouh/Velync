@@ -1,0 +1,542 @@
+
+<h2 class="sr-only">Claude Code prompt to implement loading spinner during delete operations</h2>
+
+<div style="padding: 1.5rem 0;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+    <span style="font-size: 13px; color: var(--text-secondary); font-family: var(--font-mono);">delete-loading-spinner.txt</span>
+    <button id="copyBtn" onclick="copyPrompt()" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 6px 14px; cursor: pointer;">
+      <i class="ti ti-copy" aria-hidden="true" style="font-size: 15px;"></i>
+      Copy prompt
+    </button>
+  </div>
+
+  <div id="promptBox" style="
+    background: var(--surface-1);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 720px;
+    overflow-y: auto;
+  ">Implement a loading spinner/indicator that displays while delete operations 
+are in progress. The user should see clear visual feedback indicating the 
+deletion is being processed, preventing accidental double-clicks and 
+improving UX.
+
+─── REQUIREMENTS ──────────────────────────────────────────────────
+
+VISUAL FEEDBACK:
+  ✓ Show spinner/loading indicator inside delete button
+  ✓ Change button text to "Deleting..." or show only spinner
+  ✓ Disable button to prevent multiple clicks
+  ✓ Dim or gray out button during deletion
+  ✓ Show success message after deletion
+  ✓ Show error message if deletion fails
+  ✓ Allow retry on error
+
+USER EXPERIENCE:
+  ✓ Button is disabled during deletion (no double-delete)
+  ✓ User knows deletion is in progress
+  ✓ Clear feedback on success or failure
+  ✓ Smooth transition to success/error state
+  ✓ Quick completion feels instant, slow operations feel intentional
+
+IMPLEMENTATION APPROACH:
+  ✓ Manage loading state for each delete action
+  ✓ Add loading spinner component to button
+  ✓ Disable button while loading
+  ✓ Handle success and error responses
+  ✓ Update table/list after successful deletion
+
+─── IMPLEMENTATION OPTIONS ────────────────────────────────────────
+
+OPTION 1: Simple Loading State (Recommended)
+──────────────────────────────────────────────
+
+Use this pattern for delete buttons in tables/lists:
+
+STEP 1 - Add loading state:
+  const [deletingId, setDeletingId] = useState(null);
+
+STEP 2 - Create delete handler:
+  const handleDelete = async (id) => {
+    // Confirm before deleting
+    if (!window.confirm('Are you sure? This cannot be undone.')) {
+      return;
+    }
+
+    setDeletingId(id); // Show spinner for this item
+
+    try {
+      await deleteAPI(`/api/sync-configs/${id}`);
+      
+      // Remove from list
+      setData(prev => prev.filter(item => item.id !== id));
+      
+      // Show success message
+      showToast('Deleted successfully', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to delete', 'error');
+    } finally {
+      setDeletingId(null); // Hide spinner
+    }
+  };
+
+STEP 3 - Render delete button:
+  <button
+    onClick={() => handleDelete(item.id)}
+    disabled={deletingId === item.id}  // Disable while deleting
+    className={deletingId === item.id ? 'is-loading' : ''}
+  >
+    {deletingId === item.id ? (
+      <>
+        <Spinner size="sm" />
+        <span>Deleting...</span>
+      </>
+    ) : (
+      <>
+        <TrashIcon />
+        <span>Delete</span>
+      </>
+    )}
+  </button>
+
+STYLING:
+  .delete-button[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .delete-button.is-loading {
+    background-color: var(--color-loading);
+  }
+
+OPTION 2: With Confirmation Modal + Loading
+──────────────────────────────────────────────
+
+For more critical deletions:
+
+STEP 1 - State management:
+  const [deleteModal, setDeleteModal] = useState({
+    isOpen: false,
+    itemId: null,
+    isDeleting: false
+  });
+
+STEP 2 - Delete handler:
+  const handleConfirmDelete = async () => {
+    const { itemId } = deleteModal;
+    
+    setDeleteModal(prev => ({ ...prev, isDeleting: true }));
+
+    try {
+      await deleteAPI(`/api/sync-configs/${itemId}`);
+      
+      setData(prev => prev.filter(item => item.id !== itemId));
+      
+      // Close modal
+      setDeleteModal({ isOpen: false, itemId: null, isDeleting: false });
+      
+      showToast('Deleted successfully', 'success');
+    } catch (error) {
+      showToast('Failed to delete', 'error');
+      setDeleteModal(prev => ({ ...prev, isDeleting: false }));
+    }
+  };
+
+STEP 3 - Modal component:
+  {deleteModal.isOpen && (
+    <Modal isOpen={deleteModal.isOpen} onClose={() => 
+      setDeleteModal({ isOpen: false, itemId: null, isDeleting: false })
+    }>
+      <h2>Delete Configuration?</h2>
+      <p>This action cannot be undone.</p>
+      
+      <div className="modal-actions">
+        <button 
+          onClick={() => setDeleteModal({ isOpen: false, itemId: null, isDeleting: false })}
+          disabled={deleteModal.isDeleting}
+        >
+          Cancel
+        </button>
+        
+        <button 
+          onClick={handleConfirmDelete}
+          disabled={deleteModal.isDeleting}
+          className="delete-button"
+        >
+          {deleteModal.isDeleting ? (
+            <>
+              <Spinner size="sm" />
+              Deleting...
+            </>
+          ) : (
+            'Delete'
+          )}
+        </button>
+      </div>
+    </Modal>
+  )}
+
+OPTION 3: Inline Delete with Undo (Best UX)
+──────────────────────────────────────────────
+
+Most user-friendly approach:
+
+STEP 1 - State:
+  const [deletingId, setDeletingId] = useState(null);
+  const [undoData, setUndoData] = useState(null);
+  const undoTimeoutRef = useRef(null);
+
+STEP 2 - Delete with undo window:
+  const handleDelete = async (item) => {
+    // Show the item as "deleting" in UI
+    setDeletingId(item.id);
+    setUndoData(item); // Store for undo
+
+    // Wait 5 seconds before actually deleting
+    const timeout = setTimeout(async () => {
+      try {
+        await deleteAPI(`/api/sync-configs/${item.id}`);
+        setData(prev => prev.filter(i => i.id !== item.id));
+        setDeletingId(null);
+        setUndoData(null);
+        showToast('Deleted', 'success');
+      } catch (error) {
+        // Restore if delete failed
+        setDeletingId(null);
+        showToast('Failed to delete', 'error');
+      }
+    }, 5000);
+
+    undoTimeoutRef.current = timeout;
+  };
+
+  const handleUndo = () => {
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current);
+      setDeletingId(null);
+      setUndoData(null);
+      showToast('Deletion cancelled', 'info');
+    }
+  };
+
+STEP 3 - Render deleted item with undo:
+  {deletingId === item.id && (
+    <div className="undo-notification">
+      <span>Item deleted</span>
+      <button onClick={handleUndo}>Undo</button>
+      <ProgressBar duration={5000} /> {/* 5 second countdown */}
+    </div>
+  )}
+
+OPTION 4: With Batch Delete Loading
+───────────────────────────────────────
+
+For deleting multiple items:
+
+STEP 1 - State:
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false);
+
+STEP 2 - Batch delete:
+  const handleBatchDelete = async () => {
+    if (!window.confirm(`Delete ${selectedIds.length} items?`)) {
+      return;
+    }
+
+    setIsDeletingBatch(true);
+
+    try {
+      await Promise.all(
+        selectedIds.map(id => deleteAPI(`/api/sync-configs/${id}`))
+      );
+
+      setData(prev => prev.filter(item => !selectedIds.includes(item.id)));
+      setSelectedIds([]);
+      showToast(`Deleted ${selectedIds.length} items`, 'success');
+    } catch (error) {
+      showToast('Failed to delete some items', 'error');
+    } finally {
+      setIsDeletingBatch(false);
+    }
+  };
+
+STEP 3 - Bulk action button:
+  <button 
+    onClick={handleBatchDelete}
+    disabled={selectedIds.length === 0 || isDeletingBatch}
+  >
+    {isDeletingBatch ? (
+      <>
+        <Spinner size="sm" />
+        Deleting {selectedIds.length}...
+      </>
+    ) : (
+      `Delete ${selectedIds.length}`
+    )}
+  </button>
+
+─── SPINNER COMPONENT ─────────────────────────────────────────────
+
+Use or create a simple spinner component:
+
+OPTION A - Use existing design system spinner:
+  <Spinner size="sm" />  // Small spinner for inline use
+
+OPTION B - Create simple inline spinner:
+  const InlineSpinner = ({ size = 'sm' }) => (
+    <div className={`spinner spinner-${size}`}>
+      <div className="spinner-ring"></div>
+    </div>
+  );
+
+CSS for spinner animation:
+  .spinner-ring {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+─── ERROR HANDLING & RETRY ────────────────────────────────────────
+
+Handle deletion failures gracefully:
+
+const handleDelete = async (id) => {
+  setDeletingId(id);
+
+  try {
+    await deleteAPI(`/api/sync-configs/${id}`);
+    setData(prev => prev.filter(item => item.id !== id));
+    showToast('Deleted successfully', 'success');
+  } catch (error) {
+    console.error('Delete failed:', error);
+    
+    // Show error with retry option
+    showToast(
+      {
+        message: 'Failed to delete',
+        type: 'error',
+        action: {
+          label: 'Retry',
+          onClick: () => handleDelete(id)  // Retry
+        }
+      }
+    );
+  } finally {
+    setDeletingId(null);
+  }
+};
+
+─── STYLING EXAMPLES ──────────────────────────────────────────────
+
+DELETE BUTTON STATES:
+
+Normal state:
+  .delete-button {
+    padding: 8px 16px;
+    background: transparent;
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    color: #ff4444;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+Loading state:
+  .delete-button:disabled,
+  .delete-button.is-loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: rgba(255, 0, 0, 0.1);
+  }
+
+  .delete-button.is-loading span {
+    color: #ff4444;
+  }
+
+Hover state (when enabled):
+  .delete-button:hover:not(:disabled) {
+    background: rgba(255, 0, 0, 0.15);
+    color: #ff6666;
+  }
+
+─── COMPLETE WORKING EXAMPLE ──────────────────────────────────────
+
+Here's a production-ready example for a table row delete button:
+
+import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
+
+function TableRow({ item, onDeleted }) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    // Confirm
+    if (!window.confirm('Delete this configuration? This cannot be undone.')) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      // Call delete API
+      const response = await fetch(`/api/sync-configs/${item.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Delete failed');
+      }
+
+      // Notify parent to remove from list
+      onDeleted(item.id);
+
+      // Show success message
+      showSuccessToast('Configuration deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete:', error);
+      showErrorToast('Failed to delete configuration. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <tr>
+      <td>{item.name}</td>
+      <td>{item.status}</td>
+      <td>{item.schedule}</td>
+      <td>
+        <button
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className={`delete-button ${isDeleting ? 'is-loading' : ''}`}
+          title={isDeleting ? 'Deleting...' : 'Delete'}
+        >
+          {isDeleting ? (
+            <>
+              <div className="spinner-sm"></div>
+              <span>Deleting...</span>
+            </>
+          ) : (
+            <>
+              <Trash2 size={16} />
+              <span>Delete</span>
+            </>
+          )}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+export default TableRow;
+
+─── APPLY TO ALL DELETE ACTIONS ───────────────────────────────────
+
+Find and update ALL delete operations:
+  ☐ Delete from table/list actions
+  ☐ Delete from action menu (Edit, Duplicate, Delete dropdown)
+  ☐ Delete from modal (Confirm dialog)
+  ☐ Bulk delete operations
+  ☐ Delete from detail page
+  ☐ Delete from drag-and-drop
+  ☐ Delete from keyboard shortcut (if applicable)
+
+For each delete action:
+  1. Add loading state
+  2. Disable button during deletion
+  3. Show spinner
+  4. Handle success/error
+  5. Update UI (remove item from list)
+  6. Show toast notification
+
+─── TESTING CHECKLIST ─────────────────────────────────────────────
+
+  ☐ Click delete button → spinner appears immediately
+  ☐ Button is disabled during deletion (can't double-click)
+  ☐ Text changes to "Deleting..." (or spinner only)
+  ☐ After deletion, item removed from list
+  ☐ Success toast appears
+  ☐ Network error: error toast with retry option
+  ☐ Retry works (delete can be retried)
+  ☐ Loading indicator smooth and not jarring
+  ☐ Works on slow network (Chrome throttle to 3G)
+  ☐ Works on fast network
+  ☐ Confirmation modal works (if using option 2)
+  ☐ Undo works (if using option 3)
+  ☐ Batch delete shows correct count
+  ☐ Bulk actions disabled while deleting
+  ☐ No console errors
+
+─── PERFORMANCE & UX NOTES ────────────────────────────────────────
+
+  • Keep spinner small (16-20px) for inline use
+  • Animation should be smooth (0.8s rotation)
+  • Don't show spinner for <300ms (avoid flicker on fast deletes)
+  • Always disable button during delete to prevent double-submission
+  • Show clear feedback (toast notification)
+  • For slow operations (>2s), show additional context
+  • Remove item from UI only after confirmed deletion
+  • Don't leave spinner spinning forever (set timeout fallback)
+
+─── SAFETY GUIDELINES ─────────────────────────────────────────────
+
+  ✓ ALWAYS confirm before deleting
+  ✓ ALWAYS show loading state (prevent double-delete)
+  ✓ ALWAYS show success/error feedback
+  ✓ ALWAYS disable button during deletion
+  ✓ ALWAYS handle network errors gracefully
+  ✓ ALWAYS allow retry on failure
+  ✓ NEVER delete without user confirmation
+  ✓ NEVER silently fail (always show error message)
+  ✓ NEVER prevent user from retrying
+  ✓ NEVER remove UI item before server confirms</div>
+
+  <div id="successMsg" style="display: none; margin-top: 10px; font-size: 13px; color: var(--text-success); align-items: center; gap: 6px;">
+    <i class="ti ti-check" aria-hidden="true"></i> Copied to clipboard
+  </div>
+
+</div>
+
+<script>
+function copyPrompt() {
+  const box = document.getElementById('promptBox');
+  const text = box.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    const msg = document.getElementById('successMsg');
+    btn.innerHTML = '<i class="ti ti-check" aria-hidden="true" style="font-size:15px;"></i> Copied!';
+    msg.style.display = 'flex';
+    setTimeout(() => {
+      btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true" style="font-size:15px;"></i> Copy prompt';
+      msg.style.display = 'none';
+    }, 2500);
+  }).catch(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Select manually above';
+  });
+}
+</script>

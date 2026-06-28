@@ -606,7 +606,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       
       // UI Loading state
       btnDelConfirm.disabled = true;
-      btnDelConfirm.textContent = 'Deleting...';
+      btnDelConfirm.innerHTML = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></span><span style="vertical-align: middle;">Deleting...</span>';
       
       try {
         const snap = await getDoc(doc(firestoreDb, 'platforms', id));
