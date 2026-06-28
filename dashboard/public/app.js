@@ -380,12 +380,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 let appCheck;
 try {
-  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider('6LdILigtAAAAAGO0Sn27U_bVMd83hGSjNpC16Mv6'),
-      isTokenAutoRefreshEnabled: true
-    });
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   }
+  appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider('6LdILigtAAAAAGO0Sn27U_bVMd83hGSjNpC16Mv6'),
+    isTokenAutoRefreshEnabled: true
+  });
 } catch (e) {
   console.warn("App Check initialization failed.", e);
 }

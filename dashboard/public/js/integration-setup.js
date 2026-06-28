@@ -37,6 +37,9 @@ window.addEventListener('open-integration-setup', async (e) => {
     }
   }, 15000);
 
+  const p1Id = typeof currentIntegration.platform1 === 'string' ? currentIntegration.platform1 : (currentIntegration.platform1?.id || currentIntegration.platform1?.key);
+  const p2Id = typeof currentIntegration.platform2 === 'string' ? currentIntegration.platform2 : (currentIntegration.platform2?.id || currentIntegration.platform2?.key);
+
   try {
     if (!navigator.onLine) {
       showToast('No internet available. Some features may be unavailable.', 'error');
@@ -44,9 +47,6 @@ window.addEventListener('open-integration-setup', async (e) => {
     }
 
     await loadConnections();
-
-    const p1Id = typeof currentIntegration.platform1 === 'string' ? currentIntegration.platform1 : (currentIntegration.platform1?.id || currentIntegration.platform1?.key);
-    const p2Id = typeof currentIntegration.platform2 === 'string' ? currentIntegration.platform2 : (currentIntegration.platform2?.id || currentIntegration.platform2?.key);
 
     try {
       if (window.currentWorkspaceId) {
