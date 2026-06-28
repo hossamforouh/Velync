@@ -1654,15 +1654,10 @@ function renderCards() {
             <div style="font-size: 2.5rem; margin-bottom: 12px;">📭</div>
             <h3 style="margin-bottom: 6px; color: var(--text-1);">No Flows Found</h3>
             <p style="color: var(--text-3); font-size: 0.88rem; margin-bottom: 16px;">Create your first configuration to start syncing data.</p>
-            <button class="btn btn-primary btn-sm" id="btn-new-empty" type="button">${_svgCache['plus']} New Config</button>
           </div>
         </td>
       </tr>`;
       
-    const btnNewEmpty = document.getElementById('btn-new-empty');
-    if (btnNewEmpty) {
-      btnNewEmpty.addEventListener('click', () => openPanel());
-    }
     updateToolbarButtonStates();
     return;
   }

@@ -4525,7 +4525,6 @@ header.legacy-header {
     width: 40px !important;
     text-align: center !important;
     padding: 6px 8px !important;
-    background: transparent !important;
   }
   .configs-table td.col-checkbox input[type="checkbox"],
   .configs-table th.col-checkbox input[type="checkbox"] {
