@@ -1415,8 +1415,6 @@ btnLogout.addEventListener('click', async () => {
   try {
     await signOut(auth);
     currentProjects = [];
-    fTtList.innerHTML = '<option value="Inbox">Inbox</option>';
-    fTtTag.innerHTML = '<option value="">-- No Tag --</option>';
     if (authForm) authForm.reset();
   } catch (error) {
     showToast('Logout failed: ' + error.message, 'error');
