@@ -2173,7 +2173,6 @@ function handleConnectionChange(prefix) {
 }
 
 async function closePanel() {
-  delete window.currentIntegration;
   window._connectingProvider = null;
   document.querySelectorAll('#section-p1 .loader1, #section-p2 .loader2').forEach(el => el.remove());
   const sidePanel = document.getElementById('side-panel');
