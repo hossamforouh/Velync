@@ -50,7 +50,7 @@ function startScheduler() {
       activeJobs[configId] = cron.schedule(safeSchedule, async () => {
         logger.info('scheduler', `Executing "${configName}"`);
         try {
-          if (config.sourcePlatform) {
+          if (config.platform1) {
             await runSync(config, configId);
           } else {
             await runSyncForConfig(config, configId);

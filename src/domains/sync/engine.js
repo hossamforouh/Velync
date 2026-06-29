@@ -40,14 +40,21 @@ async function runSync(config, configId) {
   let synced = 0, deleted = 0, failed = 0;
   try {
     const workspaceId = config.workspaceId;
-    const sourceConnId = config.sourceConnectionId;
-    const destConnId = config.destConnectionId;
-    const sourcePlatform = config.sourcePlatform;
-    const destPlatform = config.destPlatform;
+    const sourceConnId = config.platform1ConnectionId || config.sourceConnectionId;
+    const destConnId = config.platform2ConnectionId || config.destConnectionId;
+    const sourcePlatform = config.platform1 || config.sourcePlatform;
+    const destPlatform = config.platform2 || config.destPlatform;
     const fieldMappings = config.fieldMappings || [];
     const syncType = config.syncType || 'Source_to_Dest';
-    const entityType = config.targetEntity || 'Tasks';
-    const filter = config.filterConfig || {};
+    
+    const p1Settings = config.p1Settings || {};
+    const p2Settings = config.p2Settings || {};
+    const entityType = p1Settings.targetEntity || p2Settings.targetEntity || config.targetEntity || 'Tasks';
+    
+    const filter = { ...p1Settings, ...(config.filterConfig || {}) };
+    delete filter.targetEntity;
+    
+    config.templateId = p2Settings.templateId || config.templateId;
 
     const sourceCreds = sourceConnId ? await resolveConnectorCreds(workspaceId, sourceConnId) : {};
     const destCreds = destConnId ? await resolveConnectorCreds(workspaceId, destConnId) : {};
