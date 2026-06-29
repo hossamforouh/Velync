@@ -84,6 +84,23 @@ router.get('/ticktick/lists', verifyAuth, async (req, res) => {
   }
 });
 
+router.post('/notion-databases', verifyAuth, async (req, res) => {
+  try {
+    const { connectionId, token } = req.body;
+    let actualToken = token;
+    if (connectionId) {
+      const creds = await resolveConnectionTokens(req.user.uid, connectionId);
+      actualToken = creds.accessToken;
+    }
+    if (!actualToken) throw new Error('Token or Connection ID required');
+    const notion = new NotionService(actualToken);
+    const databases = await notion.listDatabases();
+    res.json({ success: true, databases });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/notion-database-schema', verifyAuth, async (req, res) => {
   try {
     const { connectionId, databaseId, token } = req.body;

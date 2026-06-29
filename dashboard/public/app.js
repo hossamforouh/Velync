@@ -15,7 +15,7 @@ import { initAdminIntegrations } from './js/admin-integrations.js';
 import { initAdminPlatforms } from './js/admin-platforms.js';
 import './js/integration-setup.js';
 import { showToast } from './js/toast.js';
-import { confirmDialog, alertDialog } from './js/confirm.js';
+import { confirmDialog, alertDialog, threeWayConfirmDialog } from './js/confirm.js';
 import { startLoad, endLoad, isLoading } from './js/loading.js';
 import { getSkeletonFormHTML, setButtonLoading } from './js/loading-components.js';
 
@@ -162,34 +162,39 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
     
     const val = existingData[field.id] !== undefined ? existingData[field.id] : '';
     
+    const rawLabel = String(field.label || '');
+    const hasStar = rawLabel.trim().endsWith('*');
+    const cleanLabel = hasStar ? rawLabel.replace(/\*$/, '').trim() : rawLabel;
+    const isReq = field.required === true || field.required === 'true' || hasStar;
+    
     if (field.type === 'text') {
-      row.innerHTML = `<label for="f-${prefix}-${escAttr(field.id)}">${escHtml(field.label)}${field.required ? ' <span class="required-mark">*</span>' : ''}</label>
-                       <input type="text" id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" value="${escAttr(val)}" />`;
+      row.innerHTML = `<label for="f-${prefix}-${escAttr(field.id)}">${escHtml(cleanLabel)}${isReq ? ' <span class="required-mark">*</span>' : ''}</label>
+                       <input type="text" id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" value="${escAttr(val)}" ${isReq ? 'required' : ''} />`;
     } else if (field.type === 'toggle') {
       row.innerHTML = `<label style="display:flex; justify-content:space-between; align-items:center;">
-                         ${escHtml(field.label)}${field.required ? ' <span class="required-mark">*</span>' : ''}
+                         ${escHtml(cleanLabel)}${isReq ? ' <span class="required-mark">*</span>' : ''}
                          <label class="toggle">
-                           <input type="checkbox" id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" ${val ? 'checked' : ''} />
+                           <input type="checkbox" id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" ${val ? 'checked' : ''} ${isReq ? 'required' : ''} />
                            <span class="toggle-track"></span>
                            <span class="toggle-thumb"></span>
                          </label>
                        </label>`;
     } else if (field.type === 'static_select') {
       const opts = (field.options || []).map(o => `<option value="${escAttr(o)}" ${val === o ? 'selected' : ''}>${escHtml(o)}</option>`).join('');
-      row.innerHTML = `<label for="f-${prefix}-${escAttr(field.id)}">${escHtml(field.label)}${field.required ? ' <span class="required-mark">*</span>' : ''}</label>
-                       <select id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}">
+      row.innerHTML = `<label for="f-${prefix}-${escAttr(field.id)}">${escHtml(cleanLabel)}${isReq ? ' <span class="required-mark">*</span>' : ''}</label>
+                       <select id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" ${isReq ? 'required' : ''}>
                          <option value="">-- Select --</option>
                          ${opts}
                        </select>`;
     } else if (field.type === 'dynamic_select') {
       row.innerHTML = `<label for="f-${prefix}-${escAttr(field.id)}" style="display: flex; align-items: center; gap: 4px; width: 100%;">
-                         <span>${escHtml(field.label)}${field.required ? '<span class="required-mark">*</span>' : ''}</span>
+                         <span>${escHtml(cleanLabel)}${isReq ? '<span class="required-mark">*</span>' : ''}</span>
                          <span style="margin-left: auto; display: flex; align-items: center;">
                            <span class="ds-loading-dots" style="display:none; font-size: 0.8rem; color: var(--text-3); margin-right: 6px;">Loading</span>
                            <a href="#" class="btn-refresh-ds" style="font-size: 0.8rem; color: var(--primary); text-decoration: underline;" onclick="event.preventDefault();">Refresh</a>
                          </span>
                        </label>
-                       <select id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" style="width: 100%;">
+                       <select id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" style="width: 100%;" ${isReq ? 'required' : ''}>
                          <option value="">${val ? escHtml(val) + ' (Saved)' : 'No data — click Refresh'}</option>
                        </select>`;
                        
@@ -570,6 +575,12 @@ document.addEventListener('DOMContentLoaded', () => {
     configForm.addEventListener('input', window.markConfigDirty);
     configForm.addEventListener('change', window.markConfigDirty);
   }
+  
+  const nodeConfigModal = document.getElementById('node-config-modal');
+  if (nodeConfigModal) {
+    nodeConfigModal.addEventListener('input', window.markConfigDirty);
+    nodeConfigModal.addEventListener('change', window.markConfigDirty);
+  }
 
   window.addEventListener('beforeunload', (e) => {
     if (isConfigDirty) {
@@ -626,7 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Cloud Run API endpoint
-const API_URL = window.VELYNC_CONFIG.apiBase;
+const API_URL = window.VELYNC_CONFIG.apiBase.replace(/\/$/, '') + '/api';
 let currentProjects = [];
 
 // ─── Auth Flow ────────────────────────────────────────────────
@@ -1149,8 +1160,8 @@ onAuthStateChanged(auth, async (user) => {
                  <div class="collaborator-item">
                    <div class="collab-avatar">${initials}</div>
                    <div class="collab-info">
-                     <div class="collab-name">${isOwner ? 'Owner' : 'Member'}</div>
-                     <div class="collab-email">${uData.email}</div>
+                     <div class="collab-name">${escHtml(uData.name || 'Unknown User')} ${isOwner ? '(Owner)' : ''}</div>
+                     <div class="collab-email">${escHtml(uData.email || '')}</div>
                    </div>
                  </div>
                `;
@@ -1559,6 +1570,23 @@ function clearSelection() {
   renderCards();
 }
 
+window.usersCache = window.usersCache || {};
+async function fetchUserForCache(uid) {
+  if (window.usersCache[uid] === 'fetching') return;
+  window.usersCache[uid] = 'fetching';
+  try {
+    const uSnap = await getDoc(doc(db, 'users', uid));
+    if (uSnap.exists()) {
+      window.usersCache[uid] = uSnap.data();
+      renderCards(); // Re-render to update the table
+    } else {
+      window.usersCache[uid] = { name: 'Unknown' };
+    }
+  } catch (err) {
+    window.usersCache[uid] = null;
+  }
+}
+
 // ─── Render cards ─────────────────────────────────────────────
 function renderCards() {
   updateStats();
@@ -1693,7 +1721,15 @@ function renderCards() {
 
     const p1Logo = getPlatformLogoSvg(cfg.platform1);
     const p2Logo = getPlatformLogoSvg(cfg.platform2);
-    const ownerName = cfg.ownerName || cfg.createdBy || '—';
+    let ownerName = cfg.ownerName || cfg.createdBy || '—';
+    if (cfg.ownerId) {
+      if (window.usersCache && window.usersCache[cfg.ownerId] && window.usersCache[cfg.ownerId] !== 'fetching') {
+        const cachedUser = window.usersCache[cfg.ownerId];
+        ownerName = cachedUser.name || cachedUser.email || ownerName;
+      } else if (!window.usersCache[cfg.ownerId]) {
+        fetchUserForCache(cfg.ownerId);
+      }
+    }
     const lastRun = cfg.lastRunAt ? fmtDate(cfg.lastRunAt) : '—';
 
     // Parse the cron schedule into a readable text format
@@ -2031,8 +2067,10 @@ async function openPanel(id = null) {
   }
 
   goToStep(1);
-  document.getElementById('f-tt-connection')?.dispatchEvent(new Event('change'));
-  document.getElementById('f-notion-connection')?.dispatchEvent(new Event('change'));
+  if (!id) {
+    document.getElementById('f-tt-connection')?.dispatchEvent(new Event('change'));
+    document.getElementById('f-notion-connection')?.dispatchEvent(new Event('change'));
+  }
   sidePanel.classList.add('open');
   panelOverlay.classList.add('open');
   fDescription.focus();
@@ -2180,13 +2218,21 @@ async function closePanel() {
     return;
   }
   if (isConfigDirty) {
-    const confirmed = await confirmDialog({
-      title: 'Discard Changes?',
-      message: 'You have unsaved changes. Are you sure you want to discard them?',
-      confirmText: 'Discard',
-      confirmClass: 'btn-danger'
+    const action = await threeWayConfirmDialog({
+      title: 'Unsaved Changes',
+      message: 'You have unsaved changes. Would you like to save them before closing?',
+      saveText: 'Save',
+      discardText: 'Discard',
+      cancelText: 'Cancel'
     });
-    if (!confirmed) return;
+    if (action === 'cancel') return;
+    if (action === 'save') {
+      const fakeEvent = { preventDefault: () => {} };
+      await saveConfig(fakeEvent, false);
+      if (isConfigDirty) {
+        return; // Save failed or validation error prevented saving
+      }
+    }
   }
   sidePanel.classList.remove('open');
   panelOverlay.classList.remove('open');
@@ -2886,7 +2932,11 @@ async function saveConfig(e, isSubmit = false) {
       showToast(isSubmit ? 'Config activated' : 'Config updated', 'success');
     } else {
       payload.createdAt = serverTimestamp();
-      payload.ownerName = auth.currentUser?.displayName || auth.currentUser?.email || 'Unknown';
+      let fullName = auth.currentUser?.displayName;
+      if (window.usersCache && window.usersCache[auth.currentUser.uid] && window.usersCache[auth.currentUser.uid] !== 'fetching') {
+         fullName = window.usersCache[auth.currentUser.uid].name;
+      }
+      payload.ownerName = fullName || auth.currentUser?.email || 'Unknown';
       payload.ownerId = auth.currentUser?.uid || null;
       const docRef = await addDoc(collection(db, 'workspaces', currentWorkspaceId, 'sync_configs'), payload);
       editingId = docRef.id;
@@ -3541,12 +3591,27 @@ function closeNodeModal() {
   updateNodeStatuses();
 }
 
+function isSectionValid(sectionId) {
+  const section = document.getElementById(sectionId);
+  if (!section) return false;
+  
+  const requiredFields = section.querySelectorAll('[required]');
+  for (const field of requiredFields) {
+    const row = field.closest('.form-row');
+    if (row && row.style.display === 'none') continue; // Skip hidden fields
+    if (field.type === 'checkbox') {
+      if (!field.checked) return false;
+    } else {
+      if (!field.value || field.value.trim() === '') return false;
+    }
+  }
+  return true;
+}
+
 function updateNodeStatuses() {
-  // Check P1
-  const p1Conn = document.getElementById('f-tt-connection')?.value;
   const nodeP1Status = document.getElementById('node-p1-status');
   if (nodeP1Status) {
-    if (p1Conn) {
+    if (isSectionValid('section-p1')) {
       nodeP1Status.innerHTML = '<i data-feather="check-circle" style="width: 16px; height: 16px;"></i>';
       nodeP1Status.className = 'node-status-icon success';
     } else {
@@ -3555,11 +3620,9 @@ function updateNodeStatuses() {
     }
   }
 
-  // Check P2
-  const p2Conn = document.getElementById('f-notion-connection')?.value;
   const nodeP2Status = document.getElementById('node-p2-status');
   if (nodeP2Status) {
-    if (p2Conn) {
+    if (isSectionValid('section-p2')) {
       nodeP2Status.innerHTML = '<i data-feather="check-circle" style="width: 16px; height: 16px;"></i>';
       nodeP2Status.className = 'node-status-icon success';
     } else {
@@ -3571,11 +3634,50 @@ function updateNodeStatuses() {
   if (window.feather) window.feather.replace();
 }
 
+function saveNodeModal() {
+  const nodeModalBody = document.getElementById('node-modal-body');
+  if (!nodeModalBody) return closeNodeModal();
+  
+  const activeSection = nodeModalBody.querySelector('.form-section');
+  if (!activeSection) return closeNodeModal();
+  
+  let isValid = true;
+  const requiredFields = activeSection.querySelectorAll('[required]');
+  
+  for (const field of requiredFields) {
+    const row = field.closest('.form-row');
+    if (row && row.style.display === 'none') continue;
+    
+    if (field.type === 'checkbox') {
+      if (!field.checked) {
+        isValid = false;
+        field.style.outline = '2px solid var(--danger)';
+      } else {
+        field.style.outline = '';
+      }
+    } else {
+      if (!field.value || field.value.trim() === '') {
+        isValid = false;
+        field.style.borderColor = 'var(--danger)';
+      } else {
+        field.style.borderColor = '';
+      }
+    }
+  }
+  
+  if (!isValid) {
+    showToast('Please fill in all mandatory fields.', 'warning');
+    return;
+  }
+  
+  closeNodeModal();
+}
+
 // Bind Node Modal clicks
 document.getElementById('node-platform1')?.addEventListener('click', () => openNodeModal('p1'));
 document.getElementById('node-platform2')?.addEventListener('click', () => openNodeModal('p2'));
 nodeModalClose?.addEventListener('click', closeNodeModal);
-nodeModalSave?.addEventListener('click', closeNodeModal);
+nodeModalSave?.addEventListener('click', saveNodeModal);
 
 
 // ─── Utility ──────────────────────────────────────────────────

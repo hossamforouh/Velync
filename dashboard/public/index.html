@@ -971,7 +971,7 @@
           <div class="form-section" id="section-p1">
             <div class="form-section-title" id="p1-settings-title">Platform 1 Settings</div>
             <div class="form-row">
-              <label for="f-tt-connection">Connection</label>
+              <label for="f-tt-connection">Connection <span class="required-mark">*</span></label>
               <div style="display:flex;gap:8px;width:100%;">
                 <select id="f-tt-connection" required style="flex:1;">
                   <option value="">— Select Connection —</option>
@@ -988,7 +988,7 @@
           <div class="form-section" id="section-p2">
             <div class="form-section-title" id="p2-settings-title">Platform 2 Settings</div>
             <div class="form-row">
-              <label for="f-notion-connection">Connection</label>
+              <label for="f-notion-connection">Connection <span class="required-mark">*</span></label>
               <div style="display:flex;gap:8px;width:100%;">
                 <select id="f-notion-connection" required style="flex:1;">
                   <option value="">— Select Connection —</option>
@@ -1125,7 +1125,9 @@
             <div class="form-row">
               <label for="f-sync-type">Sync Directionality *</label>
               <select id="f-sync-type">
-                <!-- Dynamically populated in app.js -->
+                <option value="Source_to_Dest">Source to Destination</option>
+                <option value="Dest_to_Source">Destination to Source</option>
+                <option value="Bidirectional">Bidirectional (Two-way)</option>
               </select>
             </div>
 

@@ -4573,6 +4573,7 @@ header.legacy-header {
     align-items: center !important;
     justify-content: center !important;
     flex-shrink: 0 !important;
+    color: var(--bg) !important;
   }
 
   /* ── Status column ── */
@@ -4740,6 +4741,7 @@ header.legacy-header {
     width: 30px !important; height: 30px !important; background: #fff !important;
     border-radius: 6px !important; padding: 3px !important;
     display: flex !important; align-items: center !important; justify-content: center !important;
+    color: var(--bg) !important;
   }
 
   /* Status */

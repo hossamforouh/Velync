@@ -102,8 +102,8 @@ export function alertDialog({ title = 'Info', message } = {}) {
     overlay.innerHTML = `
       <div class="modal" role="dialog" aria-modal="true">
         <h3>${escHtml(title)}</h3>
-        <p style="white-space:pre-wrap;">${escHtml(message)}</p>
-        <div class="modal-actions">
+        <p>${escHtml(message)}</p>
+        <div class="modal-actions" style="justify-content: flex-end;">
           <button class="btn btn-primary" id="alert-ok">OK</button>
         </div>
       </div>
@@ -112,7 +112,6 @@ export function alertDialog({ title = 'Info', message } = {}) {
     document.body.appendChild(overlay);
 
     const btnOk = overlay.querySelector('#alert-ok');
-
     const cleanup = () => {
       document.removeEventListener('keydown', escHandler);
       overlay.remove();
@@ -126,3 +125,77 @@ export function alertDialog({ title = 'Info', message } = {}) {
     btnOk.focus();
   });
 }
+
+/**
+ * Show a 3-way confirmation dialog. Resolves to 'save', 'discard', or 'cancel'.
+ */
+export function threeWayConfirmDialog({
+  title = 'Unsaved Changes',
+  message = 'You have unsaved changes. Would you like to save them before closing?',
+  saveText = 'Save',
+  saveClass = 'btn-primary',
+  discardText = 'Discard',
+  discardClass = 'btn-danger',
+  cancelText = 'Cancel'
+} = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.style.cssText = 'z-index: 10000;';
+
+    const cleanup = () => {
+      document.removeEventListener('keydown', escHandler);
+      overlay.remove();
+    };
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        resolve('cancel');
+      }
+    });
+
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        cleanup();
+        resolve('cancel');
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3>${escHtml(title)}</h3>
+        <p>${escHtml(message)}</p>
+        <div class="modal-actions" style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" id="confirm-cancel">${escHtml(cancelText)}</button>
+          <div style="margin-left: auto; display: flex; gap: 8px;">
+            <button class="btn ${escHtml(discardClass)}" id="confirm-discard">${escHtml(discardText)}</button>
+            <button class="btn ${escHtml(saveClass)}" id="confirm-save">${escHtml(saveText)}</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#confirm-cancel').addEventListener('click', () => {
+      cleanup();
+      resolve('cancel');
+    });
+
+    overlay.querySelector('#confirm-discard').addEventListener('click', () => {
+      cleanup();
+      resolve('discard');
+    });
+
+    const btnSave = overlay.querySelector('#confirm-save');
+    btnSave.addEventListener('click', () => {
+      cleanup();
+      resolve('save');
+    });
+
+    btnSave.focus();
+  });
+}
+
