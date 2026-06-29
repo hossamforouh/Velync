@@ -150,7 +150,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
     }
   }
   
-  const plat = window.cachedPlatforms?.find(p => p.id === platformId);
+  const plat = window.cachedPlatforms?.find(p => p.id === platformId || p.key === platformId);
   if (!plat || !plat.configSchema) return;
   
   for (const field of plat.configSchema) {
@@ -1546,7 +1546,7 @@ function getPlatformLogoSvg(platformId) {
   if (!platformId || !window.cachedPlatforms) {
     return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>';
   }
-  const plat = window.cachedPlatforms.find(p => p.id === platformId);
+  const plat = window.cachedPlatforms.find(p => p.id === platformId || p.key === platformId);
   if (plat && plat.logo) return plat.logo;
   return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>';
 }
@@ -1719,13 +1719,25 @@ function renderCards() {
     const p1Name = cfg.p1Settings?.platformName || 'Source';
     const p2Name = cfg.p2Settings?.platformName || 'Dest';
 
-    const p1Logo = getPlatformLogoSvg(cfg.platform1);
-    const p2Logo = getPlatformLogoSvg(cfg.platform2);
+    let p1Id = cfg.platform1;
+    let p2Id = cfg.platform2;
+    if (!p1Id && cfg.platform1ConnectionId && typeof _connectionsCache !== 'undefined') {
+      const c = _connectionsCache.find(x => x.id === cfg.platform1ConnectionId);
+      if (c) p1Id = c.provider;
+    }
+    if (!p2Id && cfg.platform2ConnectionId && typeof _connectionsCache !== 'undefined') {
+      const c = _connectionsCache.find(x => x.id === cfg.platform2ConnectionId);
+      if (c) p2Id = c.provider;
+    }
+    const p1Logo = getPlatformLogoSvg(p1Id);
+    const p2Logo = getPlatformLogoSvg(p2Id);
     let ownerName = cfg.ownerName || cfg.createdBy || '—';
-    if (cfg.ownerId) {
-      if (window.usersCache && window.usersCache[cfg.ownerId] && window.usersCache[cfg.ownerId] !== 'fetching') {
+    if (!cfg.ownerName && cfg.ownerId) {
+      if (auth.currentUser && cfg.ownerId === auth.currentUser.uid && auth.currentUser.displayName) {
+        ownerName = auth.currentUser.displayName;
+      } else if (window.usersCache && window.usersCache[cfg.ownerId] && window.usersCache[cfg.ownerId] !== 'fetching') {
         const cachedUser = window.usersCache[cfg.ownerId];
-        ownerName = cachedUser.name || cachedUser.email || ownerName;
+        ownerName = cachedUser.name || cachedUser.displayName || cachedUser.email || ownerName;
       } else if (!window.usersCache[cfg.ownerId]) {
         fetchUserForCache(cfg.ownerId);
       }
@@ -1907,6 +1919,14 @@ async function loadConfigs(silent = false) {
   }
 
   try {
+    if (!window.cachedPlatforms) {
+      const pSnap = await getDocs(collection(db, 'platforms'));
+      window.cachedPlatforms = pSnap.docs.map(d => ({id: d.id, ...d.data()}));
+    }
+    if (typeof loadConnections === 'function' && (!_connectionsCache || _connectionsCache.length === 0)) {
+      _connectionsCache = await loadConnections();
+    }
+
     const q = collection(db, "workspaces", currentWorkspaceId, "sync_configs");
     const querySnapshot = await Promise.race([
       getDocs(q),
@@ -2027,8 +2047,8 @@ async function openPanel(id = null) {
   } else if (window.currentIntegration) {
     // New config from marketplace flow: use integration's platform definitions
     const integ = window.currentIntegration;
-    p1Provider = typeof integ.platform1 === 'string' ? integ.platform1 : (integ.platform1?.id || integ.platform1?.key);
-    p2Provider = typeof integ.platform2 === 'string' ? integ.platform2 : (integ.platform2?.id || integ.platform2?.key);
+    p1Provider = typeof integ.platform1 === 'string' ? integ.platform1 : (integ.platform1?.key || integ.platform1?.id);
+    p2Provider = typeof integ.platform2 === 'string' ? integ.platform2 : (integ.platform2?.key || integ.platform2?.id);
   }
 
   populateConnectionDropdowns(_connectionsCache, id, p1Provider, p2Provider);
@@ -2084,7 +2104,7 @@ let _dropdownP2Name = null;
 
 function getPlatformDisplayName(providerId) {
   if (!providerId) return null;
-  const plat = window.cachedPlatforms?.find(p => p.id === providerId);
+  const plat = window.cachedPlatforms?.find(p => p.id === providerId || p.key === providerId);
   return plat?.name || providerId;
 }
 
@@ -2585,13 +2605,16 @@ async function fetchNotionDbTemplates(dbId, connectionId, selectedTemplateId = n
 
 async function fetchSourceSchema(connectionId, platform, entityType = 'Tasks') {
   if (!connectionId || !platform) return;
+  // Resolve platform to key if an ID was incorrectly passed
+  const plat = window.cachedPlatforms?.find(p => p.id === platform || p.key === platform);
+  const resolvedPlatform = plat ? (plat.key || plat.id) : platform;
   try {
     const user = auth.currentUser;
     const idToken = await user.getIdToken();
     const res = await fetch(`${API_URL}/schema`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-      body: JSON.stringify({ connectionId, platform, entityType })
+      body: JSON.stringify({ connectionId, platform: resolvedPlatform, entityType })
     });
     const data = await res.json();
     if (data.success) {
@@ -2627,7 +2650,7 @@ function clearForm() {
   window.currentConfigStatus = 'draft';
   // Only reset creationSource to 'manual' when not in marketplace/inline mode
   const sidePanel = document.getElementById('side-panel');
-  if (sidePanel && sidePanel.classList.contains('inline-mode')) {
+  if ((sidePanel && sidePanel.classList.contains('inline-mode')) || window.currentIntegration) {
     window.currentConfigCreationSource = 'marketplace';
   } else {
     window.currentConfigCreationSource = 'manual';
@@ -2828,8 +2851,8 @@ function buildFormPayload(status) {
     syncType:    fSyncType.value,
     deleteAfterSync: fDeleteAfter.checked,
     cronSchedule: buildCron(fIntervalValue?.value, fIntervalUnit?.value, fCron?.value),
-    platform1: _dropdownP1Provider,
-    platform2: _dropdownP2Provider,
+    platform1: _dropdownP1Provider || (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === fTtConnection.value)?.provider) || null,
+    platform2: _dropdownP2Provider || (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === fNotionConnection.value)?.provider) || null,
     platform1ConnectionId: p1ConnId,
     platform2ConnectionId: p2ConnId,
     p1Settings: window.harvestDynamicFields ? window.harvestDynamicFields('p1-dynamic-container') : {},
@@ -2934,7 +2957,17 @@ async function saveConfig(e, isSubmit = false) {
       payload.createdAt = serverTimestamp();
       let fullName = auth.currentUser?.displayName;
       if (window.usersCache && window.usersCache[auth.currentUser.uid] && window.usersCache[auth.currentUser.uid] !== 'fetching') {
-         fullName = window.usersCache[auth.currentUser.uid].name;
+         fullName = fullName || window.usersCache[auth.currentUser.uid].name || window.usersCache[auth.currentUser.uid].displayName;
+      }
+      if (!fullName) {
+        try {
+          const uSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
+          if (uSnap.exists()) {
+            fullName = uSnap.data().name || uSnap.data().displayName;
+          }
+        } catch (err) {
+          console.warn('Failed to fetch user name during config creation', err);
+        }
       }
       payload.ownerName = fullName || auth.currentUser?.email || 'Unknown';
       payload.ownerId = auth.currentUser?.uid || null;
@@ -3079,7 +3112,7 @@ async function fireOpenAddConnection(provider) {
   }
   
   if (provider) {
-    const plat = window.cachedPlatforms?.find(p => p.id === provider);
+    const plat = window.cachedPlatforms?.find(p => p.id === provider || p.key === provider);
 
     // If platform is OAuth, attempt direct flow
     if (plat?.authType === 'oauth' && plat?.authUrl) {

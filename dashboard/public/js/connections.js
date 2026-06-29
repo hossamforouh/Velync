@@ -447,7 +447,7 @@ async function openAddConnectionDialog(presetProvider = null) {
       const label = document.getElementById('conn-label').value.trim();
       if (!label) { showToast('Label is required', 'error'); return; }
 
-      const payload = { provider: selectedPlatform.id, label, attributes: {} };
+      const payload = { provider: selectedPlatform.key || selectedPlatform.id, label, attributes: {} };
 
       if (selectedPlatform.authType === 'oauth') {
         const encodeBase64 = (str) => btoa(unescape(encodeURIComponent(str)));
