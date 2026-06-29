@@ -195,7 +195,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                          </span>
                        </label>
                        <select id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" style="width: 100%;" ${isReq ? 'required' : ''}>
-                         <option value="">${val ? escHtml(val) + ' (Saved)' : 'No data — click Refresh'}</option>
+                         <option value="${val ? escAttr(val) : ''}">${val ? escHtml(val) + ' (Saved)' : 'No data — click Refresh'}</option>
                        </select>`;
                        
       // Attach fetch logic
