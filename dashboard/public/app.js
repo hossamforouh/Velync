@@ -1659,6 +1659,7 @@ function renderCards() {
       </tr>`;
       
     updateToolbarButtonStates();
+    updateMultiSelectBar();
     return;
   }
 
@@ -1675,6 +1676,7 @@ function renderCards() {
         </td>
       </tr>`;
     updateToolbarButtonStates();
+    updateMultiSelectBar();
     return;
   }
 
@@ -2940,6 +2942,7 @@ async function deleteConfig() {
   try {
     const deletedCfg = configs.find(c => c.id === pendingDeleteId);
     await deleteDoc(doc(db, "workspaces", currentWorkspaceId, "sync_configs", pendingDeleteId));
+    selectedConfigIds.delete(pendingDeleteId);
     closeModal();
     await loadConfigs(true);
     showToast('Config deleted', 'info', {
