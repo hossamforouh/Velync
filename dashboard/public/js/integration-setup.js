@@ -11,13 +11,18 @@ let currentIntegration = null;
 let currentStep = 1;
 let platformsMap = {};
 let sidePanelObserver = null;
-let currentSetupConfigId = null;
+
+// Setup Integration Flow
+function closeSetupView() {
+  const overlay = document.getElementById('setup-overlay');
+  if (overlay) overlay.classList.remove('open');
+  window.currentIntegration = null;
+}
 
 window.addEventListener('open-integration-setup', async (e) => {
   currentIntegration = e.detail.integration;
   window.currentIntegration = currentIntegration;
   platformsMap = e.detail.platformsMap;
-  currentSetupConfigId = null; // Reset for a new setup session
 
   // Show loading overlay before async work
   const loadingOverlay = document.createElement('div');
@@ -47,52 +52,6 @@ window.addEventListener('open-integration-setup', async (e) => {
     }
 
     await loadConnections();
-
-    try {
-      if (window.currentWorkspaceId) {
-        const q = query(collection(getDb(), "workspaces", window.currentWorkspaceId, "sync_configs"));
-        const snap = await getDocs(q);
-        const matches = [];
-        for (const doc of snap.docs) {
-          if (doc.data().integrationId === currentIntegration.id && doc.data().status === 'draft') {
-            matches.push({ id: doc.id, ...doc.data() });
-          }
-        }
-        if (matches.length > 0) {
-          matches.sort((a, b) => {
-            const tA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : (new Date(a.updatedAt || 0).getTime());
-            const tB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : (new Date(b.updatedAt || 0).getTime());
-            if (tA !== tB) return tB - tA;
-            const aHasSettings = (a.p1Settings && Object.keys(a.p1Settings).length > 0) ? 1 : 0;
-            const bHasSettings = (b.p1Settings && Object.keys(b.p1Settings).length > 0) ? 1 : 0;
-            return bHasSettings - aHasSettings;
-          });
-          currentSetupConfigId = matches[0].id;
-        }
-
-        if (!currentSetupConfigId) {
-          const payload = {
-            description: `${currentIntegration.name} Sync`,
-            integrationId: currentIntegration.id,
-            status: 'draft',
-            creationSource: 'marketplace',
-            enabled: false,
-            syncType: 'Source_to_Dest',
-            updatedAt: new Date(),
-            workspaceId: window.currentWorkspaceId,
-          };
-          const docRef = await addDoc(collection(getDb(), "workspaces", window.currentWorkspaceId, "sync_configs"), payload);
-          currentSetupConfigId = docRef.id;
-
-          if (window.loadConfigs) {
-            await window.loadConfigs(true);
-          }
-        }
-      }
-    } catch(e) {
-      console.warn('Could not check or create draft config', e);
-      showToast('Could not check or create draft config: ' + (e.message || e), 'error');
-    }
 
     if (!loadingTimedOut) {
       populateSetupView(p1Id, p2Id);
