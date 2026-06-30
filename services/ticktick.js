@@ -81,7 +81,8 @@ class TickTickService {
     const res = await axios.get(`${this.officialBaseUrl}/project`, {
       headers: { 'Authorization': `Bearer ${this.accessToken}` }
     });
-    return res.data || [];
+    const projects = res.data || [];
+    return [{ id: 'inbox', name: 'Inbox' }, ...projects];
   }
 
   /**
