@@ -3208,9 +3208,15 @@ document.getElementById('p2-connect-link')?.addEventListener('click', (e) => {
 
 // Refresh dropdowns when connections are saved/deleted elsewhere
 window.addEventListener('connections-refreshed', async (e) => {
+  const currentP1 = fTtConnection.value;
+  const currentP2 = fNotionConnection.value;
+
   _connectionsCache = await loadConnections();
   const cfgId = document.getElementById('form-id')?.value?.trim() || null;
   populateConnectionDropdowns(_connectionsCache, cfgId, _dropdownP1Provider, _dropdownP2Provider);
+
+  if (currentP1) fTtConnection.value = currentP1;
+  if (currentP2) fNotionConnection.value = currentP2;
 
   const { newConnectionId, platformId } = e.detail || {};
   if (newConnectionId && platformId) {
