@@ -2110,6 +2110,20 @@ header.legacy-header {
   background-size: 14px;
 }
 
+.form-row select.is-loading,
+.configs-table select.is-loading,
+.ds-select.is-loading {
+  color: var(--primary) !important;
+  opacity: 1 !important;
+  animation: pulse-loading 1.5s infinite;
+}
+
+@keyframes pulse-loading {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
+}
+
 :root[data-theme="dark"] .form-row select {
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
 }

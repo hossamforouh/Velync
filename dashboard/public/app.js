@@ -190,9 +190,6 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
       row.innerHTML = `<label for="f-${prefix}-${escAttr(field.id)}" style="display: flex; align-items: center; gap: 4px; width: 100%;">
                          <span>${escHtml(cleanLabel)}${isReq ? '<span class="required-mark">*</span>' : ''}</span>
                          <span style="margin-left: auto; display: flex; align-items: center;">
-                           <span class="ds-loading-dots" style="display:none; font-size: 0.8rem; color: var(--text-3); margin-right: 6px; align-items: center;">
-                             <span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 6px;"></span>Loading...
-                           </span>
                            <a href="#" class="btn-refresh-ds" style="font-size: 0.8rem; color: var(--primary); text-decoration: underline;" onclick="event.preventDefault();">Refresh</a>
                          </span>
                        </label>
@@ -200,17 +197,12 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                          <select id="f-${prefix}-${escAttr(field.id)}" class="ds-select" data-schema-id="${escAttr(field.id)}" style="width: 100%; transition: opacity 0.2s;" ${isReq ? 'required' : ''}>
                            <option value="${val ? escAttr(val) : ''}">${val ? escHtml(val) + ' (Saved)' : '-- Select --'}</option>
                          </select>
-                         <div class="ds-skeleton" style="display:none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; padding: 4px 0;">
-                           <div class="skeleton-line" style="width: 100%; height: 100%; margin: 0; border-radius: 8px;"></div>
-                         </div>
                        </div>`;
                        
       // Attach fetch logic
       setTimeout(async () => {
          const selectEl = row.querySelector('.ds-select');
-         const skeletonEl = row.querySelector('.ds-skeleton');
          const btnRef = row.querySelector('.btn-refresh-ds');
-         const dots = row.querySelector('.ds-loading-dots');
          if(window.feather) window.feather.replace();
          
          // Auto-load if a connection is already selected (always load, even with a saved value)
@@ -225,13 +217,10 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 return;
               }
               
-              dots.style.display = 'flex';
               btnRef.style.display = 'none';
-              
-              // Skeleton UI
-              skeletonEl.style.display = 'block';
-              selectEl.style.opacity = '0';
+              selectEl.innerHTML = `<option value="">Fetching ${escHtml(cleanLabel)}...</option>`;
               selectEl.disabled = true;
+              selectEl.classList.add('is-loading');
               
               try {
                 let parentVal = '';
@@ -261,15 +250,11 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 // Error state on button
                 btnRef.textContent = 'Fetch Failed — Retry';
                 btnRef.style.color = '#ef4444';
+              } finally {
+                selectEl.classList.remove('is-loading');
+                selectEl.disabled = false;
+                btnRef.style.display = 'inline-block';
               }
-              
-              // Remove Skeleton UI
-              skeletonEl.style.display = 'none';
-              selectEl.style.opacity = '1';
-              selectEl.disabled = false;
-              
-              dots.style.display = 'none';
-              btnRef.style.display = '';
             }
           };
          btnRef.addEventListener('click', loadData);
@@ -2208,6 +2193,8 @@ function populateConnectionDropdowns(connections, id = null, p1Provider = null, 
   fNotionConnection.innerHTML = p2Result.html;
   fTtConnection.disabled = false;
   fNotionConnection.disabled = false;
+  fTtConnection.classList.remove('is-loading');
+  fNotionConnection.classList.remove('is-loading');
 
   const hint1 = document.getElementById('p1-connect-hint');
   const hint2 = document.getElementById('p2-connect-hint');
@@ -3170,29 +3157,32 @@ async function fireOpenAddConnection(provider) {
         label = baseLabel + ' (' + idx + ')';
       }
 
-      // Show loading indicator in the connection area
+      // Show inline loading state in the dropdown
       const isP1 = provider === _dropdownP1Provider;
       const select = isP1 ? fTtConnection : fNotionConnection;
       const btn = isP1 ? document.getElementById('btn-connect-p1') : document.getElementById('btn-connect-p2');
       const hint = isP1 ? document.getElementById('p1-connect-hint') : document.getElementById('p2-connect-hint');
-      const formRow = isP1 ? document.querySelector('#section-p1 .form-row') : document.querySelector('#section-p2 .form-row');
-      if (select) select.disabled = true;
+      
+      let originalSelectHtml = '';
+      if (select) {
+        originalSelectHtml = select.innerHTML;
+        select.disabled = true;
+        select.classList.add('is-loading');
+        select.innerHTML = `<option value="">Fetching ${escHtml(plat.name || 'provider')}...</option>`;
+      }
       if (btn) btn.style.display = 'none';
       if (hint) hint.style.display = 'none';
-      if (formRow) {
-        const ind = document.createElement('span');
-        ind.className = 'loader' + (isP1 ? '1' : '2');
-        ind.style.cssText = 'color:var(--text-3);font-size:0.85rem;display:flex;align-items:center;gap:8px;';
-        ind.innerHTML = '<span class="spin">⟳</span> Connecting to ' + escHtml(plat.name || 'provider') + '…';
-        formRow.appendChild(ind);
-      }
 
       const opened = await initiateDirectOAuthFlow(plat, label);
       if (opened) return; // Popup opened — skip the dialog
+      
       window._connectingProvider = null;
-      // Clean up loading indicator — the fallback dialog will also call populateConnectionDropdowns on success
-      document.querySelectorAll('#section-p1 .loader1, #section-p2 .loader2').forEach(el => el.remove());
-      if (select) select.disabled = false;
+      // Revert loading state
+      if (select) {
+        select.innerHTML = originalSelectHtml;
+        select.classList.remove('is-loading');
+        select.disabled = false;
+      }
       if (btn) btn.style.display = '';
       if (hint) hint.style.display = '';
     }
