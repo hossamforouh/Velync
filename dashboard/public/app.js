@@ -205,9 +205,9 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
          const dots = row.querySelector('.ds-loading-dots');
          if(window.feather) window.feather.replace();
          
-         // Auto-load if a connection is already selected
+         // Auto-load if a connection is already selected (always load, even with a saved value)
          const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
-         const shouldAutoLoad = connId && !val;
+         const shouldAutoLoad = !!connId;
          
           const loadData = async () => {
             if (field.dataSource) {
@@ -230,12 +230,17 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 const items = await fetchPlatformEntities(field.dataSource, connId, parentVal);
                 if (items.length === 0) {
                   selectEl.innerHTML = '<option value="">— No data available —</option>';
+                  // Keep saved value as a fallback option so it isn't lost
+                  if (val) selectEl.innerHTML += `<option value="${escAttr(val)}" selected>${escHtml(val)} (Saved)</option>`;
                 } else {
                   selectEl.innerHTML = '<option value="">-- Select --</option>' + items.map(i => `<option value="${escAttr(i.value)}" ${val === i.value ? 'selected' : ''}>${escHtml(i.label)}</option>`).join('');
+                  // Re-select saved value after loading (handles the case where val was set before options loaded)
+                  if (val) selectEl.value = val;
                 }
               } catch (e) {
                 console.error("DataSource Error:", e);
                 selectEl.innerHTML = `<option value="">Error loading</option>`;
+                if (val) selectEl.innerHTML += `<option value="${escAttr(val)}" selected>${escHtml(val)} (Saved)</option>`;
               }
               dots.style.display = 'none';
               btnRef.style.display = '';
@@ -2605,9 +2610,13 @@ async function fetchNotionDbTemplates(dbId, connectionId, selectedTemplateId = n
 
 async function fetchSourceSchema(connectionId, platform, entityType = 'Tasks') {
   if (!connectionId || !platform) return;
-  // Resolve platform to key if an ID was incorrectly passed
+  // Resolve platform to key if an ID was incorrectly passed (e.g. custom platforms)
   const plat = window.cachedPlatforms?.find(p => p.id === platform || p.key === platform);
-  const resolvedPlatform = plat ? (plat.key || plat.id) : platform;
+  let resolvedPlatform = plat ? (plat.key || plat.name?.toLowerCase() || plat.id) : platform;
+  if (plat && resolvedPlatform === plat.id) {
+     if (plat.authUrl?.includes('ticktick')) resolvedPlatform = 'ticktick';
+     if (plat.authUrl?.includes('notion')) resolvedPlatform = 'notion';
+  }
   try {
     const user = auth.currentUser;
     const idToken = await user.getIdToken();
@@ -2695,6 +2704,12 @@ function clearForm() {
     templateSelect.innerHTML = '<option value="">No Template (Default Layout)</option>';
     templateSelect.value = '';
   }
+
+  // Clear dynamic platform containers so legacy schema fields don't persist
+  const p1Container = document.getElementById('p1-dynamic-container');
+  if (p1Container) p1Container.innerHTML = '';
+  const p2Container = document.getElementById('p2-dynamic-container');
+  if (p2Container) p2Container.innerHTML = '';
 
   notionDbProperties = {};
   mappingsContainer.innerHTML = '';

@@ -22,9 +22,12 @@ router.get('/data-sources', verifyAuth, (req, res) => {
 router.post('/platform-entities', verifyAuth, async (req, res) => {
   try {
     const { connectionId, providerName, dataSourceId, parentValue } = req.body;
+    logger.info('platform', 'platform-entities called', { connectionId, dataSourceId, parentValue, uid: req.user?.uid });
     if (!connectionId) throw new Error('Connection ID required');
 
+    logger.info('platform', 'resolving connection tokens', { connectionId });
     const creds = await resolveConnectionTokens(req.user.uid, connectionId);
+    logger.info('platform', 'creds resolved', { hasAccessToken: !!creds.accessToken, tokenLength: creds.accessToken?.length });
     let entities = [];
 
     switch (dataSourceId) {
@@ -47,16 +50,33 @@ router.post('/platform-entities', verifyAuth, async (req, res) => {
           { id: 'contactGroups/starred', name: 'Starred Contacts' },
         ];
         break;
+      case 'fetchNotionDBs': {
+        logger.info('platform', 'calling NotionService.listDatabases', { tokenPrefix: creds.accessToken?.substring(0, 10) });
+        const notion = new NotionService(creds.accessToken);
+        const databases = await notion.listDatabases();
+        logger.info('platform', 'listDatabases returned', { count: databases?.length });
+        entities = (databases || []).map(db => ({ id: db.id, name: db.title || db.id }));
+        break;
+      }
+      case 'fetchNotionTemplates': {
+        if (!parentValue) throw new Error('Database ID (parentValue) is required to fetch templates');
+        const notion = new NotionService(creds.accessToken, parentValue);
+        const templates = await notion.listTemplates();
+        entities = (templates || []).map(t => ({ id: t.id, name: t.name || t.id }));
+        break;
+      }
       default:
         throw new Error(`Unknown data source: ${dataSourceId}`);
     }
 
+    logger.info('platform', 'returning entities', { count: entities.length });
     res.json({ success: true, entities });
   } catch (err) {
-    logger.error('platform', 'Failed to fetch entities', { error: err.message });
+    logger.error('platform', 'Failed to fetch entities', { error: err.message, stack: err.stack?.split('\n').slice(0,5).join(' | ') });
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 
 router.get('/notion/databases', verifyAuth, async (req, res) => {
   try {

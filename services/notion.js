@@ -58,22 +58,97 @@ class NotionService {
     }
 
     try {
-      const response = await this.client.search({
-        filter: {
-          value: 'database',
-          property: 'object'
+      // Fetch all accessible items (Notion OAuth returns items as 'page' or 'database' objects)
+      const allResults = [];
+      let cursor = undefined;
+      let hasMore = true;
+
+      while (hasMore) {
+        const response = await this.client.search({
+          start_cursor: cursor,
+          page_size: 100,
+        });
+        allResults.push(...response.results);
+        hasMore = response.has_more;
+        cursor = response.next_cursor;
+        if (!hasMore) break;
+      }
+
+      console.log(`[Notion Service] Total items returned by Notion search: ${allResults.length}`);
+      console.log('[Notion Service] Item types:', allResults.map(r => `${r.object}(${r.id?.substring(0,8)})`).join(', '));
+
+      // Map results — include 'database' and 'data_source' objects
+      const databases = allResults
+        .filter(obj => obj.object === 'database' || obj.object === 'data_source')
+        .map(db => {
+          let title = 'Untitled Database';
+          if (db.title && Array.isArray(db.title) && db.title[0]) {
+            title = db.title[0].plain_text || 'Untitled Database';
+          } else if (db.properties?.title?.title?.[0]?.plain_text) {
+            title = db.properties.title.title[0].plain_text;
+          } else if (db.name) {
+             title = db.name; // Some newer API objects use 'name' instead of 'title' array
+          }
+          return { id: db.id, title };
+        });
+
+      // Throttling helper to prevent Notion rate limits (max 3 req/sec)
+      const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+      // Fetch block children recursively for all returned pages to find nested/inline databases
+      const pages = allResults.filter(obj => obj.object === 'page');
+      console.log(`[Notion Service] Checking ${pages.length} pages for nested databases...`);
+      
+      const findDatabases = async (blockId, depth = 0) => {
+        if (depth > 2) return; // Restrict depth to 2 to prevent excessive crawling
+        try {
+          let cursor = undefined;
+          let hasMore = true;
+          while (hasMore) {
+            await sleep(350); // Delay to stay under 3 req/sec rate limit
+            const childrenResp = await this.client.blocks.children.list({
+              block_id: blockId,
+              start_cursor: cursor,
+              page_size: 100,
+            });
+            
+            for (const block of childrenResp.results) {
+              if (block.type === 'child_database') {
+                if (!databases.find(d => d.id === block.id)) {
+                  databases.push({
+                    id: block.id,
+                    title: block.child_database?.title || 'Untitled Nested Database'
+                  });
+                  console.log(`[Notion Service] Found nested database: ${block.id} (depth ${depth})`);
+                }
+              } else if (block.has_children) {
+                // Only recurse into pages, toggles, or columns, not every single block
+                if (['child_page', 'toggle', 'column', 'column_list', 'synced_block'].includes(block.type)) {
+                   await findDatabases(block.id, depth + 1);
+                }
+              }
+            }
+            hasMore = childrenResp.has_more;
+            cursor = childrenResp.next_cursor;
+          }
+        } catch (e) {
+           if (depth === 0) console.warn(`[Notion Service] Could not fetch children for page ${blockId}:`, e.message);
         }
-      });
-      
-      const databases = response.results.map(db => {
-        const title = db.title && db.title[0] ? db.title[0].plain_text : 'Untitled Database';
-        return {
-          id: db.id,
-          title: title
-        };
-      });
-      
-      console.log(`[Notion Service] Found ${databases.length} databases.`);
+      };
+
+      // Only perform the deep nested scan IF we didn't find any databases directly
+      // This saves API calls and prevents rate limits when the user properly connects the database
+      if (databases.length === 0) {
+        console.log(`[Notion Service] No databases found directly. Checking ${pages.length} pages for nested databases...`);
+        for (const page of pages) {
+          await findDatabases(page.id);
+        }
+      } else {
+        console.log(`[Notion Service] Found ${databases.length} databases directly. Skipping deep nested scan.`);
+      }
+
+      console.log(`[Notion Service] Found ${databases.length} databases/data_sources after filtering and recursive block traversal.`);
+
       return databases;
     } catch (error) {
       console.error('[Notion Service] Failed to list databases:', error.message);

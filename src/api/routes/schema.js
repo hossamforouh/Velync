@@ -14,9 +14,32 @@ router.post('/schema', verifyAuth, async (req, res) => {
     }
 
     const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-    const ConnectorClass = getConnector(platform);
-    if (!ConnectorClass) {
-      return res.status(400).json({ success: false, error: `No connector registered for platform: ${platform}` });
+    let ConnectorClass;
+    try {
+      ConnectorClass = getConnector(platform);
+    } catch (e) {
+      // Fallback: Check if platform is a Firestore document ID and resolve its key or name
+      const { Firestore } = require('@google-cloud/firestore');
+      const db = new Firestore();
+      const platDoc = await db.collection('platforms').doc(platform).get();
+      if (platDoc.exists) {
+        const platData = platDoc.data();
+        let resolvedPlatform = platData.key || platData.name?.toLowerCase() || platData.title?.toLowerCase() || platform;
+        
+        // Intelligent fallback for custom platforms missing name/key
+        if (resolvedPlatform === platform) {
+           if (platData.authUrl?.includes('ticktick')) resolvedPlatform = 'ticktick';
+           if (platData.authUrl?.includes('notion')) resolvedPlatform = 'notion';
+        }
+
+        try {
+          ConnectorClass = getConnector(resolvedPlatform);
+        } catch(innerErr) {
+          return res.status(400).json({ success: false, error: `No connector registered for resolved platform: ${resolvedPlatform}` });
+        }
+      } else {
+        return res.status(400).json({ success: false, error: `No connector registered for platform: ${platform}` });
+      }
     }
 
     const instance = new ConnectorClass({ ...creds, ...context });
