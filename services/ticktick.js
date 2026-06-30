@@ -117,7 +117,7 @@ class TickTickService {
       }
     }
 
-    return filtered.map(p => ({ id: p.id || p.name, name: p.name }));
+    return filtered.map(p => ({ id: p.id || p.name, name: p.name || p.id || 'Untitled List' }));
   }
 
   /**

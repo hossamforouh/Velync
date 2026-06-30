@@ -190,17 +190,25 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
       row.innerHTML = `<label for="f-${prefix}-${escAttr(field.id)}" style="display: flex; align-items: center; gap: 4px; width: 100%;">
                          <span>${escHtml(cleanLabel)}${isReq ? '<span class="required-mark">*</span>' : ''}</span>
                          <span style="margin-left: auto; display: flex; align-items: center;">
-                           <span class="ds-loading-dots" style="display:none; font-size: 0.8rem; color: var(--text-3); margin-right: 6px;">Loading</span>
+                           <span class="ds-loading-dots" style="display:none; font-size: 0.8rem; color: var(--text-3); margin-right: 6px; align-items: center;">
+                             <span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 6px;"></span>Loading...
+                           </span>
                            <a href="#" class="btn-refresh-ds" style="font-size: 0.8rem; color: var(--primary); text-decoration: underline;" onclick="event.preventDefault();">Refresh</a>
                          </span>
                        </label>
-                       <select id="f-${prefix}-${escAttr(field.id)}" data-schema-id="${escAttr(field.id)}" style="width: 100%;" ${isReq ? 'required' : ''}>
-                         <option value="${val ? escAttr(val) : ''}">${val ? escHtml(val) + ' (Saved)' : 'No data — click Refresh'}</option>
-                       </select>`;
+                       <div class="ds-input-container" style="position: relative; width: 100%;">
+                         <select id="f-${prefix}-${escAttr(field.id)}" class="ds-select" data-schema-id="${escAttr(field.id)}" style="width: 100%; transition: opacity 0.2s;" ${isReq ? 'required' : ''}>
+                           <option value="${val ? escAttr(val) : ''}">${val ? escHtml(val) + ' (Saved)' : '-- Select --'}</option>
+                         </select>
+                         <div class="ds-skeleton" style="display:none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; padding: 4px 0;">
+                           <div class="skeleton-line" style="width: 100%; height: 100%; margin: 0; border-radius: 8px;"></div>
+                         </div>
+                       </div>`;
                        
       // Attach fetch logic
       setTimeout(async () => {
-         const selectEl = row.querySelector('select');
+         const selectEl = row.querySelector('.ds-select');
+         const skeletonEl = row.querySelector('.ds-skeleton');
          const btnRef = row.querySelector('.btn-refresh-ds');
          const dots = row.querySelector('.ds-loading-dots');
          if(window.feather) window.feather.replace();
@@ -216,9 +224,15 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 selectEl.innerHTML = '<option value="">— Select a connection first —</option>';
                 return;
               }
-              dots.style.display = '';
+              
+              dots.style.display = 'flex';
               btnRef.style.display = 'none';
-              selectEl.innerHTML = '<option value="">Loading...</option>';
+              
+              // Skeleton UI
+              skeletonEl.style.display = 'block';
+              selectEl.style.opacity = '0';
+              selectEl.disabled = true;
+              
               try {
                 let parentVal = '';
                 if (field.dependsOn) {
@@ -230,18 +244,30 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 const items = await fetchPlatformEntities(field.dataSource, connId, parentVal);
                 if (items.length === 0) {
                   selectEl.innerHTML = '<option value="">— No data available —</option>';
-                  // Keep saved value as a fallback option so it isn't lost
                   if (val) selectEl.innerHTML += `<option value="${escAttr(val)}" selected>${escHtml(val)} (Saved)</option>`;
                 } else {
                   selectEl.innerHTML = '<option value="">-- Select --</option>' + items.map(i => `<option value="${escAttr(i.value)}" ${val === i.value ? 'selected' : ''}>${escHtml(i.label)}</option>`).join('');
-                  // Re-select saved value after loading (handles the case where val was set before options loaded)
                   if (val) selectEl.value = val;
                 }
+                
+                // Reset button on success
+                btnRef.textContent = 'Refresh';
+                btnRef.style.color = 'var(--primary)';
               } catch (e) {
                 console.error("DataSource Error:", e);
                 selectEl.innerHTML = `<option value="">Error loading</option>`;
                 if (val) selectEl.innerHTML += `<option value="${escAttr(val)}" selected>${escHtml(val)} (Saved)</option>`;
+                
+                // Error state on button
+                btnRef.textContent = 'Fetch Failed — Retry';
+                btnRef.style.color = '#ef4444';
               }
+              
+              // Remove Skeleton UI
+              skeletonEl.style.display = 'none';
+              selectEl.style.opacity = '1';
+              selectEl.disabled = false;
+              
               dots.style.display = 'none';
               btnRef.style.display = '';
             }
