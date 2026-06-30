@@ -673,7 +673,10 @@ let currentProjects = [];
 
 // ─── Auth Flow ────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
+  const globalLoader = document.getElementById('global-loader');
+  if (globalLoader) globalLoader.style.display = 'none';
   
+
   if (user) {
     // If offline at startup, show landing page with retry instead of a broken app
     if (!navigator.onLine) {
