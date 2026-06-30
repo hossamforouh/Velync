@@ -3420,6 +3420,7 @@ if (msbDelete) {
       }
     }
     clearSelection();
+    await loadConfigs(true);
   });
 }
 
