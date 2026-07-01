@@ -94,31 +94,16 @@ class TickTickService {
   async getProjectsFiltered(entityType) {
     await this.authenticate();
     const projects = await this.getProjects();
-
-    if (!entityType || entityType === 'Habits') {
-      return projects.map(p => ({ id: p.id || p.name, name: p.name }));
+    // Return all projects immediately to avoid 120s timeout and rate limits.
+    // TickTick allows creating tasks/notes in any list, so filtering by existing content is unnecessary and slow.
+    const mapped = projects.map(p => ({ id: p.id || p.name, name: p.name }));
+    
+    // Always include 'Inbox' as a valid target for Tasks/Notes if it's not present
+    if (!mapped.find(p => p.id === 'inbox' || p.name.toLowerCase() === 'inbox')) {
+      mapped.unshift({ id: 'inbox', name: 'Inbox' });
     }
-
-    const filtered = [];
-    for (const project of projects) {
-      try {
-        const res = await axios.get(`${this.officialBaseUrl}/project/${project.id}/data`, {
-          headers: { 'Authorization': `Bearer ${this.accessToken}` }
-        });
-        const tasks = res.data?.tasks || [];
-        const hasTasks = tasks.some(t => t.kind !== 'NOTE');
-        const hasNotes = tasks.some(t => t.kind === 'NOTE');
-
-        if (entityType === 'Tasks' && hasTasks) filtered.push(project);
-        else if (entityType === 'Notes' && hasNotes) filtered.push(project);
-        else if (!entityType) filtered.push(project);
-      } catch (err) {
-        console.warn(`[TickTick Service] Could not inspect project "${project.name}": ${err.message}`);
-        filtered.push(project);
-      }
-    }
-
-    return filtered.map(p => ({ id: p.id || p.name, name: p.name || p.id || 'Untitled List' }));
+    
+    return mapped;
   }
 
   /**

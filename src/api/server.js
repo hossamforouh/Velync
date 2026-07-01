@@ -7,6 +7,7 @@ const platformRoutes = require('./routes/platform');
 const schemaRoutes = require('./routes/schema');
 const syncRoutes = require('./routes/sync');
 const workspaceRoutes = require('./routes/workspace');
+const syncConfigsRoutes = require('./routes/sync-configs');
 
 function createApp() {
   const app = express();
@@ -29,6 +30,7 @@ function createApp() {
   app.use('/api', platformRoutes);
   app.use('/api', schemaRoutes);
   app.use('/api', workspaceRoutes);
+  app.use('/api', syncConfigsRoutes);
   app.use(syncRoutes);
 
   app.use((req, res) => {

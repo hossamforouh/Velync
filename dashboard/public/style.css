@@ -580,6 +580,18 @@ body::after {
   box-shadow: 0 6px 20px rgba(79, 70, 229, 0.2);
 }
 
+.mapping-reasoning-badge {
+  background: rgba(129, 140, 248, 0.15);
+  color: var(--primary-light);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: help;
+  white-space: nowrap;
+}
+
 /* ── Responsive Sidebar ─────────────────────────────────────── */
 @media (max-width: 900px) {
   .sidebar {

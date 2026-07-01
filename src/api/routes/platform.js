@@ -132,7 +132,13 @@ router.post('/notion-database-schema', verifyAuth, async (req, res) => {
     }
     if (!actualToken) throw new Error('Token or Connection ID required');
     const notion = new NotionService(actualToken, databaseId);
-    const schema = await notion.getDatabaseSchema();
+    const properties = await notion.getDatabaseSchema();
+    const schema = {};
+    for (const [key, prop] of Object.entries(properties)) {
+      schema[key] = { label: prop.name || key, type: prop.type };
+      if (prop.type === 'status' && prop.status) schema[key].options = prop.status.options;
+      if (prop.type === 'select' && prop.select) schema[key].options = prop.select.options;
+    }
     res.json({ success: true, schema });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

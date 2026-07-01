@@ -37,17 +37,35 @@ class NotionConnector extends Connector {
     return svc.archiveDatabasePage(id);
   }
 
-  getSchema(entityType, context = {}) {
-    const databaseId = context.databaseId || this.credentials.databaseId;
+  async getSchema(entityType, context = {}) {
+    const databaseId = context.databaseId || context.database || this.credentials.databaseId;
     if (databaseId) {
       const svc = new NotionService(this.credentials.accessToken, databaseId);
-      return svc.getDatabaseSchema().catch(() => ({}));
+      try {
+        const properties = await svc.getDatabaseSchema();
+        if (!properties) {
+          throw new Error("Cannot retrieve properties for this database. It may be a linked view or an empty synced database.");
+        }
+        const schema = {};
+        for (const [key, prop] of Object.entries(properties)) {
+          schema[key] = {
+            label: prop.name || key,
+            type: prop.type
+          };
+          if (prop.type === 'status' && prop.status) schema[key].options = prop.status.options;
+          if (prop.type === 'select' && prop.select) schema[key].options = prop.select.options;
+        }
+        return schema;
+      } catch (err) {
+        console.error(`[NotionConnector] Failed to fetch database schema for ${databaseId}:`, err.message);
+        return { __error: { label: `Error: ${err.message}`, type: 'error' } };
+      }
     }
     return { titleField: { type: 'title', label: 'Title' } };
   }
 
   async getDataSource(fieldId, context = {}) {
-    const databaseId = context.databaseId || this.credentials.databaseId;
+    const databaseId = context.databaseId || context.database || this.credentials.databaseId;
     const svc = new NotionService(this.credentials.accessToken, databaseId);
     if (fieldId === 'databases') {
       const dbs = await svc.listDatabases();

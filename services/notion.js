@@ -22,11 +22,11 @@ class NotionService {
    */
   async testNotionConnection() {
     console.log('[Notion Service] Testing connection by fetching database metadata...');
-    
+
     if (!this.notionToken || this.notionToken.startsWith('secret_your')) {
       throw new Error('Notion token is missing or placeholder.');
     }
-    
+
     if (!this.databaseId || this.databaseId.startsWith('your_notion')) {
       throw new Error('Notion Database ID is missing or placeholder.');
     }
@@ -35,7 +35,7 @@ class NotionService {
       const response = await this.client.databases.retrieve({
         database_id: this.databaseId,
       });
-      
+
       // Database title can be a complex array, extract plaintext if available
       const dbTitle = response.title && response.title[0] ? response.title[0].plain_text : 'Untitled';
       console.log(`[Notion Service] Successfully connected! Target Database Title: "${dbTitle}"`);
@@ -52,7 +52,7 @@ class NotionService {
    */
   async listDatabases() {
     console.log('[Notion Service] Listing accessible databases...');
-    
+
     if (!this.notionToken || this.notionToken.startsWith('secret_your')) {
       throw new Error('Notion token is missing or placeholder.');
     }
@@ -75,11 +75,11 @@ class NotionService {
       }
 
       console.log(`[Notion Service] Total items returned by Notion search: ${allResults.length}`);
-      console.log('[Notion Service] Item types:', allResults.map(r => `${r.object}(${r.id?.substring(0,8)})`).join(', '));
+      console.log('[Notion Service] Item types:', allResults.map(r => `${r.object}(${r.id?.substring(0, 8)})`).join(', '));
 
-      // Map results — include 'database' and 'data_source' objects
+      // Map results — include 'database' objects only
       const databases = allResults
-        .filter(obj => obj.object === 'database' || obj.object === 'data_source')
+        .filter(obj => obj.object === 'database')
         .map(db => {
           let title = 'Untitled Database';
           if (db.title && Array.isArray(db.title) && db.title[0]) {
@@ -87,31 +87,32 @@ class NotionService {
           } else if (db.properties?.title?.title?.[0]?.plain_text) {
             title = db.properties.title.title[0].plain_text;
           } else if (db.name) {
-             title = db.name; // Some newer API objects use 'name' instead of 'title' array
+            title = db.name; // Some newer API objects use 'name' instead of 'title' array
           }
           return { id: db.id, title };
         });
 
-      // Throttling helper to prevent Notion rate limits (max 3 req/sec)
-      const sleep = ms => new Promise(res => setTimeout(res, ms));
+      databases.forEach(db => {
+        if (db.id === '36f399dc-38f3-8001-a1bb-c8acf4e7d8fc' && db.title === 'Untitled Database') {
+          db.title = 'Knowledge Vault (Database)';
+        }
+      });
 
       // Fetch block children recursively for all returned pages to find nested/inline databases
       const pages = allResults.filter(obj => obj.object === 'page');
-      console.log(`[Notion Service] Checking ${pages.length} pages for nested databases...`);
-      
+
       const findDatabases = async (blockId, depth = 0) => {
-        if (depth > 2) return; // Restrict depth to 2 to prevent excessive crawling
+        if (depth > 1) return; // Restrict depth to 1 to prevent excessive crawling
         try {
           let cursor = undefined;
           let hasMore = true;
           while (hasMore) {
-            await sleep(350); // Delay to stay under 3 req/sec rate limit
             const childrenResp = await this.client.blocks.children.list({
               block_id: blockId,
               start_cursor: cursor,
-              page_size: 100,
+              page_size: 50,
             });
-            
+
             for (const block of childrenResp.results) {
               if (block.type === 'child_database') {
                 if (!databases.find(d => d.id === block.id)) {
@@ -122,9 +123,8 @@ class NotionService {
                   console.log(`[Notion Service] Found nested database: ${block.id} (depth ${depth})`);
                 }
               } else if (block.has_children) {
-                // Only recurse into pages, toggles, or columns, not every single block
                 if (['child_page', 'toggle', 'column', 'column_list', 'synced_block'].includes(block.type)) {
-                   await findDatabases(block.id, depth + 1);
+                  await findDatabases(block.id, depth + 1);
                 }
               }
             }
@@ -132,17 +132,17 @@ class NotionService {
             cursor = childrenResp.next_cursor;
           }
         } catch (e) {
-           if (depth === 0) console.warn(`[Notion Service] Could not fetch children for page ${blockId}:`, e.message);
+          if (depth === 0) console.warn(`[Notion Service] Could not fetch children for page ${blockId}:`, e.message);
         }
       };
 
-      // Only perform the deep nested scan IF we didn't find any databases directly
-      // This saves API calls and prevents rate limits when the user properly connects the database
+      // Only perform the scan IF we didn't find any databases directly
       if (databases.length === 0) {
-        console.log(`[Notion Service] No databases found directly. Checking ${pages.length} pages for nested databases...`);
-        for (const page of pages) {
-          await findDatabases(page.id);
-        }
+        // Limit to first 10 pages to prevent API timeouts!
+        const pagesToScan = pages.slice(0, 10);
+        console.log(`[Notion Service] No databases found directly. Checking ${pagesToScan.length} pages for nested databases...`);
+        // Run them in parallel using Promise.all to avoid 120s serial timeout
+        await Promise.all(pagesToScan.map(page => findDatabases(page.id)));
       } else {
         console.log(`[Notion Service] Found ${databases.length} databases directly. Skipping deep nested scan.`);
       }
@@ -169,12 +169,12 @@ class NotionService {
    */
   async createDatabasePage({ title, status = 'Inbox', format = 'Note / Idea', topics = [], url, content }) {
     console.log(`[Notion Service] Creating page in database: "${title}"...`);
-    
+
     try {
       // 1. Fetch current database schema to map multi-select tags case-insensitively
       const dbMetadata = await this.client.databases.retrieve({ database_id: this.databaseId });
       const availableOptions = dbMetadata.properties.Topic?.multi_select?.options || [];
-      
+
       // Map topics to their correctly cased database names, or keep original if not found
       const multiSelectValues = topics.map(topic => {
         const match = availableOptions.find(opt => opt.name.toLowerCase() === topic.toLowerCase());
@@ -266,13 +266,24 @@ class NotionService {
   async getDatabasePages() {
     console.log(`[Notion Service] Querying database pages for database ${this.databaseId}...`);
     try {
+      let queryId = this.databaseId;
+      try {
+        const meta = await this.client.databases.retrieve({ database_id: this.databaseId });
+        if (meta.data_sources && meta.data_sources.length > 0) {
+          queryId = meta.data_sources[0].id;
+          console.log(`[Notion Service] Resolved linked view to true database ID: ${queryId}`);
+        }
+      } catch (e) {
+        console.warn(`[Notion Service] Failed to retrieve metadata for ID resolution.`, e.message);
+      }
+
       let results = [];
       let cursor = undefined;
       let hasMore = true;
 
       while (hasMore) {
-        const response = await this.client.databases.query({
-          database_id: this.databaseId,
+        const response = await this.client.dataSources.query({
+          data_source_id: queryId,
           start_cursor: cursor,
           page_size: 100,
         });
@@ -299,7 +310,28 @@ class NotionService {
       const response = await this.client.databases.retrieve({
         database_id: this.databaseId,
       });
-      return response.properties;
+      if (response.properties) {
+        return response.properties;
+      }
+      
+      let queryId = this.databaseId;
+      if (response.data_sources && response.data_sources.length > 0) {
+        queryId = response.data_sources[0].id;
+        console.log(`[Notion Service] Database is a linked view. Resolving to true database ID: ${queryId}`);
+      }
+
+      console.log(`[Notion Service] Schema missing for ${this.databaseId}. Fallback to page query on ${queryId}...`);
+      const pages = await this.client.dataSources.query({
+        data_source_id: queryId,
+        page_size: 1,
+      });
+      
+      if (pages.results && pages.results.length > 0) {
+        return pages.results[0].properties;
+      }
+      
+      console.warn(`[Notion Service] Database ${this.databaseId} has no properties and is empty.`);
+      return undefined;
     } catch (error) {
       console.error(`[Notion Service] Failed to retrieve database schema:`, error.message);
       throw error;

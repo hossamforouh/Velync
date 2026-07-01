@@ -210,6 +210,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
          const shouldAutoLoad = !!connId;
          
           const loadData = async () => {
+            if (selectEl.classList.contains('is-loading')) return;
             if (field.dataSource) {
               const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
               if (!connId) {
@@ -548,13 +549,13 @@ const btnLoadTt    = document.getElementById('btn-load-tt');
 const btnLoadNotion = document.getElementById('btn-load-notion');
 
 const sectionStatusMapping = document.getElementById('section-status-mapping');
-const fStatusIncomplete = document.getElementById('f-status-incomplete');
-const fStatusIncompleteDefault = document.getElementById('f-status-incomplete-default');
-const fStatusComplete = document.getElementById('f-status-complete');
-const fStatusCompleteDefault = document.getElementById('f-status-complete-default');
-
-let statusIncompleteSelect;
-let statusCompleteSelect;
+let currentStatusState = {
+  options: [],
+  incomplete: [],
+  incompleteDefault: '',
+  complete: [],
+  completeDefault: ''
+};
 
 let notionDbSelect;
 let notionDbProperties = {}; // name -> { type, ... } property metadata
@@ -633,23 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (fStatusIncomplete && window.TomSelect) {
-    statusIncompleteSelect = new TomSelect("#f-status-incomplete", {
-      create: false,
-      plugins: ['remove_button'],
-      placeholder: "Select status options...",
-      maxOptions: null
-    });
-  }
-
-  if (fStatusComplete && window.TomSelect) {
-    statusCompleteSelect = new TomSelect("#f-status-complete", {
-      create: false,
-      plugins: ['remove_button'],
-      placeholder: "Select status options...",
-      maxOptions: null
-    });
-  }
+  // Removed TomSelect init for status fields (now handled by custom modal)
 });
 
 // Cloud Run API endpoint
@@ -2241,14 +2226,6 @@ function handleConnectionChange(prefix) {
 
   container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text-3);"><span class="spinner" style="width:16px;height:16px;border-width:2px;margin-right:8px;"></span> Loading fields...</div>';
   window.renderSchemaForPlatform(conn.provider, containerId, prefix, {});
-
-  // Auto-trigger Refresh on visible dynamic_select fields after schema renders
-  setTimeout(() => {
-    container.querySelectorAll('.btn-refresh-ds').forEach(btn => {
-      const row = btn.closest('.form-row');
-      if (row && row.style.display !== 'none') btn.click();
-    });
-  }, 100);
 }
 
 async function closePanel() {
@@ -2303,9 +2280,15 @@ function duplicateConfig(id) {
   fDescription.focus();
 }
 
+function formatPropertyType(typeStr) {
+  if (!typeStr) return '';
+  const formatted = typeStr.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  return ` [Type: ${formatted}]`;
+}
+
 function buildSourceFieldOptions(entity, selectedField) {
   let fields = Object.entries(sourceSchema).map(([key, f]) => ({
-    value: key, label: `${f.label || key} (${f.type})`
+    value: key, label: `${f.label || key}${formatPropertyType(f.type)}`
   }));
   if (!fields.length) {
     const legacy = { Tasks: 'title,desc,tags,status', Notes: 'title,content,tags', Habits: 'name,type,goal' };
@@ -2314,28 +2297,34 @@ function buildSourceFieldOptions(entity, selectedField) {
   return fields.map(f => `<option value="${f.value}" ${f.value === selectedField ? 'selected' : ''}>${f.label}</option>`).join('');
 }
 
-function addMappingRow(sourceField = '', destField = '', sourceFieldList = null, destFieldList = null) {
+function addMappingRow(sourceField = '', destField = '', confidence = null, reasoning = '', sourceFieldList = null, destFieldList = null) {
   const row = document.createElement('div');
   row.className = 'mapping-row';
-  row.style = 'display: flex; gap: 0.5rem; align-items: center; background: rgba(255, 255, 255, 0.03); padding: 0.5rem; border-radius: 6px;';
+  row.style = 'display: flex; gap: 1rem; align-items: center; background: rgba(255, 255, 255, 0.02); padding: 0.75rem 1rem; border-radius: 12px; border: 1px solid var(--border); transition: all 0.2s ease;';
 
   const entity = (window.harvestDynamicFields && window.harvestDynamicFields('p1-dynamic-container')['targetEntity']) || 'Tasks';
 
   if (!sourceFieldList) {
     sourceFieldList = Object.entries(sourceSchema).map(([key, f]) => ({
-      value: key, label: `${f.label || key} (${f.type})`
+      value: key, label: `${f.label || key}${formatPropertyType(f.type)}`
     }));
     if (!sourceFieldList.length) {
-      const legacy = { Tasks: 'title,desc,tags,status', Notes: 'title,content,tags', Habits: 'name,type,goal' };
+      const legacy = { Tasks: 'title,desc,tags,status,priority,parentId', Notes: 'title,content,tags', Habits: 'name,type,goal' };
       sourceFieldList = (legacy[entity] || 'title').split(',').map(k => ({ value: k, label: k }));
     }
   }
 
   if (!destFieldList) {
-    destFieldList = Object.keys(notionDbProperties).map(prop => ({
-      value: prop, label: `${prop} (${notionDbProperties[prop].type})`
-    }));
-    destFieldList.unshift({ value: '__content__', label: '[Page Content / Body]' });
+    if (notionDbProperties && notionDbProperties.__error) {
+      destFieldList = [{ value: '__error', label: `Couldn't load properties: ${notionDbProperties.__error.label}` }];
+    } else if (notionDbProperties) {
+      destFieldList = Object.entries(notionDbProperties).map(([key, f]) => ({
+        value: key, label: `${f.label || key}${formatPropertyType(f.type)}`
+      }));
+      destFieldList.unshift({ value: '__content__', label: '[Page Content / Body]' });
+    } else {
+      destFieldList = [{ value: '__content__', label: '[Page Content / Body]' }];
+    }
   }
 
   let sOptions = sourceFieldList.map(f =>
@@ -2347,10 +2336,19 @@ function addMappingRow(sourceField = '', destField = '', sourceFieldList = null,
   ).join('');
 
   row.innerHTML = `
-    <select class="map-source" style="flex: 1; padding: 4px; border-radius: 4px; background: var(--bg-card); color: var(--text-1); border: 1px solid var(--border); font-size: 0.85rem;">${sOptions}</select>
-    <span style="color: var(--text-3); font-size: 0.9rem;">➔</span>
-    <select class="map-dest" style="flex: 1; padding: 4px; border-radius: 4px; background: var(--bg-card); color: var(--text-1); border: 1px solid var(--border); font-size: 0.85rem;">${dOptions}</select>
-    <button type="button" class="btn-remove-mapping" style="background: none; border: none; color: var(--danger); font-size: 1.1rem; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;">${feather.icons['x'].toSvg({width: 14, height: 14})}</button>
+    <select class="map-source" style="flex: 1; padding: 10px 12px; border-radius: 8px; background: transparent; color: var(--text-1); border: 1px solid transparent; font-size: 0.9rem; font-weight: 500; outline: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';" onmouseout="this.style.background='transparent'; this.style.borderColor='transparent';">${sOptions}</select>
+    
+    <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--glass); color: var(--text-3);">
+      ${feather.icons['arrow-right'].toSvg({width: 16, height: 16})}
+    </div>
+    
+    <select class="map-dest" style="flex: 1; padding: 10px 12px; border-radius: 8px; background: transparent; color: var(--text-1); border: 1px solid transparent; font-size: 0.9rem; font-weight: 500; outline: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';" onmouseout="this.style.background='transparent'; this.style.borderColor='transparent';">${dOptions}</select>
+    
+    ${confidence !== null ? `<div class="mapping-reasoning-badge" style="background: rgba(129, 140, 248, 0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;" title="${reasoning.replace(/"/g, '&quot;')}">${Math.round(confidence * 100)}%</div>` : ''}
+    
+    <button type="button" class="btn-remove-mapping" style="background: rgba(251, 113, 133, 0.1); border: 1px solid transparent; color: var(--rose); cursor: pointer; padding: 6px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(251, 113, 133, 0.2)'" onmouseout="this.style.background='rgba(251, 113, 133, 0.1)'">
+      ${feather.icons['x'].toSvg({width: 16, height: 16})}
+    </button>
   `;
 
   row.querySelector('.map-source').addEventListener('change', () => updateStatusMappingUI());
@@ -2364,6 +2362,9 @@ function addMappingRow(sourceField = '', destField = '', sourceFieldList = null,
   mappingsContainer.appendChild(row);
   updateStatusMappingUI();
 }
+
+let currentModalTarget = null;
+let currentModalTempSelection = [];
 
 function updateStatusMappingUI(savedStatusMappings = null) {
   if (!sectionStatusMapping) return;
@@ -2387,100 +2388,182 @@ function updateStatusMappingUI(savedStatusMappings = null) {
   sectionStatusMapping.style.display = 'block';
 
   const options = (propSchema.type === 'status' ? propSchema.status?.options : propSchema.select?.options) || [];
-  
-  if (statusIncompleteSelect) {
-    statusIncompleteSelect.clear(true);
-    statusIncompleteSelect.clearOptions();
-  }
-  if (statusCompleteSelect) {
-    statusCompleteSelect.clear(true);
-    statusCompleteSelect.clearOptions();
-  }
-  fStatusIncompleteDefault.innerHTML = '';
-  fStatusCompleteDefault.innerHTML = '';
-
-  options.forEach(opt => {
-    const optionVal = opt.name;
-    
-    if (statusIncompleteSelect) {
-      statusIncompleteSelect.addOption({ value: optionVal, text: optionVal });
-    }
-    if (statusCompleteSelect) {
-      statusCompleteSelect.addOption({ value: optionVal, text: optionVal });
-    }
-    
-    const defaultOpt1 = document.createElement('option');
-    defaultOpt1.value = optionVal;
-    defaultOpt1.textContent = optionVal;
-    fStatusIncompleteDefault.appendChild(defaultOpt1);
-
-    const defaultOpt2 = document.createElement('option');
-    defaultOpt2.value = optionVal;
-    defaultOpt2.textContent = optionVal;
-    fStatusCompleteDefault.appendChild(defaultOpt2);
-  });
-
-  let incVal = [];
-  let incDefVal = '';
-  let compVal = [];
-  let compDefVal = '';
+  currentStatusState.options = options.map(o => o.name);
 
   if (savedStatusMappings) {
-    incVal = savedStatusMappings.incomplete || [];
-    incDefVal = savedStatusMappings.incompleteDefault || '';
-    compVal = savedStatusMappings.complete || [];
-    compDefVal = savedStatusMappings.completeDefault || '';
+    currentStatusState.incomplete = savedStatusMappings.incomplete || [];
+    currentStatusState.incompleteDefault = savedStatusMappings.incompleteDefault || '';
+    currentStatusState.complete = savedStatusMappings.complete || [];
+    currentStatusState.completeDefault = savedStatusMappings.completeDefault || '';
   } else {
     const completedNames = options.filter(opt => ['completed', 'complete', 'done'].includes(opt.name.toLowerCase())).map(opt => opt.name);
     const incompleteNames = options.filter(opt => ['not started', 'to-do', 'todo', 'in progress'].includes(opt.name.toLowerCase())).map(opt => opt.name);
     
-    compVal = completedNames.length > 0 ? completedNames : (options.length > 0 ? [options[options.length - 1].name] : []);
-    compDefVal = completedNames.length > 0 ? completedNames[0] : (options.length > 0 ? options[options.length - 1].name : '');
+    currentStatusState.complete = completedNames.length > 0 ? completedNames : (options.length > 0 ? [options[options.length - 1].name] : []);
+    currentStatusState.completeDefault = completedNames.length > 0 ? completedNames[0] : (options.length > 0 ? options[options.length - 1].name : '');
     
-    incVal = incompleteNames.length > 0 ? incompleteNames : (options.length > 0 ? [options[0].name] : []);
-    incDefVal = incompleteNames.length > 0 ? incompleteNames[0] : (options.length > 0 ? options[0].name : '');
+    currentStatusState.incomplete = incompleteNames.length > 0 ? incompleteNames : (options.length > 0 ? [options[0].name] : []);
+    currentStatusState.incompleteDefault = incompleteNames.length > 0 ? incompleteNames[0] : (options.length > 0 ? options[0].name : '');
   }
 
-  if (statusIncompleteSelect) {
-    statusIncompleteSelect.setValue(incVal, true);
-  }
-  fStatusIncompleteDefault.value = incDefVal;
+  renderStatusLabels();
+}
 
-  if (statusCompleteSelect) {
-    statusCompleteSelect.setValue(compVal, true);
+function renderStatusLabels() {
+  document.getElementById('lbl-status-incomplete').textContent = currentStatusState.incomplete.length ? currentStatusState.incomplete.join(', ') : 'None';
+  document.getElementById('lbl-status-incomplete-default').textContent = currentStatusState.incompleteDefault || 'None';
+  document.getElementById('lbl-status-complete').textContent = currentStatusState.complete.length ? currentStatusState.complete.join(', ') : 'None';
+  document.getElementById('lbl-status-complete-default').textContent = currentStatusState.completeDefault || 'None';
+}
+
+window.openStatusModal = function(target) {
+  currentModalTarget = target;
+  currentModalTempSelection = [];
+  
+  const title = document.getElementById('status-modal-title');
+  const subtitle = document.getElementById('status-modal-subtitle');
+  const list = document.getElementById('status-modal-list');
+  
+  list.innerHTML = '';
+  
+  let options = currentStatusState.options;
+  let isMulti = false;
+  
+  if (target === 'incomplete') {
+    title.innerHTML = 'Incomplete';
+    subtitle.textContent = 'Which properties in Notion are displayed as incomplete in TickTick?';
+    isMulti = true;
+    currentModalTempSelection = [...currentStatusState.incomplete];
+  } else if (target === 'incomplete-default') {
+    title.innerHTML = 'Incomplete Default';
+    subtitle.textContent = 'Which property will incomplete tasks in TickTick sync to in Notion?';
+    isMulti = false;
+    currentModalTempSelection = [currentStatusState.incompleteDefault];
+  } else if (target === 'complete') {
+    title.innerHTML = 'Complete';
+    subtitle.textContent = 'Which properties in Notion are displayed as complete in TickTick?';
+    isMulti = true;
+    currentModalTempSelection = [...currentStatusState.complete];
+  } else if (target === 'complete-default') {
+    title.innerHTML = 'Complete Default';
+    subtitle.textContent = 'Which property will complete tasks in TickTick sync to in Notion?';
+    isMulti = false;
+    currentModalTempSelection = [currentStatusState.completeDefault];
   }
-  fStatusCompleteDefault.value = compDefVal;
+
+  options.forEach(opt => {
+    const isSelected = currentModalTempSelection.includes(opt);
+    const row = document.createElement('div');
+    row.style = 'display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;';
+    row.onmouseover = () => row.style.background = 'rgba(255,255,255,0.05)';
+    row.onmouseout = () => row.style.background = 'transparent';
+    
+    const checkboxChecked = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="var(--primary)"/><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="#fff"/></svg>`;
+    const checkboxUnchecked = `<div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); box-sizing: border-box;"></div>`;
+    
+    const radioChecked = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="transparent" stroke="rgba(255,255,255,0.2)" stroke-width="2"/><circle cx="12" cy="12" r="8" fill="var(--primary)"/></svg>`;
+    const radioUnchecked = `<div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); box-sizing: border-box;"></div>`;
+    
+    let iconSvg = isMulti ? (isSelected ? checkboxChecked : checkboxUnchecked) : (isSelected ? radioChecked : radioUnchecked);
+    
+    row.innerHTML = `<div class="opt-icon" style="display: flex; align-items: center; justify-content: center;">${iconSvg}</div><span style="font-size: 1rem; color: var(--text-1);">${opt}</span>`;
+    
+    row.onclick = () => {
+      if (isMulti) {
+        if (currentModalTempSelection.includes(opt)) {
+           currentModalTempSelection = currentModalTempSelection.filter(x => x !== opt);
+        } else {
+           currentModalTempSelection.push(opt);
+        }
+      } else {
+        currentModalTempSelection = [opt];
+      }
+      openStatusModal(target); // re-render to show correct selection state
+    };
+    list.appendChild(row);
+  });
+  
+  document.getElementById('status-mapping-modal').classList.add('open');
+};
+
+window.closeStatusModal = function() {
+  document.getElementById('status-mapping-modal').classList.remove('open');
+};
+
+window.saveStatusModal = function() {
+  if (currentModalTarget === 'incomplete') {
+    currentStatusState.incomplete = [...currentModalTempSelection];
+  } else if (currentModalTarget === 'incomplete-default') {
+    currentStatusState.incompleteDefault = currentModalTempSelection[0] || '';
+  } else if (currentModalTarget === 'complete') {
+    currentStatusState.complete = [...currentModalTempSelection];
+  } else if (currentModalTarget === 'complete-default') {
+    currentStatusState.completeDefault = currentModalTempSelection[0] || '';
+  }
+  renderStatusLabels();
+  closeStatusModal();
 }
 
 async function loadDefaultMappingsPreset() {
-  mappingsContainer.innerHTML = '';
   const entity = (window.harvestDynamicFields && window.harvestDynamicFields('p1-dynamic-container')['targetEntity']) || 'Tasks';
-
   const sourceConnId = document.getElementById('f-tt-connection')?.value || document.querySelector('[data-source-connection]')?.value;
   const destConnId = document.getElementById('f-notion-connection')?.value || document.querySelector('[data-dest-connection]')?.value;
 
-  if (sourceConnId && destConnId && Object.keys(sourceSchema).length && Object.keys(notionDbProperties).length) {
-    try {
-      const user = auth.currentUser;
-      const idToken = await user.getIdToken();
-      const res = await fetch(`${API_URL}/schema/suggest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-        body: JSON.stringify({ sourceSchema, destSchema: notionDbProperties })
+  if (!sourceConnId || !destConnId) return;
+
+  if (window._lastMappedSourceId === sourceConnId && window._lastMappedDestId === destConnId && mappingsContainer.children.length > 0) {
+    return; // Preserve existing state if connections haven't changed
+  }
+
+  mappingsContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-3); font-size: 0.9rem; animation: pulse-loading 1.5s infinite;"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i> Generating intelligent mapping suggestions...</div>';
+  if (window.feather) window.feather.replace();
+
+  try {
+    const user = auth.currentUser;
+    const idToken = await user.getIdToken();
+    const sourceConn = typeof _connectionsCache !== 'undefined' ? _connectionsCache.find(c => c.id === sourceConnId) : null;
+    const destConn = typeof _connectionsCache !== 'undefined' ? _connectionsCache.find(c => c.id === destConnId) : null;
+    
+    // We get contexts for dynamic schemas (e.g. databaseId for Notion)
+    const destContext = window.harvestDynamicFields ? window.harvestDynamicFields('p2-dynamic-container') : {};
+    const sourceContext = window.harvestDynamicFields ? window.harvestDynamicFields('p1-dynamic-container') : {};
+
+    const res = await fetch(`${API_URL}/suggest-mappings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+      body: JSON.stringify({
+        sourceConnectionId: sourceConnId,
+        destConnectionId: destConnId,
+        sourcePlatform: sourceConn?.provider || (typeof _dropdownP1Provider !== 'undefined' ? _dropdownP1Provider : 'ticktick'),
+        destPlatform: destConn?.provider || (typeof _dropdownP2Provider !== 'undefined' ? _dropdownP2Provider : 'notion'),
+        entityType: entity,
+        context: { source: sourceContext, dest: destContext }
+      })
+    });
+    const data = await res.json();
+    mappingsContainer.innerHTML = ''; // clear loading state
+    
+    if (data.sourceSchema && Object.keys(data.sourceSchema).length > 0) sourceSchema = data.sourceSchema;
+    if (data.destSchema && Object.keys(data.destSchema).length > 0) notionDbProperties = data.destSchema;
+    
+    if (data.success && data.suggestions && data.suggestions.length > 0) {
+      window._lastMappedSourceId = sourceConnId;
+      window._lastMappedDestId = destConnId;
+
+
+      data.suggestions.forEach(s => {
+        if (s.destField) addMappingRow(s.sourceField, s.destField, s.confidence, s.reasoning);
       });
-      const data = await res.json();
-      if (data.success && data.suggestions) {
-        data.suggestions.forEach(s => {
-          if (s.destField) addMappingRow(s.sourceField, s.destField);
-        });
-        return;
-      }
-    } catch (e) {
-      console.warn('Suggest API failed, falling back to presets:', e);
+      return;
     }
+  } catch (e) {
+    console.warn('LLM Suggest API failed, falling back to presets:', e);
   }
 
   // Fallback presets
+  mappingsContainer.innerHTML = '';
+  window._lastMappedSourceId = sourceConnId;
+  window._lastMappedDestId = destConnId;
   if (entity === 'Tasks') {
     addMappingRow('title', 'Name');
     addMappingRow('tags', 'Topic');
@@ -2562,9 +2645,8 @@ async function fetchNotionDbSchema(databaseId, connectionId, showToasts = true) 
       const currentVal = selectDest.value;
       
       let dOptions = `<option value="__content__" ${currentVal === '__content__' ? 'selected' : ''}>[Page Content / Body]</option>`;
-      Object.keys(notionDbProperties).forEach(prop => {
-        const type = notionDbProperties[prop].type;
-        dOptions += `<option value="${prop}" ${prop === currentVal ? 'selected' : ''}>${prop} (${type})</option>`;
+      Object.entries(notionDbProperties).forEach(([key, f]) => {
+        dOptions += `<option value="${key}" ${key === currentVal ? 'selected' : ''}>${f.label || key} (${f.type})</option>`;
       });
       selectDest.innerHTML = dOptions;
     });
@@ -2730,10 +2812,10 @@ function clearForm() {
   notionDbProperties = {};
   mappingsContainer.innerHTML = '';
   
-  if (statusIncompleteSelect) statusIncompleteSelect.clear(true);
-  if (statusCompleteSelect) statusCompleteSelect.clear(true);
-  if (fStatusIncompleteDefault) fStatusIncompleteDefault.innerHTML = '';
-  if (fStatusCompleteDefault) fStatusCompleteDefault.innerHTML = '';
+  currentStatusState = { options: [], incomplete: [], incompleteDefault: '', complete: [], completeDefault: '' };
+  // cleared state instead of tomselect
+  if (window.fStatusIncompleteDefault) fStatusIncompleteDefault.innerHTML = '';
+  if (window.fStatusCompleteDefault) fStatusCompleteDefault.innerHTML = '';
   if (sectionStatusMapping) sectionStatusMapping.style.display = 'none';
 
   currentProjects = [];
@@ -2831,6 +2913,8 @@ async function fillForm(cfg) {
   const mappings = cfg.fieldMappings || [];
   if (mappings.length > 0) {
     mappings.forEach(m => addMappingRow(m.sourceField || m.ticktickField, m.destField || m.notionProperty));
+    window._lastMappedSourceId = cfg.platform1ConnectionId || document.getElementById('f-tt-connection')?.value;
+    window._lastMappedDestId = cfg.platform2ConnectionId || document.getElementById('f-notion-connection')?.value;
   } else {
     loadDefaultMappingsPreset();
   }
@@ -2891,10 +2975,10 @@ function buildFormPayload(status) {
     fieldMappings,
     statusMappings: (Array.from(mappingsContainer.querySelectorAll('.mapping-row'))
       .some(row => (row.querySelector('.map-source') || row.querySelector('.map-ticktick')).value === 'status')) ? {
-        incomplete: statusIncompleteSelect ? statusIncompleteSelect.getValue() : [],
-        incompleteDefault: fStatusIncompleteDefault ? fStatusIncompleteDefault.value : '',
-        complete: statusCompleteSelect ? statusCompleteSelect.getValue() : [],
-        completeDefault: fStatusCompleteDefault ? fStatusCompleteDefault.value : ''
+        incomplete: currentStatusState.incomplete,
+        incompleteDefault: currentStatusState.incompleteDefault,
+        complete: currentStatusState.complete,
+        completeDefault: currentStatusState.completeDefault
       } : null,
     updatedAt: serverTimestamp(),
     workspaceId: currentWorkspaceId,
@@ -2916,6 +3000,32 @@ async function saveConfig(e, isSubmit = false) {
     showToast("Validation Error: The 'From' and 'To' connections cannot be the exact same account.", 'error');
     isSavingConfig = false;
     return;
+  }
+
+  // Validate duplicate destination fields
+  const mappedDestFields = new Set();
+  for (const m of payload.fieldMappings) {
+    if (mappedDestFields.has(m.destField)) {
+      showToast(`Validation Error: Destination field '${m.destField}' is mapped multiple times.`, 'error');
+      isSavingConfig = false;
+      if (btnSave) btnSave.disabled = false;
+      if (btnSubmit) btnSubmit.disabled = false;
+      return;
+    }
+    mappedDestFields.add(m.destField);
+  }
+
+  // Validate required destination fields
+  if (typeof notionDbProperties !== 'undefined') {
+    for (const [key, prop] of Object.entries(notionDbProperties)) {
+      if (prop.required && !mappedDestFields.has(key)) {
+        showToast(`Validation Error: Required destination field '${prop.label || key}' must be mapped.`, 'error');
+        isSavingConfig = false;
+        if (btnSave) btnSave.disabled = false;
+        if (btnSubmit) btnSubmit.disabled = false;
+        return;
+      }
+    }
   }
   
   const targetBtn = isSubmit ? btnSubmit : btnSave;
@@ -3115,6 +3225,8 @@ document.getElementById('btn-step1-next')?.addEventListener('click', () => {
   if (!p1) { showToast('Please select a saved account for Platform 1.', 'error'); return; }
   if (!p2) { showToast('Please select a saved account for Platform 2.', 'error'); return; }
   if (p1 === p2) { showToast('The source and destination accounts cannot be the same.', 'error'); return; }
+  
+  loadDefaultMappingsPreset();
   goToStep(2);
 });
 
