@@ -1559,7 +1559,6 @@ header.legacy-header {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
-  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 .skeleton-line {

@@ -364,7 +364,8 @@ async function openAddConnectionDialog(presetProvider = null) {
     'display:flex;align-items:center;justify-content:center;'
   ].join('');
 
-  overlay.innerHTML = `<div style="background:var(--bg-2);padding:2rem;border-radius:12px;color:var(--text-1);">Loading providers...</div>`;
+  overlay.innerHTML = `<div style="background:var(--bg-2);padding:2rem;border-radius:12px;color:var(--text-1);"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i>Loading providers...</div>`;
+  if (window.feather) feather.replace();
   document.body.appendChild(overlay);
 
   let platforms = [];
