@@ -2440,7 +2440,7 @@ function updateStatusMappingUI(savedStatusMappings = null) {
 
   sectionStatusMapping.style.display = 'block';
 
-  const options = (propSchema.type === 'status' ? propSchema.status?.options : propSchema.select?.options) || [];
+  const options = propSchema.options || (propSchema.type === 'status' ? propSchema.status?.options : propSchema.select?.options) || [];
   currentStatusState.options = options.map(o => o.name);
 
   if (savedStatusMappings) {
@@ -2469,9 +2469,8 @@ function renderStatusLabels() {
   document.getElementById('lbl-status-complete-default').textContent = currentStatusState.completeDefault || 'None';
 }
 
-window.openStatusModal = function(target) {
+window.openStatusModal = function(target, isReRender = false) {
   currentModalTarget = target;
-  currentModalTempSelection = [];
   
   const title = document.getElementById('status-modal-title');
   const subtitle = document.getElementById('status-modal-subtitle');
@@ -2486,26 +2485,31 @@ window.openStatusModal = function(target) {
     title.innerHTML = 'Incomplete';
     subtitle.textContent = 'Which properties in Notion are displayed as incomplete in TickTick?';
     isMulti = true;
-    currentModalTempSelection = [...currentStatusState.incomplete];
+    if (!isReRender) currentModalTempSelection = [...currentStatusState.incomplete];
   } else if (target === 'incomplete-default') {
     title.innerHTML = 'Incomplete Default';
     subtitle.textContent = 'Which property will incomplete tasks in TickTick sync to in Notion?';
     isMulti = false;
-    currentModalTempSelection = [currentStatusState.incompleteDefault];
+    options = currentStatusState.incomplete;
+    if (!isReRender) currentModalTempSelection = [currentStatusState.incompleteDefault];
   } else if (target === 'complete') {
     title.innerHTML = 'Complete';
     subtitle.textContent = 'Which properties in Notion are displayed as complete in TickTick?';
     isMulti = true;
-    currentModalTempSelection = [...currentStatusState.complete];
+    if (!isReRender) currentModalTempSelection = [...currentStatusState.complete];
   } else if (target === 'complete-default') {
     title.innerHTML = 'Complete Default';
     subtitle.textContent = 'Which property will complete tasks in TickTick sync to in Notion?';
     isMulti = false;
-    currentModalTempSelection = [currentStatusState.completeDefault];
+    options = currentStatusState.complete;
+    if (!isReRender) currentModalTempSelection = [currentStatusState.completeDefault];
   }
 
-  options.forEach(opt => {
-    const isSelected = currentModalTempSelection.includes(opt);
+  if (options.length === 0) {
+    list.innerHTML = `<p style="padding: 16px; color: var(--text-3); text-align: center; font-size: 0.9rem;">Please select at least one status in the parent list first.</p>`;
+  } else {
+    options.forEach(opt => {
+      const isSelected = currentModalTempSelection.includes(opt);
     const row = document.createElement('div');
     row.style = 'display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;';
     row.onmouseover = () => row.style.background = 'rgba(255,255,255,0.05)';
@@ -2531,10 +2535,11 @@ window.openStatusModal = function(target) {
       } else {
         currentModalTempSelection = [opt];
       }
-      openStatusModal(target); // re-render to show correct selection state
+      openStatusModal(target, true); // re-render to show correct selection state without resetting
     };
     list.appendChild(row);
   });
+  }
   
   document.getElementById('status-mapping-modal').classList.add('open');
 };
