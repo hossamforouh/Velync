@@ -94,9 +94,18 @@ class TickTickService {
   async getProjectsFiltered(entityType) {
     await this.authenticate();
     const projects = await this.getProjects();
-    // Return all projects immediately to avoid 120s timeout and rate limits.
-    // TickTick allows creating tasks/notes in any list, so filtering by existing content is unnecessary and slow.
-    const mapped = projects.map(p => ({ id: p.id || p.name, name: p.name }));
+    
+    let filtered = projects;
+    if (entityType) {
+      const typeStr = String(entityType).toLowerCase();
+      if (typeStr.includes('note')) {
+        filtered = projects.filter(p => p.kind === 'NOTE' || (p.id === 'inbox'));
+      } else if (typeStr.includes('task')) {
+        filtered = projects.filter(p => p.kind === 'TASK' || !p.kind || (p.id === 'inbox'));
+      }
+    }
+    
+    const mapped = filtered.map(p => ({ id: p.id || p.name, name: p.name }));
     
     // Always include 'Inbox' as a valid target for Tasks/Notes if it's not present
     if (!mapped.find(p => p.id === 'inbox' || p.name.toLowerCase() === 'inbox')) {

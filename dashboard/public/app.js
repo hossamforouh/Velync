@@ -54,7 +54,7 @@ async function fetchPlatformEntities(dataSourceId, connId, parentValue) {
   switch (dataSourceId) {
     case 'ticktick.getProjects':
     case 'fetchTickTickLists':
-      return clientTickTickProjects(conn);
+      return clientTickTickProjects(conn, parentValue);
     case 'fetchTickTickTags':
       return clientTickTickAllTags(conn);
     default:
@@ -80,7 +80,7 @@ async function clientTickTickToken(conn) {
   return null;
 }
 
-async function clientTickTickProjects(conn) {
+async function clientTickTickProjects(conn, parentValue) {
   try {
     const token = await clientTickTickToken(conn);
     if (!token) return [];
@@ -89,7 +89,27 @@ async function clientTickTickProjects(conn) {
     });
     if (!res.ok) return [];
     const projects = await res.json();
-    return (projects || []).map(p => ({ value: p.id || p.name, label: p.name }));
+    let filteredProjects = projects || [];
+    
+    if (parentValue) {
+       const pValStr = String(parentValue).toLowerCase();
+       
+       if (pValStr.includes('note')) {
+           // Target Entity is Notes: show lists of kind NOTE, or lists that contain 'note' in their name
+           filteredProjects = filteredProjects.filter(p => 
+               p.kind === 'NOTE' || p.name.toLowerCase().includes('note')
+           );
+       } else if (pValStr.includes('task')) {
+           // Target Entity is Tasks: hide lists of kind NOTE, and hide lists containing 'note' in name
+           filteredProjects = filteredProjects.filter(p => {
+               if (p.kind === 'NOTE') return false;
+               if (p.name.toLowerCase().includes('note')) return false;
+               return true;
+           });
+       }
+    }
+    
+    return filteredProjects.map(p => ({ value: p.id || p.name, label: p.name }));
   } catch (e) {
     console.warn('[clientTickTickProjects]', e);
     showToast('Failed to load TickTick projects', 'error');
@@ -157,7 +177,18 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
     const row = document.createElement('div');
     row.className = 'form-row';
     row.id = `row-${prefix}-${field.id}`;
-    if (field.dependsOn) row.dataset.dependsOn = field.dependsOn;
+    if (field.dependsOn) {
+      row.dataset.dependsOn = field.dependsOn;
+      const parentVal = existingData[field.dependsOn] !== undefined ? String(existingData[field.dependsOn]) : '';
+      let isVisible = true;
+      if (field.visibilityRule) {
+        const allowedVals = field.visibilityRule.split(',').map(s => s.trim());
+        isVisible = allowedVals.includes(parentVal);
+      } else {
+        isVisible = parentVal.trim().length > 0;
+      }
+      if (!isVisible) row.style.display = 'none';
+    }
     if (field.visibilityRule) row.dataset.visibilityRule = field.visibilityRule;
     
     const val = existingData[field.id] !== undefined ? existingData[field.id] : '';
@@ -207,7 +238,16 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
          
          // Auto-load if a connection is already selected (always load, even with a saved value)
          const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
-         const shouldAutoLoad = !!connId;
+         let shouldAutoLoad = !!connId;
+         if (shouldAutoLoad && field.dependsOn) {
+            const parentEl = container.querySelector(`[data-schema-id="${field.dependsOn}"]`);
+            const pVal = parentEl ? (parentEl.type === 'checkbox' ? parentEl.checked : parentEl.value) : (existingData[field.dependsOn] !== undefined ? String(existingData[field.dependsOn]) : '');
+            if (field.visibilityRule) {
+              shouldAutoLoad = field.visibilityRule.split(',').map(s => s.trim()).includes(String(pVal));
+            } else {
+              shouldAutoLoad = String(pVal).trim().length > 0;
+            }
+         }
          
           const loadData = async () => {
             if (selectEl.classList.contains('is-loading')) return;
@@ -281,12 +321,16 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                const childRow = container.querySelector(`#row-${prefix}-${childField.id}`);
                if (!childRow) return;
                
+               let isVisible = true;
                if (childField.visibilityRule) {
                  const allowedVals = childField.visibilityRule.split(',').map(s => s.trim());
-                 childRow.style.display = allowedVals.includes(String(newVal)) ? 'block' : 'none';
+                 isVisible = allowedVals.includes(String(newVal));
+               } else {
+                 isVisible = String(newVal).trim().length > 0;
                }
+               childRow.style.display = isVisible ? 'block' : 'none';
                
-                if (childField.type === 'dynamic_select') {
+                if (childField.type === 'dynamic_select' && isVisible) {
                   const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
                   if (connId) {
                     const btnRef = childRow.querySelector('.btn-refresh-ds');
@@ -311,9 +355,15 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
           const parentEl = container.querySelector(`[data-schema-id="${field.dependsOn}"]`);
           const parentVal = parentEl ? (parentEl.type === 'checkbox' ? parentEl.checked : parentEl.value) : '';
           const childRow = container.querySelector(`#row-${prefix}-${field.id}`);
-          if (childRow && field.visibilityRule) {
-             const allowedVals = field.visibilityRule.split(',').map(s => s.trim());
-             childRow.style.display = allowedVals.includes(String(parentVal)) ? 'block' : 'none';
+          if (childRow) {
+             let isVisible = true;
+             if (field.visibilityRule) {
+                const allowedVals = field.visibilityRule.split(',').map(s => s.trim());
+                isVisible = allowedVals.includes(String(parentVal));
+             } else {
+                isVisible = String(parentVal).trim().length > 0;
+             }
+             childRow.style.display = isVisible ? 'block' : 'none';
           }
        }
     });
