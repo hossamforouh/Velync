@@ -77,9 +77,9 @@ class NotionService {
       console.log(`[Notion Service] Total items returned by Notion search: ${allResults.length}`);
       console.log('[Notion Service] Item types:', allResults.map(r => `${r.object}(${r.id?.substring(0, 8)})`).join(', '));
 
-      // Map results — include 'database' objects only
+      // Map results — include 'database' and 'data_source' objects
       const databases = allResults
-        .filter(obj => obj.object === 'database')
+        .filter(obj => obj.object === 'database' || obj.object === 'data_source')
         .map(db => {
           let title = 'Untitled Database';
           if (db.title && Array.isArray(db.title) && db.title[0]) {
@@ -92,11 +92,7 @@ class NotionService {
           return { id: db.id, title };
         });
 
-      databases.forEach(db => {
-        if (db.id === '36f399dc-38f3-8001-a1bb-c8acf4e7d8fc' && db.title === 'Untitled Database') {
-          db.title = 'Knowledge Vault (Database)';
-        }
-      });
+      // Removed hardcoded Knowledge Vault rename logic
 
       // Fetch block children recursively for all returned pages to find nested/inline databases
       const pages = allResults.filter(obj => obj.object === 'page');
@@ -136,15 +132,13 @@ class NotionService {
         }
       };
 
-      // Only perform the scan IF we didn't find any databases directly
-      if (databases.length === 0) {
+      // Scan pages for nested inline databases that aren't returned by search
+      if (pages.length > 0) {
         // Limit to first 10 pages to prevent API timeouts!
         const pagesToScan = pages.slice(0, 10);
-        console.log(`[Notion Service] No databases found directly. Checking ${pagesToScan.length} pages for nested databases...`);
+        console.log(`[Notion Service] Checking ${pagesToScan.length} pages for nested databases...`);
         // Run them in parallel using Promise.all to avoid 120s serial timeout
         await Promise.all(pagesToScan.map(page => findDatabases(page.id)));
-      } else {
-        console.log(`[Notion Service] Found ${databases.length} databases directly. Skipping deep nested scan.`);
       }
 
       console.log(`[Notion Service] Found ${databases.length} databases/data_sources after filtering and recursive block traversal.`);

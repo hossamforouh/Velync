@@ -99,6 +99,17 @@ function populateSetupView(p1Id, p2Id) {
   document.getElementById('setup-platform1-name').textContent = p1Name;
   document.getElementById('setup-platform2-name').textContent = p2Name;
 
+  // Update the workflow canvas nodes
+  const n1Name = document.getElementById('node-p1-name');
+  const n2Name = document.getElementById('node-p2-name');
+  const n1Logo = document.getElementById('node-p1-logo');
+  const n2Logo = document.getElementById('node-p2-logo');
+
+  if (n1Name) n1Name.textContent = p1Name;
+  if (n2Name) n2Name.textContent = p2Name;
+  if (n1Logo) n1Logo.innerHTML = p1Logo;
+  if (n2Logo) n2Logo.innerHTML = p2Logo;
+
   const isP1Connected = connections.some(c => c.provider === p1Id);
   const isP2Connected = connections.some(c => c.provider === p2Id);
 
