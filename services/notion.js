@@ -97,49 +97,9 @@ class NotionService {
       // Fetch block children recursively for all returned pages to find nested/inline databases
       const pages = allResults.filter(obj => obj.object === 'page');
 
-      const findDatabases = async (blockId, depth = 0) => {
-        if (depth > 1) return; // Restrict depth to 1 to prevent excessive crawling
-        try {
-          let cursor = undefined;
-          let hasMore = true;
-          while (hasMore) {
-            const childrenResp = await this.client.blocks.children.list({
-              block_id: blockId,
-              start_cursor: cursor,
-              page_size: 50,
-            });
-
-            for (const block of childrenResp.results) {
-              if (block.type === 'child_database') {
-                if (!databases.find(d => d.id === block.id)) {
-                  databases.push({
-                    id: block.id,
-                    title: block.child_database?.title || 'Untitled Nested Database'
-                  });
-                  console.log(`[Notion Service] Found nested database: ${block.id} (depth ${depth})`);
-                }
-              } else if (block.has_children) {
-                if (['child_page', 'toggle', 'column', 'column_list', 'synced_block'].includes(block.type)) {
-                  await findDatabases(block.id, depth + 1);
-                }
-              }
-            }
-            hasMore = childrenResp.has_more;
-            cursor = childrenResp.next_cursor;
-          }
-        } catch (e) {
-          if (depth === 0) console.warn(`[Notion Service] Could not fetch children for page ${blockId}:`, e.message);
-        }
-      };
-
-      // Scan pages for nested inline databases that aren't returned by search
-      if (pages.length > 0) {
-        // Limit to first 10 pages to prevent API timeouts!
-        const pagesToScan = pages.slice(0, 10);
-        console.log(`[Notion Service] Checking ${pagesToScan.length} pages for nested databases...`);
-        // Run them in parallel using Promise.all to avoid 120s serial timeout
-        await Promise.all(pagesToScan.map(page => findDatabases(page.id)));
-      }
+      // The client.search API already cascades permissions and returns all nested/inline databases
+      // that the integration has access to. We do not manually crawl child_database blocks because 
+      // the blocks API only returns the Block ID (not the Database ID), which cannot be used to fetch schemas.
 
       // Deduplicate by normalized ID AND Title to prevent hyphen mismatches, race conditions, and Notion API UUID discrepancies
       const uniqueDatabasesMap = new Map();
@@ -254,11 +214,25 @@ class NotionService {
         };
       }
 
-      const response = await this.client.pages.create({
-        parent: { database_id: this.databaseId },
-        properties: pageProperties,
-        children: children.length > 0 ? children.slice(0, 100) : undefined,
-      });
+      let response;
+      try {
+        response = await this.client.pages.create({
+          parent: { database_id: this.databaseId },
+          properties: pageProperties,
+          children: children.length > 0 ? children.slice(0, 100) : undefined,
+        });
+      } catch (err) {
+        if (err.code === 'object_not_found' || err.code === 'validation_error') {
+          console.log(`[Notion Service] Failed with database_id, trying data_source_id for page creation...`);
+          response = await this.client.pages.create({
+            parent: { type: 'data_source_id', data_source_id: this.databaseId },
+            properties: pageProperties,
+            children: children.length > 0 ? children.slice(0, 100) : undefined,
+          });
+        } else {
+          throw err;
+        }
+      }
 
       console.log(`[Notion Service] ✅ Successfully created page! Page ID: ${response.id}`);
       return response;
@@ -275,15 +249,22 @@ class NotionService {
   async getDatabasePages() {
     console.log(`[Notion Service] Querying database pages for database ${this.databaseId}...`);
     try {
+      let isDataSource = false;
       let queryId = this.databaseId;
       try {
         const meta = await this.client.databases.retrieve({ database_id: this.databaseId });
         if (meta.data_sources && meta.data_sources.length > 0) {
           queryId = meta.data_sources[0].id;
-          console.log(`[Notion Service] Resolved linked view to true database ID: ${queryId}`);
+          isDataSource = true;
+          console.log(`[Notion Service] Resolved linked view to true data_source ID: ${queryId}`);
         }
       } catch (e) {
-        console.warn(`[Notion Service] Failed to retrieve metadata for ID resolution.`, e.message);
+        if (e.code === 'object_not_found') {
+          isDataSource = true;
+          console.log(`[Notion Service] ID is a data_source natively.`);
+        } else {
+          console.warn(`[Notion Service] Failed to retrieve metadata for ID resolution.`, e.message);
+        }
       }
 
       let results = [];
@@ -291,11 +272,18 @@ class NotionService {
       let hasMore = true;
 
       while (hasMore) {
-        const response = await this.client.dataSources.query({
-          data_source_id: queryId,
-          start_cursor: cursor,
-          page_size: 100,
-        });
+        const response = isDataSource
+          ? await this.client.dataSources.query({
+              data_source_id: queryId,
+              start_cursor: cursor,
+              page_size: 100,
+            })
+          : await this.client.databases.query({
+              database_id: queryId,
+              start_cursor: cursor,
+              page_size: 100,
+            });
+            
         results = results.concat(response.results);
         hasMore = response.has_more;
         cursor = response.next_cursor;
@@ -316,9 +304,22 @@ class NotionService {
   async getDatabaseSchema() {
     console.log(`[Notion Service] Fetching database schema for database ${this.databaseId}...`);
     try {
-      const response = await this.client.databases.retrieve({
-        database_id: this.databaseId,
-      });
+      let response;
+      try {
+        response = await this.client.databases.retrieve({
+          database_id: this.databaseId,
+        });
+      } catch (err) {
+        if (err.code === 'object_not_found') {
+          console.log(`[Notion Service] Not found as database, trying as data_source...`);
+          response = await this.client.dataSources.retrieve({
+            data_source_id: this.databaseId,
+          });
+        } else {
+          throw err;
+        }
+      }
+      
       if (response.properties) {
         return response.properties;
       }

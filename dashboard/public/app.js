@@ -2564,8 +2564,15 @@ async function loadDefaultMappingsPreset() {
 
   if (!sourceConnId || !destConnId) return;
 
-  if (window._lastMappedSourceId === sourceConnId && window._lastMappedDestId === destConnId && mappingsContainer.children.length > 0) {
-    return; // Preserve existing state if connections haven't changed
+  const destContext = window.harvestDynamicFields ? window.harvestDynamicFields('p2-dynamic-container') : {};
+  const sourceContext = window.harvestDynamicFields ? window.harvestDynamicFields('p1-dynamic-container') : {};
+  const destContextStr = JSON.stringify(destContext);
+  const sourceContextStr = JSON.stringify(sourceContext);
+
+  if (window._lastMappedSourceId === sourceConnId && window._lastMappedDestId === destConnId && 
+      window._lastMappedSourceContext === sourceContextStr && window._lastMappedDestContext === destContextStr && 
+      mappingsContainer.children.length > 0) {
+    return; // Preserve existing state if connections and specific dynamic contexts haven't changed
   }
 
   mappingsContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-3); font-size: 0.9rem; animation: pulse-loading 1.5s infinite;"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i> Generating intelligent mapping suggestions...</div>';
@@ -2576,10 +2583,6 @@ async function loadDefaultMappingsPreset() {
     const idToken = await user.getIdToken();
     const sourceConn = typeof _connectionsCache !== 'undefined' ? _connectionsCache.find(c => c.id === sourceConnId) : null;
     const destConn = typeof _connectionsCache !== 'undefined' ? _connectionsCache.find(c => c.id === destConnId) : null;
-    
-    // We get contexts for dynamic schemas (e.g. databaseId for Notion)
-    const destContext = window.harvestDynamicFields ? window.harvestDynamicFields('p2-dynamic-container') : {};
-    const sourceContext = window.harvestDynamicFields ? window.harvestDynamicFields('p1-dynamic-container') : {};
 
     const res = await fetch(`${API_URL}/suggest-mappings`, {
       method: 'POST',
@@ -2602,8 +2605,8 @@ async function loadDefaultMappingsPreset() {
     if (data.success && data.suggestions && data.suggestions.length > 0) {
       window._lastMappedSourceId = sourceConnId;
       window._lastMappedDestId = destConnId;
-
-
+      window._lastMappedSourceContext = sourceContextStr;
+      window._lastMappedDestContext = destContextStr;
       data.suggestions.forEach(s => {
         if (s.destField) addMappingRow(s.sourceField, s.destField, s.confidence, s.reasoning);
       });
@@ -2617,6 +2620,8 @@ async function loadDefaultMappingsPreset() {
   mappingsContainer.innerHTML = '';
   window._lastMappedSourceId = sourceConnId;
   window._lastMappedDestId = destConnId;
+  window._lastMappedSourceContext = sourceContextStr;
+  window._lastMappedDestContext = destContextStr;
   if (entity === 'Tasks') {
     addMappingRow('title', 'Name');
     addMappingRow('tags', 'Topic');
