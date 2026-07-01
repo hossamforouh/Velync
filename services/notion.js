@@ -141,9 +141,24 @@ class NotionService {
         await Promise.all(pagesToScan.map(page => findDatabases(page.id)));
       }
 
-      console.log(`[Notion Service] Found ${databases.length} databases/data_sources after filtering and recursive block traversal.`);
+      // Deduplicate by normalized ID AND Title to prevent hyphen mismatches, race conditions, and Notion API UUID discrepancies
+      const uniqueDatabasesMap = new Map();
+      const seenTitles = new Set();
+      
+      databases.forEach(db => {
+        if (!db || (!db.id && !db.title)) return;
+        const normId = String(db.id).replace(/-/g, '').toLowerCase();
+        
+        if (!uniqueDatabasesMap.has(normId) && !seenTitles.has(db.title)) {
+          uniqueDatabasesMap.set(normId, db);
+          if (db.title) seenTitles.add(db.title);
+        }
+      });
+      const finalDatabases = Array.from(uniqueDatabasesMap.values());
 
-      return databases;
+      console.log(`[Notion Service] Found ${finalDatabases.length} databases/data_sources after filtering and recursive block traversal.`);
+
+      return finalDatabases;
     } catch (error) {
       console.error('[Notion Service] Failed to list databases:', error.message);
       throw error;
