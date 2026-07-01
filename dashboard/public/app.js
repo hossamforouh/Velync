@@ -564,6 +564,9 @@ let _connectionsCache = [];
 let currentSourcePlatform = '';
 let currentDestPlatform = '';
 document.addEventListener('DOMContentLoaded', () => {
+  if (typeof initWorkspaceDropdownSkeleton === 'function') {
+    initWorkspaceDropdownSkeleton();
+  }
   if (fIntervalUnit) {
     fIntervalUnit.addEventListener('change', () => {
       if (fIntervalUnit.value === 'advanced') {
@@ -3887,52 +3890,10 @@ function fmtDate(iso) {
 }
 
 // ─── God Mode Workspace Switcher ──────────────────────────────
-async function setupWorkspaceSwitcher(user) {
+function initWorkspaceDropdownSkeleton() {
   const selectEl = document.getElementById('workspace-selector');
-  if (!selectEl) return;
-
-  // Clear existing TomSelect if it exists
-  if (workspaceSelectTom) {
-    workspaceSelectTom.destroy();
-    workspaceSelectTom = null;
-  }
-  selectEl.innerHTML = '';
-
-  try {
-
-    if (currentUserRole === 'superadmin') {
-      // Superadmin: Fetch all tenants
-      const tenantsSnap = await getDocs(collection(db, 'workspaces'));
-      tenantsSnap.forEach(doc => {
-        const t = doc.data();
-        const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = t.name || 'Organization';
-        selectEl.appendChild(opt);
-      });
-    } else {
-      // Normal User: Fetch tenants they belong to
-      const tenantsQuery = query(collection(db, 'workspaces'), where('members', 'array-contains', user.uid));
-      const tenantsSnap = await getDocs(tenantsQuery);
-      
-      tenantsSnap.forEach(doc => {
-        const t = doc.data();
-        const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = t.name || 'Organization';
-        selectEl.appendChild(opt);
-      });
-    }
-  } catch (err) {
-    console.error("Error setting up workspace switcher:", err);
-    showToast('Failed to load workspaces', 'error');
-    const opt = document.createElement('option');
-    opt.value = user.uid;
-    opt.textContent = `Personal Workspace`;
-    selectEl.appendChild(opt);
-  }
-
-  // Initialize TomSelect
+  if (!selectEl || typeof TomSelect === 'undefined' || workspaceSelectTom) return;
+  
   workspaceSelectTom = new TomSelect("#workspace-selector", {
     create: false,
     sortField: { field: "text", direction: "asc" },
@@ -3944,15 +3905,14 @@ async function setupWorkspaceSwitcher(user) {
     }
   });
 
-  // Set default value
-  workspaceSelectTom.setValue(currentWorkspaceId, true);
-  
-  const selectedName = workspaceSelectTom.options[currentWorkspaceId]?.text || 'Workspace';
-
   workspaceSelectTom.on('change', async (value) => {
-    if (value && value !== currentWorkspaceId) {
+    if (value && value !== currentWorkspaceId && value !== 'loading') {
       currentWorkspaceId = value;
       window.currentWorkspaceId = currentWorkspaceId;
+      
+      const tsWrapper = workspaceSelectTom.wrapper;
+      tsWrapper.classList.add('is-loading');
+      workspaceSelectTom.lock();
       
       showToast(`Switched workspace`, 'info');
       await loadConfigs();
@@ -3963,6 +3923,77 @@ async function setupWorkspaceSwitcher(user) {
         await loadConnections();
         renderConnectionsView();
       }
+      
+      tsWrapper.classList.remove('is-loading');
+      workspaceSelectTom.unlock();
     }
   });
+
+  const tsWrapper = workspaceSelectTom.wrapper;
+  tsWrapper.classList.add('is-loading');
+  workspaceSelectTom.lock();
+  workspaceSelectTom.addOption({value: 'loading', text: 'Fetching Workspaces...'});
+  workspaceSelectTom.setValue('loading', true);
+}
+
+async function setupWorkspaceSwitcher(user) {
+  initWorkspaceDropdownSkeleton();
+  const selectEl = document.getElementById('workspace-selector');
+  if (!selectEl) return;
+
+  const tsWrapper = workspaceSelectTom.wrapper;
+  tsWrapper.classList.add('is-loading');
+  workspaceSelectTom.lock();
+  workspaceSelectTom.addOption({value: 'loading', text: 'Fetching Workspaces...'});
+  if (!workspaceSelectTom.getValue()) {
+    workspaceSelectTom.setValue('loading', true);
+  }
+
+  try {
+    let options = [];
+    if (currentUserRole === 'superadmin') {
+      const tenantsSnap = await getDocs(collection(db, 'workspaces'));
+      tenantsSnap.forEach(doc => {
+        const t = doc.data();
+        options.push({value: t.id, text: t.name || 'Organization'});
+      });
+    } else {
+      const tenantsQuery = query(collection(db, 'workspaces'), where('members', 'array-contains', user.uid));
+      const tenantsSnap = await getDocs(tenantsQuery);
+      
+      tenantsSnap.forEach(doc => {
+        const t = doc.data();
+        options.push({value: t.id, text: t.name || 'Organization'});
+      });
+    }
+
+    workspaceSelectTom.clear(true);
+    workspaceSelectTom.clearOptions();
+    workspaceSelectTom.removeOption('loading');
+    options.forEach(opt => workspaceSelectTom.addOption(opt));
+
+  } catch (err) {
+    console.error("Error setting up workspace switcher:", err);
+    showToast('Failed to load workspaces', 'error');
+    workspaceSelectTom.clear(true);
+    workspaceSelectTom.clearOptions();
+    workspaceSelectTom.removeOption('loading');
+    workspaceSelectTom.addOption({value: user.uid, text: `Personal Workspace`});
+  }
+
+  // Set default value
+  if (currentWorkspaceId) {
+    workspaceSelectTom.setValue(currentWorkspaceId, true);
+  } else {
+    // Select first available option if no current ID
+    const opts = Object.keys(workspaceSelectTom.options);
+    if (opts.length > 0) {
+      currentWorkspaceId = opts[0];
+      window.currentWorkspaceId = currentWorkspaceId;
+      workspaceSelectTom.setValue(currentWorkspaceId, true);
+    }
+  }
+  
+  tsWrapper.classList.remove('is-loading');
+  workspaceSelectTom.unlock();
 }

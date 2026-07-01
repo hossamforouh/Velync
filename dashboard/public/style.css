@@ -231,13 +231,13 @@ body::after {
 /* ── TomSelect Overrides ────────────────────────────────────── */
 .ts-control,
 .ts-wrapper.single .ts-control {
-  background: var(--glass) !important;
+  background-color: var(--glass) !important;
   border: 1px solid var(--glass-hover) !important;
   color: var(--text-1) !important;
   border-radius: var(--radius-sm) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
   min-height: 38px !important;
-  padding: 8px 16px !important;
+  padding: 8px 32px 8px 16px !important;
   font-weight: 500 !important;
   font-size: 0.9rem !important;
   transition: all 0.3s ease !important;
@@ -247,6 +247,34 @@ body::after {
   align-items: center !important;
   width: 100% !important;
   flex-wrap: nowrap !important;
+  cursor: pointer !important;
+}
+
+.ts-wrapper.single .ts-control {
+  background-image: url('data:image/svg+xml;utf8,<svg fill="none" height="24" stroke="%2381A1C1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><polyline points="6 9 12 15 18 9"/></svg>') !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 16px !important;
+}
+
+.ts-wrapper.is-loading .ts-control {
+  animation: pulse-loading 1.5s infinite !important;
+  pointer-events: none !important;
+  opacity: 0.7 !important;
+}
+
+.ts-wrapper.is-loading .ts-control .item::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 10px;
+  border: 2px solid rgba(129, 161, 193, 0.3);
+  border-top-color: #81A1C1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  vertical-align: middle;
+  margin-bottom: 2px;
 }
 
 .ts-control .item {
@@ -258,7 +286,7 @@ body::after {
 }
 
 .ts-wrapper.single .ts-control:hover {
-  background: var(--glass-hover) !important;
+  background-color: var(--glass-hover) !important;
   border-color: var(--border-hover) !important;
 }
 
@@ -304,6 +332,8 @@ body::after {
   margin: 0 !important;
   position: absolute !important;
   opacity: 0 !important;
+  cursor: pointer !important;
+  caret-color: transparent !important;
 }
 
 .ts-wrapper.single .ts-control:after {
