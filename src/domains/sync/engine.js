@@ -42,8 +42,8 @@ async function runSync(config, configId) {
     const workspaceId = config.workspaceId;
     const sourceConnId = config.platform1ConnectionId || config.sourceConnectionId;
     const destConnId = config.platform2ConnectionId || config.destConnectionId;
-    const sourcePlatform = config.platform1 || config.sourcePlatform;
-    const destPlatform = config.platform2 || config.destPlatform;
+    const sourcePlatformId = config.platform1 || config.sourcePlatform;
+    const destPlatformId = config.platform2 || config.destPlatform;
     const fieldMappings = config.fieldMappings || [];
     const syncType = config.syncType || 'Source_to_Dest';
     
@@ -56,11 +56,20 @@ async function runSync(config, configId) {
     
     config.templateId = p2Settings.templateId || config.templateId;
 
-    const sourceCreds = sourceConnId ? await resolveConnectorCreds(workspaceId, sourceConnId) : {};
-    const destCreds = destConnId ? await resolveConnectorCreds(workspaceId, destConnId) : {};
+    const sourceCreds = sourceConnId ? { ...await resolveConnectorCreds(workspaceId, sourceConnId), ...p1Settings } : { ...p1Settings };
+    const destCreds = destConnId ? { ...await resolveConnectorCreds(workspaceId, destConnId), databaseId: p2Settings.database, ...p2Settings } : { databaseId: p2Settings.database, ...p2Settings };
 
-    const SourceConn = getConnector(sourcePlatform);
-    const DestConn = getConnector(destPlatform);
+    let resolvedSourcePlatform = sourcePlatformId;
+    let resolvedDestPlatform = destPlatformId;
+    
+    const p1Doc = await db.collection('platforms').doc(sourcePlatformId).get();
+    if (p1Doc.exists && p1Doc.data().name) resolvedSourcePlatform = p1Doc.data().name.toLowerCase();
+    
+    const p2Doc = await db.collection('platforms').doc(destPlatformId).get();
+    if (p2Doc.exists && p2Doc.data().name) resolvedDestPlatform = p2Doc.data().name.toLowerCase();
+
+    const SourceConn = getConnector(resolvedSourcePlatform);
+    const DestConn = getConnector(resolvedDestPlatform);
     const source = new SourceConn(sourceCreds);
     const dest = new DestConn(destCreds);
 
@@ -103,7 +112,7 @@ async function runSync(config, configId) {
       }
     };
 
-    const destSchema = typeof dest.getSchema === 'function' ? dest.getSchema(entityType) : {};
+    const destSchema = typeof dest.getSchema === 'function' ? await dest.getSchema(entityType) : {};
 
     for (const item of sourceItems) {
       try {
@@ -178,7 +187,9 @@ async function runSync(config, configId) {
     runningConfigs.delete(configId);
   }
 
-  if (logRef) await logRef.update({ status: 'success', endTime: new Date().toISOString(), syncedCount: synced, deletedCount: deleted, failedCount: failed }).catch(() => {});
+  const now = new Date().toISOString();
+  if (logRef) await logRef.update({ status: 'success', endTime: now, syncedCount: synced, deletedCount: deleted, failedCount: failed }).catch(() => {});
+  await db.collection('workspaces').doc(config.workspaceId).collection('sync_configs').doc(configId).update({ lastRunAt: now }).catch(() => {});
   logger.info('sync', `Completed "${configId}" — synced:${synced} deleted:${deleted} failed:${failed}`);
   return { synced, deleted, failed };
 }

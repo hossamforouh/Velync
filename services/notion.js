@@ -17,6 +17,27 @@ class NotionService {
   }
 
   /**
+   * Helper to fetch database metadata, resolving data_sources seamlessly.
+   */
+  async _getDatabaseMetadata() {
+    if (this.trueDatabaseId) {
+      return this.client.databases.retrieve({ database_id: this.trueDatabaseId });
+    }
+    try {
+      return await this.client.databases.retrieve({ database_id: this.databaseId });
+    } catch (err) {
+      if (err.code === 'object_not_found' || err.code === 'validation_error') {
+        const ds = await this.client.dataSources.retrieve({ data_source_id: this.databaseId });
+        if (ds.parent && ds.parent.type === 'database_id') {
+          this.trueDatabaseId = ds.parent.database_id;
+        }
+        return ds;
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Test the Notion connection by retrieving target database metadata.
    * @returns {Promise<object>} Database metadata
    */
@@ -32,9 +53,7 @@ class NotionService {
     }
 
     try {
-      const response = await this.client.databases.retrieve({
-        database_id: this.databaseId,
-      });
+      const response = await this._getDatabaseMetadata();
 
       // Database title can be a complex array, extract plaintext if available
       const dbTitle = response.title && response.title[0] ? response.title[0].plain_text : 'Untitled';
@@ -141,8 +160,8 @@ class NotionService {
 
     try {
       // 1. Fetch current database schema to map multi-select tags case-insensitively
-      const dbMetadata = await this.client.databases.retrieve({ database_id: this.databaseId });
-      const availableOptions = dbMetadata.properties.Topic?.multi_select?.options || [];
+      const dbMetadata = await this._getDatabaseMetadata();
+      const availableOptions = dbMetadata.properties?.Topic?.multi_select?.options || [];
 
       // Map topics to their correctly cased database names, or keep original if not found
       const multiSelectValues = topics.map(topic => {
@@ -249,40 +268,48 @@ class NotionService {
   async getDatabasePages() {
     console.log(`[Notion Service] Querying database pages for database ${this.databaseId}...`);
     try {
-      let isDataSource = false;
-      let queryId = this.databaseId;
-      try {
-        const meta = await this.client.databases.retrieve({ database_id: this.databaseId });
-        if (meta.data_sources && meta.data_sources.length > 0) {
-          queryId = meta.data_sources[0].id;
-          isDataSource = true;
-          console.log(`[Notion Service] Resolved linked view to true data_source ID: ${queryId}`);
-        }
-      } catch (e) {
-        if (e.code === 'object_not_found') {
-          isDataSource = true;
-          console.log(`[Notion Service] ID is a data_source natively.`);
-        } else {
-          console.warn(`[Notion Service] Failed to retrieve metadata for ID resolution.`, e.message);
-        }
-      }
-
       let results = [];
       let cursor = undefined;
       let hasMore = true;
 
+      // Try standard databases.query first (works for regular databases)
+      // Fall back to dataSources.query if needed (for data sources / linked databases)
+      let useDataSource = false;
+      let queryId = this.databaseId;
+
+      // Probe: try to retrieve as a regular database first
+      try {
+        const meta = await this.client.databases.retrieve({ database_id: this.databaseId });
+        if (meta.data_sources && meta.data_sources.length > 0) {
+          queryId = meta.data_sources[0].id;
+          useDataSource = true;
+          console.log(`[Notion Service] Resolved linked database to data_source ID: ${queryId}`);
+        }
+      } catch (e) {
+        if (e.code === 'object_not_found') {
+          useDataSource = true;
+          console.log(`[Notion Service] ID is a data_source natively, switching to dataSources.query.`);
+        } else {
+          console.warn(`[Notion Service] Failed to retrieve database metadata:`, e.message);
+        }
+      }
+
       while (hasMore) {
-        const response = isDataSource
-          ? await this.client.dataSources.query({
-              data_source_id: queryId,
-              start_cursor: cursor,
-              page_size: 100,
-            })
-          : await this.client.databases.query({
-              database_id: queryId,
-              start_cursor: cursor,
-              page_size: 100,
-            });
+        let response;
+        if (useDataSource) {
+          response = await this.client.dataSources.query({
+            data_source_id: queryId,
+            start_cursor: cursor,
+            page_size: 100,
+          });
+        } else {
+          response = await this.client.databases.query({
+            database_id: queryId,
+            start_cursor: cursor,
+            page_size: 100,
+          });
+        }
+
             
         results = results.concat(response.results);
         hasMore = response.has_more;
@@ -304,46 +331,16 @@ class NotionService {
   async getDatabaseSchema() {
     console.log(`[Notion Service] Fetching database schema for database ${this.databaseId}...`);
     try {
-      let response;
-      try {
-        response = await this.client.databases.retrieve({
-          database_id: this.databaseId,
-        });
-      } catch (err) {
-        if (err.code === 'object_not_found') {
-          console.log(`[Notion Service] Not found as database, trying as data_source...`);
-          response = await this.client.dataSources.retrieve({
-            data_source_id: this.databaseId,
-          });
-        } else {
-          throw err;
-        }
-      }
+      const response = await this._getDatabaseMetadata();
       
       if (response.properties) {
         return response.properties;
       }
       
-      let queryId = this.databaseId;
-      if (response.data_sources && response.data_sources.length > 0) {
-        queryId = response.data_sources[0].id;
-        console.log(`[Notion Service] Database is a linked view. Resolving to true database ID: ${queryId}`);
-      }
-
-      console.log(`[Notion Service] Schema missing for ${this.databaseId}. Fallback to page query on ${queryId}...`);
-      const pages = await this.client.dataSources.query({
-        data_source_id: queryId,
-        page_size: 1,
-      });
-      
-      if (pages.results && pages.results.length > 0) {
-        return pages.results[0].properties;
-      }
-      
-      console.warn(`[Notion Service] Database ${this.databaseId} has no properties and is empty.`);
-      return undefined;
+      // Fallback if properties missing (extremely rare for data_sources with the new Notion API SDK version, but safe)
+      return {};
     } catch (error) {
-      console.error(`[Notion Service] Failed to retrieve database schema:`, error.message);
+      console.error(`[Notion Service] Failed to retrieve metadata for ID resolution.`, error.message);
       throw error;
     }
   }

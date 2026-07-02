@@ -4,17 +4,29 @@
       "collectionGroup": "sync_configs",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "enabled", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "sync_configs",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
         { "fieldPath": "enabled", "order": "ASCENDING" },
         { "fieldPath": "cronSchedule", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "execution_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workspaceId", "order": "ASCENDING" },
+        { "fieldPath": "startTime", "order": "DESCENDING" }
+      ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "sync_configs",
+      "fieldPath": "enabled",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    }
+  ]
 }

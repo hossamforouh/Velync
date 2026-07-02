@@ -260,10 +260,10 @@ class TickTickService {
           }
         });
         const projects = response.data?.projectProfiles || [];
-        let project = projects.find(p => p.name.toLowerCase() === normalizedList);
-        if (!project) {
-          project = projects.find(p => p.name.toLowerCase().includes(normalizedList));
-        }
+        // Try matching by ID first, then by name
+        let project = projects.find(p => p.id === listName);
+        if (!project) project = projects.find(p => p.name.toLowerCase() === normalizedList);
+        if (!project) project = projects.find(p => p.name.toLowerCase().includes(normalizedList));
         
         if (!project) {
           console.warn(`[TickTick Service] Custom list "${listName}" not found. Falling back to Inbox.`);
@@ -284,10 +284,10 @@ class TickTickService {
         });
 
         const projects = projectRes.data;
-        let project = projects.find(p => p.name.toLowerCase() === normalizedList);
-        if (!project) {
-          project = projects.find(p => p.name.toLowerCase().includes(normalizedList));
-        }
+        // Try matching by ID first, then by name
+        let project = projects.find(p => p.id === listName);
+        if (!project) project = projects.find(p => p.name.toLowerCase() === normalizedList);
+        if (!project) project = projects.find(p => p.name.toLowerCase().includes(normalizedList));
         
         if (!project) {
           console.warn(`[TickTick Service] Custom list "${listName}" not found. Falling back to Inbox.`);

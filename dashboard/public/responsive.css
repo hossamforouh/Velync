@@ -277,6 +277,11 @@ html, body {
   .search-box input { width: 100% !important; }
   .search-box input:focus { width: 100% !important; }
 
+  /* Responsive: Filter pills wrap and date inputs shrink */
+  .logs-filter-pills { flex-wrap: wrap; }
+  .logs-date-input { width: 120px; }
+  #logs-toolbar .toolbar-left { width: 100%; }
+
   /* ── Logs table — horizontal scroll ─── */
   /* Responsive: Logs table horizontal scroll on mobile */
   #view-logs .grid-table-wrapper {

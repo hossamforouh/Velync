@@ -12,59 +12,63 @@ function startScheduler() {
     logger.debug('scheduler', `Heartbeat — active jobs: ${Object.keys(activeJobs).length}`);
   }).start();
 
-  db.collectionGroup('sync_configs')
-    .where('enabled', '==', true)
-    .onSnapshot((snapshot) => {
-    logger.info('scheduler', `Firestore update: ${snapshot.docChanges().length} changes`);
+  function listenToConfigs() {
+    db.collectionGroup('sync_configs')
+      .onSnapshot((snapshot) => {
+      logger.info('scheduler', `Firestore update: ${snapshot.docChanges().length} changes`);
 
-    snapshot.docChanges().forEach((change) => {
-      const configId = change.doc.id;
-      const config = change.doc.data();
-      const configName = config.description || configId;
+      snapshot.docChanges().forEach((change) => {
+        const configId = change.doc.id;
+        const config = change.doc.data();
+        const configName = config.description || configId;
 
-      if (change.type === 'removed') {
+        if (change.type === 'removed' || config.enabled !== true) {
+          if (activeJobs[configId]) {
+            logger.info('scheduler', `Stopping job for "${configName}"`);
+            activeJobs[configId].stop();
+            delete activeJobs[configId];
+          }
+          return;
+        }
+
+        if (change.type !== 'added' && change.type !== 'modified') return;
+
+        const schedule = config.cronSchedule || '*/5 * * * *';
         if (activeJobs[configId]) {
-          logger.info('scheduler', `Stopping job for "${configName}"`);
           activeJobs[configId].stop();
           delete activeJobs[configId];
+          logger.info('scheduler', `Updating job for "${configName}" → "${schedule}"`);
+        } else {
+          logger.info('scheduler', `Starting job for "${configName}" → "${schedule}"`);
         }
-        return;
-      }
 
-      if (change.type !== 'added' && change.type !== 'modified') return;
+        const safeSchedule = cron.validate(schedule) ? schedule : '*/5 * * * *';
+        if (!cron.validate(schedule)) {
+          logger.warn('scheduler', `Invalid cron "${schedule}" for "${configName}", fallback to */5`);
+        }
 
-      const schedule = config.cronSchedule || '*/5 * * * *';
-      if (activeJobs[configId]) {
-        activeJobs[configId].stop();
-        delete activeJobs[configId];
-        logger.info('scheduler', `Updating job for "${configName}" → "${schedule}"`);
-      } else {
-        logger.info('scheduler', `Starting job for "${configName}" → "${schedule}"`);
-      }
-
-      const safeSchedule = cron.validate(schedule) ? schedule : '*/5 * * * *';
-      if (!cron.validate(schedule)) {
-        logger.warn('scheduler', `Invalid cron "${schedule}" for "${configName}", fallback to */5`);
-      }
-
-      activeJobs[configId] = cron.schedule(safeSchedule, async () => {
-        logger.info('scheduler', `Executing "${configName}"`);
-        try {
-          if (config.platform1) {
-            await runSync(config, configId);
-          } else {
-            await runSyncForConfig(config, configId);
+        activeJobs[configId] = cron.schedule(safeSchedule, async () => {
+          logger.info('scheduler', `Executing "${configName}"`);
+          try {
+            if (config.platform1) {
+              await runSync(config, configId);
+            } else {
+              await runSyncForConfig(config, configId);
+            }
+          } catch (err) {
+            logger.error('scheduler', `Failed "${configName}"`, { error: err.message });
           }
-        } catch (err) {
-          logger.error('scheduler', `Failed "${configName}"`, { error: err.message });
-        }
-      });
+        });
 
-      activeJobs[configId].start();
+        activeJobs[configId].start();
+      });
+    }, (err) => {
+      logger.error('scheduler', 'Firestore listener error, retrying in 30s', { error: err.message });
+      setTimeout(listenToConfigs, 30000);
     });
-  }, (err) => {
-    logger.error('scheduler', 'Firestore listener error', { error: err.message });
-  });
+  }
+
+  listenToConfigs();
 
   logger.info('scheduler', 'Scheduler started');
 }

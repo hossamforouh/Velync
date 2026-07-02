@@ -7,6 +7,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebas
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app-check.js";
+import { initLogs } from "./js/logs.js";
 import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
 import { bindNavEvents, navigateTo } from './js/navigation.js';
 import { renderHubView } from './js/hub.js';
@@ -584,6 +585,9 @@ const fTtConnection = document.getElementById('f-tt-connection');
 const fNotionConnection = document.getElementById('f-notion-connection');
 const fNDbId       = document.getElementById('f-n-dbid');
 const fNToken      = document.getElementById('f-n-token');
+const fStatusToggle = document.getElementById('f-status-toggle');
+const lastRunRow   = document.getElementById('last-run-row');
+const fLastRun     = document.getElementById('f-last-run');
 
 // New configuration fields
 const fSyncType      = document.getElementById('f-sync-type');
@@ -625,6 +629,24 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         fCron.style.display = 'none';
         if (fIntervalValue) fIntervalValue.style.display = 'block';
+      }
+    });
+  }
+
+  if (fStatusToggle) {
+    fStatusToggle.addEventListener('change', () => {
+      const disabled = !fStatusToggle.checked;
+      if (fIntervalValue) fIntervalValue.disabled = disabled;
+      if (fIntervalUnit) fIntervalUnit.disabled = disabled;
+      if (fCron) fCron.disabled = disabled;
+      if (fIntervalValue) fIntervalValue.style.opacity = disabled ? '0.5' : '1';
+      if (fIntervalUnit) fIntervalUnit.style.opacity = disabled ? '0.5' : '1';
+      if (fCron) fCron.style.opacity = disabled ? '0.5' : '1';
+      
+      // Also sync the submit button text if available
+      const btnSubmit = document.getElementById('btn-submit');
+      if (btnSubmit) {
+        btnSubmit.textContent = disabled ? 'Save' : 'Save & Enable';
       }
     });
   }
@@ -848,6 +870,8 @@ onAuthStateChanged(auth, async (user) => {
 
     window.currentWorkspaceId = currentWorkspaceId;
     window.currentUserRole = currentUserRole;
+
+    initLogs(db, currentWorkspaceId);
 
     // Load configs in background — renders when done
     loadConfigs();
@@ -1803,7 +1827,9 @@ function renderCards() {
 
     // Parse the cron schedule into a readable text format
     let scheduleText = 'Every 5 Minutes';
-    if (cfg.cronSchedule) {
+    if (!cfg.enabled) {
+      scheduleText = '<span style="opacity: 0.5;">Disabled</span>';
+    } else if (cfg.cronSchedule) {
       const [cVal, cUnit] = parseCron(cfg.cronSchedule);
       let displayUnit = cUnit.charAt(0).toUpperCase() + cUnit.slice(1);
       if (cVal == 1 && displayUnit.endsWith('s')) displayUnit = displayUnit.slice(0, -1);
@@ -2018,7 +2044,7 @@ async function toggleConfig(id, checkbox) {
   const prev = checkbox.checked;
   checkbox.disabled = true;
   try {
-    const docRef = doc(db, "sync_configs", id);
+    const docRef = doc(db, 'workspaces', currentWorkspaceId, 'sync_configs', id);
     await updateDoc(docRef, {
       enabled: checkbox.checked,
       updatedAt: new Date().toISOString()
@@ -2545,7 +2571,7 @@ window.openStatusModal = function(target, isReRender = false) {
 };
 
 window.closeStatusModal = function() {
-  document.getElementById('status-mapping-modal').classList.remove('open');
+  document.getElementById('status-modal').classList.remove('open');
 };
 
 window.saveStatusModal = function() {
@@ -2851,6 +2877,12 @@ function clearForm() {
     fIntervalUnit.value = 'minutes';
     fIntervalUnit.dispatchEvent(new Event('change'));
   }
+
+  if (fStatusToggle) {
+    fStatusToggle.checked = true;
+    fStatusToggle.dispatchEvent(new Event('change'));
+  }
+  if (lastRunRow) lastRunRow.style.display = 'none';
   if (notionDbSelect) {
     notionDbSelect.clear();
     notionDbSelect.clearOptions();
@@ -2954,6 +2986,19 @@ async function fillForm(cfg) {
   }
   fCron.value = raw;
   
+  if (fStatusToggle) {
+    fStatusToggle.checked = cfg.enabled !== false; // default true if missing
+    fStatusToggle.dispatchEvent(new Event('change'));
+  }
+  if (lastRunRow && fLastRun) {
+    if (cfg.lastRunAt) {
+      lastRunRow.style.display = 'flex';
+      const d = new Date(cfg.lastRunAt);
+      fLastRun.textContent = isNaN(d.getTime()) ? cfg.lastRunAt : d.toLocaleString();
+    } else {
+      lastRunRow.style.display = 'none';
+    }
+  }
   const dbId = cfg.notion?.databaseId || '';
   if (dbId) {
     if (notionDbSelect) {
@@ -2990,7 +3035,7 @@ async function fillForm(cfg) {
   }
 }
 
-function buildFormPayload(status) {
+function buildFormPayload(payloadStatus) {
   
   // Read dynamic mapping rows
   const fieldMappings = [];
@@ -3020,17 +3065,20 @@ function buildFormPayload(status) {
     p2ConnId = existingCfg.platform2ConnectionId || p2ConnId;
   }
 
+  const enabled = fStatusToggle ? fStatusToggle.checked : (payloadStatus === 'active');
+  const finalStatus = enabled ? 'active' : 'draft';
+
   return {
     description: fDescription.value.trim() || 'New Sync Configuration',
     integrationId: document.getElementById('f-integration-id')?.value || null,
-    status: status,
+    status: finalStatus,
     creationSource: creationSource,
-    enabled:     status === 'active',
+    enabled: enabled,
     syncType:    fSyncType.value,
     deleteAfterSync: fDeleteAfter.checked,
     cronSchedule: buildCron(fIntervalValue?.value, fIntervalUnit?.value, fCron?.value),
-    platform1: _dropdownP1Provider || (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === fTtConnection.value)?.provider) || null,
-    platform2: _dropdownP2Provider || (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === fNotionConnection.value)?.provider) || null,
+    platform1: (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === p1ConnId)?.provider) || _dropdownP1Provider || null,
+    platform2: (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === p2ConnId)?.provider) || _dropdownP2Provider || null,
     platform1ConnectionId: p1ConnId,
     platform2ConnectionId: p2ConnId,
     p1Settings: window.harvestDynamicFields ? window.harvestDynamicFields('p1-dynamic-container') : {},
@@ -3969,6 +4017,7 @@ function initWorkspaceDropdownSkeleton() {
     if (value && value !== currentWorkspaceId && value !== 'loading') {
       currentWorkspaceId = value;
       window.currentWorkspaceId = currentWorkspaceId;
+      initLogs(db, currentWorkspaceId);
       
       const tsWrapper = workspaceSelectTom.wrapper;
       tsWrapper.classList.add('is-loading');
@@ -4050,6 +4099,7 @@ async function setupWorkspaceSwitcher(user) {
     if (opts.length > 0) {
       currentWorkspaceId = opts[0];
       window.currentWorkspaceId = currentWorkspaceId;
+      initLogs(db, currentWorkspaceId);
       workspaceSelectTom.setValue(currentWorkspaceId, true);
     }
   }

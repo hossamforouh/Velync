@@ -38,12 +38,16 @@ function mapSourceToDest(sourceItem, fieldMappings, sourceSchema, destSchema, st
         const statusOptions = destProp.status?.options || [];
         const numVal = Number(value);
         let mappedName;
-        if (numVal === 2) {
-          const match = statusOptions.find(o => ['completed', 'complete', 'done'].includes(o.name.toLowerCase()));
-          mappedName = match ? match.name : (statusOptions.find(o => o.color === 'green')?.name || 'Completed');
+        if (statusMappings && statusMappings.incompleteDefault && statusMappings.completeDefault) {
+          mappedName = numVal === 2 ? statusMappings.completeDefault : statusMappings.incompleteDefault;
         } else {
-          const match = statusOptions.find(o => ['not started', 'to-do', 'todo'].includes(o.name.toLowerCase()));
-          mappedName = match ? match.name : (statusOptions[0]?.name || 'Not Started');
+          if (numVal === 2) {
+            const match = statusOptions.find(o => ['completed', 'complete', 'done'].includes(o.name.toLowerCase()));
+            mappedName = match ? match.name : (statusOptions.find(o => o.color === 'green')?.name || 'Completed');
+          } else {
+            const match = statusOptions.find(o => ['not started', 'to-do', 'todo'].includes(o.name.toLowerCase()));
+            mappedName = match ? match.name : (statusOptions[0]?.name || 'Not Started');
+          }
         }
         properties[destField] = { status: { name: mappedName } };
         break;

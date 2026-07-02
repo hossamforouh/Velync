@@ -3603,6 +3603,80 @@ header.legacy-header {
   border: 1px solid rgba(129, 140, 248, 0.3);
 }
 
+/* ── Execution Logs Filter Pills ────────────────────────────── */
+.logs-filter-pills {
+  display: flex;
+  gap: 4px;
+}
+
+.logs-filter-pill {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.logs-filter-pill:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+  border-color: rgba(255,255,255,0.15);
+}
+
+.logs-filter-pill.active {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.logs-filter-pill[data-status="success"].active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: #6ee7b7;
+  color: #6ee7b7;
+}
+
+.logs-filter-pill[data-status="running"].active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #fcd34d;
+  color: #fcd34d;
+}
+
+.logs-filter-pill[data-status="failed"].active {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #fca5a5;
+  color: #fca5a5;
+}
+
+.logs-date-input {
+  background: var(--bg-body);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 0.78rem;
+  color: var(--text-1);
+  height: 30px;
+  width: 140px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  color-scheme: dark;
+}
+
+.logs-date-input:focus {
+  outline: none;
+  border-color: var(--violet);
+}
+
+.logs-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
 /* ── User Avatar Dropdown ──────────────────────────────────── */
 .user-avatar-container {
   position: relative;

@@ -3,8 +3,12 @@ const { NotionService } = require('../../../services/notion');
 const { register } = require('./registry');
 
 class NotionConnector extends Connector {
+  get databaseId() {
+    return this.credentials.databaseId || this.credentials.database;
+  }
+
   async connect() {
-    const svc = new NotionService(this.credentials.accessToken, this.credentials.databaseId);
+    const svc = new NotionService(this.credentials.accessToken, this.databaseId);
     try {
       await svc.testNotionConnection();
       return true;
@@ -14,26 +18,31 @@ class NotionConnector extends Connector {
   }
 
   async fetch(entityType, filter = {}) {
-    const svc = new NotionService(this.credentials.accessToken, this.credentials.databaseId);
+    const svc = new NotionService(this.credentials.accessToken, this.databaseId);
     const pages = await svc.getDatabasePages();
     return pages;
   }
 
   async create(entityType, data) {
     const { properties, content, children, templateId } = data;
-    const svc = new NotionService(this.credentials.accessToken, this.credentials.databaseId);
-    const dbSchema = await svc.getDatabaseSchema();
+    const svc = new NotionService(this.credentials.accessToken, this.databaseId);
+    let dbSchema = {};
+    try {
+      dbSchema = await svc.getDatabaseSchema();
+    } catch (err) {
+      console.error(`[NotionConnector] Failed to fetch database schema:`, err.message);
+    }
     const { createNotionPage } = require('../../../workflows/syncInboxToNotion');
     return createNotionPage(svc, properties, content, dbSchema, data.title || 'Untitled', children || [], templateId);
   }
 
   async update(entityType, id, data) {
-    const svc = new NotionService(this.credentials.accessToken, this.credentials.databaseId);
+    const svc = new NotionService(this.credentials.accessToken, this.databaseId);
     return svc.updateDatabasePage(id, data.properties);
   }
 
   async delete(entityType, id) {
-    const svc = new NotionService(this.credentials.accessToken, this.credentials.databaseId);
+    const svc = new NotionService(this.credentials.accessToken, this.databaseId);
     return svc.archiveDatabasePage(id);
   }
 

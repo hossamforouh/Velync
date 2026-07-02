@@ -140,10 +140,22 @@ async function createNotionPage(notionService, properties, content, dbSchema, fa
     const templates = await notionService.listTemplates().catch(() => []);
     const hasDefaultTemplate = templates.length > 0;
 
-    page = await notionService.client.pages.create({
-      parent: { database_id: notionService.databaseId },
-      properties: properties,
-    });
+    try {
+      page = await notionService.client.pages.create({
+        parent: { database_id: notionService.databaseId },
+        properties: properties,
+      });
+    } catch (err) {
+      if (err.code === 'object_not_found' || err.code === 'validation_error') {
+        console.log(`[Notion Service] Falling back to data_source_id for page creation...`);
+        page = await notionService.client.pages.create({
+          parent: { type: 'data_source_id', data_source_id: notionService.databaseId },
+          properties: properties,
+        });
+      } else {
+        throw err;
+      }
+    }
     
     if (hasDefaultTemplate) {
       shouldDelay = true;
@@ -787,85 +799,99 @@ async function runSyncForConfig(config, configId = 'unknown') {
   }
 
   try {
-    const notionConfig = config.notion || {};
-  const ticktickConfig = config.ticktick || {};
+    const notionConfig = config.notion || {
+      integrationToken: config.p2Settings?.accessToken || config.p2Creds?.accessToken,
+      databaseId: config.p2Settings?.database,
+      templateId: config.p2Settings?.templateId
+    };
+    const ticktickConfig = config.ticktick || {
+      accessToken: config.p1Settings?.accessToken || config.p1Creds?.accessToken,
+      listName: config.p1Settings?.listName,
+      syncTag: config.p1Settings?.tags,
+      clientId: config.p1Creds?.clientId,
+      clientSecret: config.p1Creds?.clientSecret
+    };
 
-  let syncType = config.syncType || 'TickTick_to_Notion';
-  const syncTypeMap = { 'Source_to_Dest': 'TickTick_to_Notion', 'Dest_to_Source': 'Notion_to_TickTick' };
-  syncType = syncTypeMap[syncType] || syncType;
-  const deleteAfterSync = config.deleteAfterSync === true;
-  const targetEntity = config.targetEntity || 'Tasks';
-  const syncTag = (ticktickConfig.syncTag || '').toLowerCase();
-  const listName = ticktickConfig.listName || 'Inbox';
-  const templateId = notionConfig.templateId || null;
+    let syncType = config.syncType || 'TickTick_to_Notion';
+    const syncTypeMap = { 'Source_to_Dest': 'TickTick_to_Notion', 'Dest_to_Source': 'Notion_to_TickTick' };
+    syncType = syncTypeMap[syncType] || syncType;
+    const deleteAfterSync = config.deleteAfterSync === true;
+    const targetEntity = config.targetEntity || config.p1Settings?.targetEntity || 'Tasks';
+    const syncTag = (ticktickConfig.syncTag || '').toLowerCase();
+    const listName = ticktickConfig.listName || 'Inbox';
+    const templateId = notionConfig.templateId || null;
 
-  // Extract custom field mappings or fallback to defaults
-  let fieldMappings = (config.fieldMappings || []).map(m => ({
-    ticktickField: m.ticktickField ?? m.sourceField,
-    notionProperty: m.notionProperty ?? m.destField,
-  })).filter(m => m.ticktickField && m.notionProperty);
-  if (fieldMappings.length === 0) {
-    if (targetEntity === 'Tasks') {
-      fieldMappings = [
-        { ticktickField: 'title', notionProperty: 'Name' },
-        { ticktickField: 'tags', notionProperty: 'Topic' },
-        { ticktickField: 'desc', notionProperty: '__content__' }
-      ];
-    } else if (targetEntity === 'Notes') {
-      fieldMappings = [
-        { ticktickField: 'title', notionProperty: 'Name' },
-        { ticktickField: 'tags', notionProperty: 'Topic' },
-        { ticktickField: 'content', notionProperty: '__content__' }
-      ];
-    } else if (targetEntity === 'Habits') {
-      fieldMappings = [
-        { ticktickField: 'name', notionProperty: 'Name' }
-      ];
+    // Extract custom field mappings or fallback to defaults
+    let fieldMappings = (config.fieldMappings || []).map(m => ({
+      ticktickField: m.ticktickField ?? m.sourceField,
+      notionProperty: m.notionProperty ?? m.destField,
+    })).filter(m => m.ticktickField && m.notionProperty);
+    if (fieldMappings.length === 0) {
+      if (targetEntity === 'Tasks') {
+        fieldMappings = [
+          { ticktickField: 'title', notionProperty: 'Name' },
+          { ticktickField: 'tags', notionProperty: 'Topic' },
+          { ticktickField: 'desc', notionProperty: '__content__' }
+        ];
+      } else if (targetEntity === 'Notes') {
+        fieldMappings = [
+          { ticktickField: 'title', notionProperty: 'Name' },
+          { ticktickField: 'tags', notionProperty: 'Topic' },
+          { ticktickField: 'content', notionProperty: '__content__' }
+        ];
+      } else if (targetEntity === 'Habits') {
+        fieldMappings = [
+          { ticktickField: 'name', notionProperty: 'Name' }
+        ];
+      }
     }
-  }
 
-  // Load Secure OAuth Connections if available
-  if (config.workspaceId && (config.ticktickConnectionId || config.notionConnectionId)) {
-    try {
-      const credsDoc = await db.collection('credentials').doc(config.workspaceId).get();
-      if (credsDoc.exists) {
-        const creds = credsDoc.data();
-        if (config.ticktickConnectionId) {
-          const ttConnDoc = await db.collection('connected_accounts').doc(config.ticktickConnectionId).get();
-          if (ttConnDoc.exists) {
-            const provider = ttConnDoc.data().provider;
-            if (creds[provider]) {
-              ticktickConfig.accessToken = decrypt(creds[provider].accessToken);
-              ticktickConfig.clientId = creds[provider].clientId;
-              ticktickConfig.clientSecret = creds[provider].clientSecret;
+    // Load Secure OAuth Connections if available
+    if (config.workspaceId) {
+      const p1ConnId = config.ticktickConnectionId || config.platform1ConnectionId;
+      const p2ConnId = config.notionConnectionId || config.platform2ConnectionId;
+      if (p1ConnId || p2ConnId) {
+        try {
+          const credsDoc = await db.collection('credentials').doc(config.workspaceId).get();
+          if (credsDoc.exists) {
+            const creds = credsDoc.data();
+            if (p1ConnId) {
+              const ttConnDoc = await db.collection('connected_accounts').doc(p1ConnId).get();
+              if (ttConnDoc.exists) {
+                const provider = ttConnDoc.data().provider;
+                if (creds[provider]) {
+                  ticktickConfig.accessToken = decrypt(creds[provider].accessToken);
+                  ticktickConfig.clientId = creds[provider].clientId;
+                  ticktickConfig.clientSecret = creds[provider].clientSecret;
+                }
+              }
+            }
+            if (p2ConnId) {
+              const nConnDoc = await db.collection('connected_accounts').doc(p2ConnId).get();
+              if (nConnDoc.exists) {
+                const provider = nConnDoc.data().provider;
+                if (creds[provider]) {
+                  notionConfig.integrationToken = decrypt(creds[provider].accessToken);
+                }
+              }
             }
           }
-        }
-        if (config.notionConnectionId) {
-          const nConnDoc = await db.collection('connected_accounts').doc(config.notionConnectionId).get();
-          if (nConnDoc.exists) {
-            const provider = nConnDoc.data().provider;
-            if (creds[provider]) {
-              notionConfig.integrationToken = decrypt(creds[provider].accessToken);
-            }
-          }
+        } catch (err) {
+          console.error(`[Workflow] Failed to resolve secure connection credentials:`, err.message);
         }
       }
-    } catch (err) {
-      console.error(`[Workflow] Failed to resolve secure connection credentials:`, err.message);
     }
-  }
 
-  const ticktickService = new TickTickService({
-    accessToken: ticktickConfig.accessToken,
-    clientId: ticktickConfig.clientId,
-    clientSecret: ticktickConfig.clientSecret
-  });
+    const ticktickService = new TickTickService({
+      accessToken: ticktickConfig.accessToken,
+      clientId: ticktickConfig.clientId,
+      clientSecret: ticktickConfig.clientSecret
+    });
 
-  const notionService = new NotionService(
-    notionConfig.integrationToken,
-    notionConfig.databaseId
-  );
+    const notionService = new NotionService(
+      notionConfig.integrationToken,
+      notionConfig.databaseId
+    );
 
   console.log(`[Workflow] Sync Settings:`);
   console.log(`  - Entity type     : ${targetEntity}`);
@@ -1435,15 +1461,19 @@ async function runSyncForConfig(config, configId = 'unknown') {
   
   if (logRef) {
     try {
+      const now = new Date().toISOString();
       await logRef.update({
         status: 'success',
-        endTime: new Date().toISOString(),
+        endTime: now,
         syncedCount,
         deletedCount,
         failedCount
       });
+      const { Firestore } = require('@google-cloud/firestore');
+      const db = new Firestore();
+      await db.collection('workspaces').doc(config.workspaceId).collection('sync_configs').doc(configId).update({ lastRunAt: now }).catch(() => {});
     } catch (e) {
-      console.error(`[Workflow] ⚠️ Failed to update execution log:`, e.message);
+      console.error(`[Workflow] ⚠️ Failed to update execution log or config:`, e.message);
     }
   }
   
@@ -1465,6 +1495,7 @@ async function runSyncForConfig(config, configId = 'unknown') {
 }
 
 module.exports = {
+  createNotionPage,
   runSyncWorkflow,
   runSyncForConfig,
   updateNotionPageContent,

@@ -757,19 +757,56 @@
              VIEW: Execution Logs
         ════════════════════════════════════════════════════ -->
         <section class="view-panel" id="view-logs" style="display: none;" aria-label="Execution Logs">
-          <!-- Section header -->
           <div class="section-header">
-            <h1 class="section-title">Execution Logs</h1>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <h1 class="section-title">Execution Logs</h1>
+              <p class="section-desc">Monitor the sync history of your integrations. Each entry records a sync run, its status, and a summary of what happened.</p>
+            </div>
           </div>
 
-          <!-- Logs Table Container -->
-          <div class="grid-table-wrapper" style="margin-top: 16px;">
+          <div class="grid-toolbar" id="logs-toolbar">
+            <div class="toolbar-left" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+              <div class="search-box">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="logs-search" placeholder="Search by name..." />
+                <button class="search-clear" id="logs-search-clear" type="button" aria-label="Clear search">&times;</button>
+              </div>
+
+              <div class="logs-filter-pills" style="display:flex;gap:4px;">
+                <button class="logs-filter-pill active" data-status="all" style="--pill-color:var(--violet);">All</button>
+                <button class="logs-filter-pill" data-status="success" style="--pill-color:#6ee7b7;">Success</button>
+                <button class="logs-filter-pill" data-status="running" style="--pill-color:#fcd34d;">Running</button>
+                <button class="logs-filter-pill" data-status="failed" style="--pill-color:#fca5a5;">Failed</button>
+              </div>
+
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="date" id="logs-date-from" class="logs-date-input" title="From date" />
+                <span style="color:var(--text-3);font-size:0.75rem;user-select:none;">→</span>
+                <input type="date" id="logs-date-to" class="logs-date-input" title="To date" />
+              </div>
+            </div>
+
+            <div class="toolbar-right">
+              <button class="toolbar-btn" id="logs-refresh" title="Refresh logs">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="logs-count-bar" style="padding:6px 16px;background:var(--bg-2);border:1px solid var(--border);border-top:none;border-bottom:none;display:flex;justify-content:space-between;align-items:center;">
+            <span id="logs-count" style="color:var(--text-3);font-size:0.8rem;">Showing 0 logs</span>
+            <div style="display:flex;gap:12px;align-items:center;">
+              <button class="btn btn-ghost btn-sm" id="logs-clear-filters" style="display:none;color:var(--violet);font-size:0.75rem;">Clear Filters</button>
+            </div>
+          </div>
+
+          <div class="grid-table-wrapper" style="border-radius:0 0 var(--radius) var(--radius);">
             <table class="configs-table" id="logs-table">
               <thead>
                 <tr>
-                  <th style="width: 160px;">Timestamp</th>
-                  <th style="width: 200px;">Integration</th>
-                  <th style="width: 120px;">Status</th>
+                  <th style="width:160px;">Timestamp</th>
+                  <th style="width:200px;">Integration</th>
+                  <th style="width:120px;">Status</th>
                   <th>Details</th>
                 </tr>
               </thead>
@@ -1224,7 +1261,19 @@
                 <option value="Bidirectional">Bidirectional (Two-way)</option>
               </select>
             </div>
+            <div class="form-row enabled-row" id="status-toggle-row">
+              <label for="f-status-toggle">Status (Enabled)</label>
+              <label class="toggle">
+                <input type="checkbox" id="f-status-toggle" checked />
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+            </div>
 
+            <div class="form-row" id="last-run-row" style="display: none;">
+              <label>Last Run Time</label>
+              <div id="f-last-run" style="color: var(--text-2); font-size: 0.9rem;">—</div>
+            </div>
             <div class="form-row enabled-row" id="delete-after-row">
               <label for="f-delete-after">Delete source item after successful sync</label>
               <label class="toggle">
@@ -1585,8 +1634,8 @@
 
   <!-- Scripts -->
   <script src="https://unpkg.com/feather-icons"></script>
-  <script src="js/logs.js"></script>
-  <script type="module" src="app.js?v=6"></script>
+
+  <script type="module" src="app.js?v=7"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       feather.replace();
