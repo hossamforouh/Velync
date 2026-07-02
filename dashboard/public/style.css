@@ -1492,16 +1492,6 @@ header.legacy-header {
   align-items: center;
 }
 
-.configs-table .badge-enabled {
-  background-color: #DEF7EC;
-  color: #03543F;
-}
-
-.configs-table .badge-disabled {
-  background-color: #FDE8E8;
-  color: #9B1C1C;
-}
-
 /* Text Wrapping Mode */
 .configs-table.text-wrap td {
   white-space: normal;

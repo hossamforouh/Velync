@@ -4,7 +4,6 @@
       "collectionGroup": "sync_configs",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "enabled", "order": "ASCENDING" },
         { "fieldPath": "cronSchedule", "order": "ASCENDING" }
       ]
     },
@@ -20,7 +19,7 @@
   "fieldOverrides": [
     {
       "collectionGroup": "sync_configs",
-      "fieldPath": "enabled",
+      "fieldPath": "status",
       "indexes": [
         {
           "order": "ASCENDING",

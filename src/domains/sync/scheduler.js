@@ -22,7 +22,7 @@ function startScheduler() {
         const config = change.doc.data();
         const configName = config.description || configId;
 
-        if (change.type === 'removed' || config.enabled !== true) {
+        if (change.type === 'removed' || (config.status || (config.enabled ? 'active' : 'paused')) !== 'active') {
           if (activeJobs[configId]) {
             logger.info('scheduler', `Stopping job for "${configName}"`);
             activeJobs[configId].stop();

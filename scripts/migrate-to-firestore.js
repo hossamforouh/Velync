@@ -15,7 +15,7 @@ async function migrate() {
   }
 
   const configData = {
-    enabled: true,
+    status: 'active',
     description: "Default Sync Configuration (Migrated from .env)",
     ticktick: {
       accessToken: process.env.TICKTICK_ACCESS_TOKEN || "",

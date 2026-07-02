@@ -618,7 +618,7 @@
                   <th class="col-checkbox"><input type="checkbox" id="select-all-configs" /></th>
                   <th class="sortable sort-asc" data-col="description">Name <span class="sort-icon"><i data-feather="chevron-up"></i></span></th>
                   <th class="col-apps">Apps <span class="sort-icon"></span></th>
-                  <th class="sortable" data-col="enabled">Status <span class="sort-icon"></span></th>
+                  <th class="sortable" data-col="status">Status <span class="sort-icon"></span></th>
                   <th>Schedule</th>
                   <th class="sortable" data-col="lastRunAt">Last Run <span class="sort-icon"></span></th>
                   <th class="sortable" data-col="owner">Owner <span class="sort-icon"></span></th>
@@ -1171,6 +1171,7 @@
 
           <div class="step-actions">
             <div style="flex:1"></div>
+            <button type="button" class="btn btn-secondary" id="btn-step1-save">Save</button>
             <button type="button" class="btn btn-primary" id="btn-step1-next">Next Step →</button>
           </div>
         </div>
@@ -1181,7 +1182,16 @@
             <span class="step-header-icon"><i data-feather="columns" style="width:20px;height:20px;"></i></span>
             Map Fields
           </div>
-          <p class="step-desc">Map fields between your source and destination platforms.</p>
+          <p class="step-desc">Configure sync behavior and map fields between your source and destination platforms.</p>
+
+          <div class="form-row">
+            <label for="f-sync-type">Sync Directionality *</label>
+            <select id="f-sync-type">
+              <option value="Source_to_Dest">Source to Destination</option>
+              <option value="Dest_to_Source">Destination to Source</option>
+              <option value="Bidirectional">Bidirectional (Two-way)</option>
+            </select>
+          </div>
 
           <div class="form-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
@@ -1233,10 +1243,11 @@
           <div class="step-actions">
             <button type="button" class="btn btn-secondary" id="btn-step2-back">← Back</button>
             <div style="flex:1"></div>
+            <button type="button" class="btn btn-secondary" id="btn-step2-save">Save</button>
             <button type="button" class="btn btn-primary" id="btn-step2-next">Next Step →</button>
           </div>
         </div>
-
+        
         <!-- ═══ Step 3: Configure & Deploy ═══ -->
         <div class="step-panel" data-step="3" style="display:none;">
           <div class="step-header">
@@ -1248,26 +1259,9 @@
           <div class="form-section">
             <div class="form-section-title">Sync Configuration</div>
 
-            <div class="form-row" style="display: none;">
-              <label for="f-description">Config Name *</label>
-              <input id="f-description" type="text" placeholder="e.g. Personal Inbox → Notion" />
-            </div>
-
             <div class="form-row">
-              <label for="f-sync-type">Sync Directionality *</label>
-              <select id="f-sync-type">
-                <option value="Source_to_Dest">Source to Destination</option>
-                <option value="Dest_to_Source">Destination to Source</option>
-                <option value="Bidirectional">Bidirectional (Two-way)</option>
-              </select>
-            </div>
-            <div class="form-row enabled-row" id="status-toggle-row">
-              <label for="f-status-toggle">Status (Enabled)</label>
-              <label class="toggle">
-                <input type="checkbox" id="f-status-toggle" checked />
-                <span class="toggle-track"></span>
-                <span class="toggle-thumb"></span>
-              </label>
+              <label for="f-description">Sync Name</label>
+              <input id="f-description" type="text" placeholder="e.g. Tasks Sync" />
             </div>
 
             <div class="form-row" id="last-run-row" style="display: none;">
@@ -1304,8 +1298,8 @@
           <div class="step-actions">
             <button type="button" class="btn btn-secondary" id="btn-step3-back">← Back</button>
             <div style="flex:1"></div>
-            <button type="button" class="btn btn-secondary" id="btn-save">Save Draft</button>
-            <button type="button" class="btn btn-primary" id="btn-submit">Submit (Active)</button>
+            <button type="button" class="btn btn-secondary" id="btn-save">Save</button>
+            <button type="button" class="btn btn-primary" id="btn-submit">Submit</button>
           </div>
         </div>
 

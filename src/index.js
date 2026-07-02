@@ -17,11 +17,15 @@ if (process.argv.includes('--test-connections')) {
     try {
       const { Firestore } = require('@google-cloud/firestore');
       const db = new Firestore();
-      const snapshot = await db.collectionGroup('sync_configs').where('enabled', '==', true).get();
-      if (snapshot.empty) {
-        console.log('No enabled configurations found.');
+      const allDocs = await db.collectionGroup('sync_configs').get();
+      const activeDocs = allDocs.docs.filter(d => {
+        const c = d.data();
+        return c.status === 'active' || (c.enabled === true && !c.status);
+      });
+      if (activeDocs.length === 0) {
+        console.log('No active configurations found.');
       } else {
-        for (const doc of snapshot.docs) {
+        for (const doc of activeDocs) {
           await testConfigConnections(doc.data(), doc.id);
         }
       }
@@ -37,9 +41,13 @@ if (process.argv.includes('--test-connections')) {
     const { getConnector } = require('./domains/connector/registry');
     const { resolveConnectionTokens } = require('./domains/connection/resolver');
     const db = new Firestore();
-    const snapshot = await db.collectionGroup('sync_configs').where('enabled', '==', true).get();
+    const allDocs = await db.collectionGroup('sync_configs').get();
+    const activeDocs = allDocs.docs.filter(d => {
+      const c = d.data();
+      return c.status === 'active' || (c.enabled === true && !c.status);
+    });
     let legacyCount = 0, newCount = 0;
-    for (const doc of snapshot.docs) {
+    for (const doc of activeDocs) {
       const config = doc.data();
       if (config.sourcePlatform) {
         try {

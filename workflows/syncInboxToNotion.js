@@ -730,16 +730,20 @@ async function runSyncWorkflow(force = false) {
   console.log('[Workflow] Starting sync: Retrieving active configurations from Firestore...');
   
   try {
-    const snapshot = await db.collection('sync_configs').where('enabled', '==', true).get();
+    const allDocs = await db.collection('sync_configs').get();
+    const activeDocs = allDocs.docs.filter(d => {
+      const c = d.data();
+      return c.status === 'active' || (c.enabled === true && !c.status);
+    });
     
-    if (snapshot.empty) {
+    if (activeDocs.length === 0) {
       console.log('[Workflow] No active sync configurations found in Firestore.');
       return;
     }
 
-    console.log(`[Workflow] Found ${snapshot.size} active configurations to sync.`);
+    console.log(`[Workflow] Found ${activeDocs.length} active configurations to sync.`);
     
-    for (const doc of snapshot.docs) {
+    for (const doc of activeDocs) {
       const config = doc.data();
       const configId = doc.id;
       const configName = config.description || doc.id;

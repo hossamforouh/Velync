@@ -508,6 +508,14 @@ let currentUserRole = 'user';
 let currentWorkspaceId = null;
 let workspaceSelectTom = null;
 
+// Backward-compat: resolve status from new 'status' field or legacy 'enabled' field
+function configIsActive(cfg) {
+  return cfg.status === 'active' || (cfg.enabled === true && !cfg.status);
+}
+function configStatusLabel(cfg) {
+  return cfg.status || (cfg.enabled ? 'active' : 'paused');
+}
+
 
 // ─── DOM refs ─────────────────────────────────────────────────
 const authOverlay   = document.getElementById('auth-overlay'); // Now the landing page
@@ -585,7 +593,6 @@ const fTtConnection = document.getElementById('f-tt-connection');
 const fNotionConnection = document.getElementById('f-notion-connection');
 const fNDbId       = document.getElementById('f-n-dbid');
 const fNToken      = document.getElementById('f-n-token');
-const fStatusToggle = document.getElementById('f-status-toggle');
 const lastRunRow   = document.getElementById('last-run-row');
 const fLastRun     = document.getElementById('f-last-run');
 
@@ -629,24 +636,6 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         fCron.style.display = 'none';
         if (fIntervalValue) fIntervalValue.style.display = 'block';
-      }
-    });
-  }
-
-  if (fStatusToggle) {
-    fStatusToggle.addEventListener('change', () => {
-      const disabled = !fStatusToggle.checked;
-      if (fIntervalValue) fIntervalValue.disabled = disabled;
-      if (fIntervalUnit) fIntervalUnit.disabled = disabled;
-      if (fCron) fCron.disabled = disabled;
-      if (fIntervalValue) fIntervalValue.style.opacity = disabled ? '0.5' : '1';
-      if (fIntervalUnit) fIntervalUnit.style.opacity = disabled ? '0.5' : '1';
-      if (fCron) fCron.style.opacity = disabled ? '0.5' : '1';
-      
-      // Also sync the submit button text if available
-      const btnSubmit = document.getElementById('btn-submit');
-      if (btnSubmit) {
-        btnSubmit.textContent = disabled ? 'Save' : 'Save & Enable';
       }
     });
   }
@@ -1518,7 +1507,7 @@ btnLogout.addEventListener('click', async () => {
 // ─── Stats ────────────────────────────────────────────────────
 function updateStats() {
   const total    = configs.length;
-  const enabled  = configs.filter(c => c.enabled).length;
+  const enabled  = configs.filter(c => configIsActive(c)).length;
   const disabled = total - enabled;
   if (statTotal) statTotal.textContent   = total;
   if (statEnabled) statEnabled.textContent = enabled;
@@ -1598,7 +1587,7 @@ function updateToolbarButtonStates() {
 async function showDocSchema() {
   const schemaText = `Sync Config Schema (Firestore Document):
 - description: string (e.g. "Work Inbox Sync")
-- enabled: boolean
+- status: "draft" | "active" | "paused"
 - syncType: "Source_to_Dest" | "Dest_to_Source" | "Bidirectional"
 - deleteAfterSync: boolean
 - targetEntity: "Tasks" | "Notes" | "Habits"
@@ -1827,7 +1816,7 @@ function renderCards() {
 
     // Parse the cron schedule into a readable text format
     let scheduleText = 'Every 5 Minutes';
-    if (!cfg.enabled) {
+    if (!configIsActive(cfg)) {
       scheduleText = '<span style="opacity: 0.5;">Disabled</span>';
     } else if (cfg.cronSchedule) {
       const [cVal, cUnit] = parseCron(cfg.cronSchedule);
@@ -1851,8 +1840,8 @@ function renderCards() {
         </div>
       </td>
       <td data-label="Status">
-        <label class="toggle" title="${cfg.enabled ? 'Disable' : 'Enable'} this config">
-          <input type="checkbox" class="toggle-checkbox" data-id="${cfg.id}" ${cfg.enabled ? 'checked' : ''} />
+        <label class="toggle" title="${configIsActive(cfg) ? 'Pause' : 'Activate'} this config">
+          <input type="checkbox" class="toggle-checkbox" data-id="${cfg.id}" ${configIsActive(cfg) ? 'checked' : ''} />
           <span class="toggle-track"></span>
           <span class="toggle-thumb"></span>
         </label>
@@ -2039,21 +2028,23 @@ async function loadConfigs(silent = false) {
 }
 
 
-// ─── Toggle enabled ───────────────────────────────────────────
+// ─── Toggle active/paused ─────────────────────────────────────
 async function toggleConfig(id, checkbox) {
   const prev = checkbox.checked;
   checkbox.disabled = true;
   try {
+    const cfg = configs.find(c => c.id === id);
+    const wasActive = cfg ? configIsActive(cfg) : false;
+    const newStatus = wasActive ? 'paused' : 'active';
     const docRef = doc(db, 'workspaces', currentWorkspaceId, 'sync_configs', id);
     await updateDoc(docRef, {
-      enabled: checkbox.checked,
+      status: newStatus,
       updatedAt: new Date().toISOString()
     });
     
-    const cfg = configs.find(c => c.id === id);
-    if (cfg) cfg.enabled = checkbox.checked;
+    if (cfg) cfg.status = newStatus;
     renderCards();
-    showToast(`Config ${checkbox.checked ? 'enabled' : 'disabled'}`, checkbox.checked ? 'success' : 'info');
+    showToast(`Config ${newStatus === 'active' ? 'activated' : 'paused'}`, newStatus === 'active' ? 'success' : 'info');
   } catch (err) {
     checkbox.checked = prev;
     showToast('Toggle failed: ' + err.message, 'error');
@@ -2143,23 +2134,30 @@ async function openPanel(id = null) {
     let cfg = configs.find(c => c.id === id);
       
     if (cfg) {
-      fillForm(cfg);
+      fillForm(cfg, { skipMappings: true });
       // Note: populateConnectionDropdowns was already called above with provider info.
       
       const p1Conn = _connectionsCache.find(c => c.id === cfg.platform1ConnectionId);
       if (p1Conn) {
         window.renderSchemaForPlatform(p1Conn.provider, 'p1-dynamic-container', 'p1', cfg.p1Settings || {});
         const entity = cfg.p1Settings?.targetEntity || 'Tasks';
-        fetchSourceSchema(cfg.platform1ConnectionId, p1Conn.provider, entity);
+        await fetchSourceSchema(cfg.platform1ConnectionId, p1Conn.provider, entity);
       }
       
       const p2Conn = _connectionsCache.find(c => c.id === cfg.platform2ConnectionId);
       if (p2Conn) {
         window.renderSchemaForPlatform(p2Conn.provider, 'p2-dynamic-container', 'p2', cfg.p2Settings || {});
         if (cfg.p2Settings?.databaseId) {
-          fetchNotionDbSchema(cfg.p2Settings.databaseId, cfg.platform2ConnectionId, false);
+          await fetchNotionDbSchema(cfg.p2Settings.databaseId, cfg.platform2ConnectionId, false);
         }
       }
+
+      // Restore mappings only when both schemas are available (connections configured)
+      if (p1Conn && p2Conn) {
+        restoreFieldMappings(cfg);
+      }
+      // Clear dirty flag — fillForm/restoreFieldMappings may fire change events
+      window.resetConfigDirty();
     }
   } else {
     panelTitle.innerHTML = feather.icons['plus'].toSvg({width: 18, height: 18, style: 'margin-right: 6px; vertical-align: text-bottom;'}) + ' New Config';
@@ -2176,7 +2174,6 @@ async function openPanel(id = null) {
   }
   sidePanel.classList.add('open');
   panelOverlay.classList.add('open');
-  fDescription.focus();
 }
 window.openPanel = openPanel; // Expose globally for external scripts
 
@@ -2219,11 +2216,16 @@ function setConnectButtonProviders(p1Provider, p2Provider) {
   if (t1) t1.textContent = p1Name + ' Settings';
   if (t2) t2.textContent = p2Name + ' Settings';
 
-  // Update node labels in the workflow canvas
+  // Update node labels and logos in the workflow canvas
   const n1 = document.getElementById('node-p1-name');
   const n2 = document.getElementById('node-p2-name');
   if (n1) n1.textContent = p1Name;
   if (n2) n2.textContent = p2Name;
+
+  const n1Logo = document.getElementById('node-p1-logo');
+  const n2Logo = document.getElementById('node-p2-logo');
+  if (n1Logo) n1Logo.innerHTML = getPlatformLogoSvg(p1Provider);
+  if (n2Logo) n2Logo.innerHTML = getPlatformLogoSvg(p2Provider);
 
   // Store on window for openNodeModal to read
   window._p1DisplayName = p1Name;
@@ -2448,6 +2450,14 @@ let currentModalTempSelection = [];
 function updateStatusMappingUI(savedStatusMappings = null) {
   if (!sectionStatusMapping) return;
 
+  const syncType = document.getElementById('f-sync-type')?.value;
+  const showStatusMapping = syncType === 'Dest_to_Source' || syncType === 'Bidirectional';
+
+  if (!showStatusMapping) {
+    sectionStatusMapping.style.display = 'none';
+    return;
+  }
+
   const statusRow = Array.from(mappingsContainer.querySelectorAll('.mapping-row'))
     .find(row => (row.querySelector('.map-source') || row.querySelector('.map-ticktick'))?.value === 'status');
     
@@ -2571,7 +2581,7 @@ window.openStatusModal = function(target, isReRender = false) {
 };
 
 window.closeStatusModal = function() {
-  document.getElementById('status-modal').classList.remove('open');
+  document.getElementById('status-mapping-modal').classList.remove('open');
 };
 
 window.saveStatusModal = function() {
@@ -2641,6 +2651,7 @@ async function loadDefaultMappingsPreset() {
       data.suggestions.forEach(s => {
         if (s.destField) addMappingRow(s.sourceField, s.destField, s.confidence, s.reasoning);
       });
+      window.markConfigDirty();
       return;
     }
   } catch (e) {
@@ -2664,6 +2675,7 @@ async function loadDefaultMappingsPreset() {
   } else if (entity === 'Habits') {
     addMappingRow('name', 'Name');
   }
+  window.markConfigDirty();
 }
 
 function filterAndPopulateTtLists() {
@@ -2878,10 +2890,6 @@ function clearForm() {
     fIntervalUnit.dispatchEvent(new Event('change'));
   }
 
-  if (fStatusToggle) {
-    fStatusToggle.checked = true;
-    fStatusToggle.dispatchEvent(new Event('change'));
-  }
   if (lastRunRow) lastRunRow.style.display = 'none';
   if (notionDbSelect) {
     notionDbSelect.clear();
@@ -2937,7 +2945,7 @@ function buildCron(val, unit, raw) {
   return '*/5 * * * *';
 }
 
-async function fillForm(cfg) {
+async function fillForm(cfg, opts = {}) {
   window.currentConfigStatus = cfg.status || 'draft';
   window.currentConfigCreationSource = cfg.creationSource || 'manual';
 
@@ -2986,10 +2994,6 @@ async function fillForm(cfg) {
   }
   fCron.value = raw;
   
-  if (fStatusToggle) {
-    fStatusToggle.checked = cfg.enabled !== false; // default true if missing
-    fStatusToggle.dispatchEvent(new Event('change'));
-  }
   if (lastRunRow && fLastRun) {
     if (cfg.lastRunAt) {
       lastRunRow.style.display = 'flex';
@@ -3016,7 +3020,38 @@ async function fillForm(cfg) {
   // Set field visibility
   triggerFormFieldVisibility();
 
-  // Load field mappings
+  // Load field mappings (skip when schemas will be loaded separately)
+  if (opts.skipMappings) {
+    window._pendingFieldMappings = cfg.fieldMappings || [];
+    window._pendingStatusMappings = cfg.statusMappings || null;
+  } else {
+    mappingsContainer.innerHTML = '';
+    const mappings = cfg.fieldMappings || [];
+    if (mappings.length > 0) {
+      mappings.forEach(m => addMappingRow(m.sourceField || m.ticktickField, m.destField || m.notionProperty));
+      window._lastMappedSourceId = cfg.platform1ConnectionId || document.getElementById('f-tt-connection')?.value;
+      window._lastMappedDestId = cfg.platform2ConnectionId || document.getElementById('f-notion-connection')?.value;
+    } else {
+      loadDefaultMappingsPreset();
+    }
+    updateStatusMappingUI(cfg.statusMappings);
+  }
+
+  // Update visual node builder UI to match form data
+  if (typeof updateNodeStatuses === 'function') {
+    updateNodeStatuses();
+  }
+}
+
+function restoreFieldMappings(cfg) {
+  if (!cfg) {
+    if (window._pendingFieldMappings) {
+      const mappings = window._pendingFieldMappings;
+      mappings.forEach(m => addMappingRow(m.sourceField || m.ticktickField, m.destField || m.notionProperty));
+      updateStatusMappingUI(window._pendingStatusMappings);
+    }
+    return;
+  }
   mappingsContainer.innerHTML = '';
   const mappings = cfg.fieldMappings || [];
   if (mappings.length > 0) {
@@ -3026,13 +3061,7 @@ async function fillForm(cfg) {
   } else {
     loadDefaultMappingsPreset();
   }
-  
   updateStatusMappingUI(cfg.statusMappings);
-
-  // Update visual node builder UI to match form data
-  if (typeof updateNodeStatuses === 'function') {
-    updateNodeStatuses();
-  }
 }
 
 function buildFormPayload(payloadStatus) {
@@ -3065,15 +3094,13 @@ function buildFormPayload(payloadStatus) {
     p2ConnId = existingCfg.platform2ConnectionId || p2ConnId;
   }
 
-  const enabled = fStatusToggle ? fStatusToggle.checked : (payloadStatus === 'active');
-  const finalStatus = enabled ? 'active' : 'draft';
+  const finalStatus = payloadStatus;
 
   return {
     description: fDescription.value.trim() || 'New Sync Configuration',
     integrationId: document.getElementById('f-integration-id')?.value || null,
     status: finalStatus,
     creationSource: creationSource,
-    enabled: enabled,
     syncType:    fSyncType.value,
     deleteAfterSync: fDeleteAfter.checked,
     cronSchedule: buildCron(fIntervalValue?.value, fIntervalUnit?.value, fCron?.value),
@@ -3102,12 +3129,29 @@ let isSavingConfig = false;
 async function saveConfig(e, isSubmit = false) {
   if (e && e.preventDefault) e.preventDefault();
   if (isSavingConfig) return;
+
+  // Skip write if editing existing config with no changes (draft only)
+  if (editingId && !isSubmit && !isConfigDirty) {
+    showToast('No changes to save', 'info');
+    return;
+  }
+
   isSavingConfig = true;
 
   const status = isSubmit ? 'active' : 'draft';
   const payload = buildFormPayload(status);
-  
-  if (payload.platform1ConnectionId && payload.platform2ConnectionId && payload.platform1ConnectionId === payload.platform2ConnectionId) {
+
+  if (!payload.platform1ConnectionId) {
+    showToast('Please complete the setup for Platform 1.', 'error');
+    isSavingConfig = false;
+    return;
+  }
+  if (!payload.platform2ConnectionId) {
+    showToast('Please complete the setup for Platform 2.', 'error');
+    isSavingConfig = false;
+    return;
+  }
+  if (payload.platform1ConnectionId === payload.platform2ConnectionId) {
     showToast("Validation Error: The 'From' and 'To' connections cannot be the exact same account.", 'error');
     isSavingConfig = false;
     return;
@@ -3144,7 +3188,7 @@ async function saveConfig(e, isSubmit = false) {
   if (btnSubmit) btnSubmit.disabled = true;
   
   const originalText = targetBtn ? targetBtn.innerHTML : '';
-  if (targetBtn) targetBtn.innerHTML = '<span class="spin">⟳</span> Saving…';
+  if (targetBtn) targetBtn.innerHTML = '<span class="spinner btn-spinner" style="width: 16px; height: 16px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></span><span style="vertical-align: middle;">' + (isSubmit ? 'Submitting...' : 'Saving...') + '</span>';
 
   try {
     // ── Resolve which document to update ──────────────────────
@@ -3248,11 +3292,11 @@ async function saveConfig(e, isSubmit = false) {
     isSavingConfig = false;
     if (btnSave) {
       btnSave.disabled = false;
-      btnSave.innerHTML = `Save (Draft)`;
+      btnSave.innerHTML = `Save`;
     }
     if (btnSubmit) {
       btnSubmit.disabled = false;
-      btnSubmit.innerHTML = `Submit (Active)`;
+      btnSubmit.innerHTML = `Submit`;
     }
   }
 }
@@ -3270,11 +3314,22 @@ function closeModal() {
   pendingDeleteId = null;
 }
 
+async function deleteMappingsSubcollection(workspaceId, configId) {
+  const snap = await getDocs(collection(db, "workspaces", workspaceId, "sync_configs", configId, "sync_mappings"));
+  if (snap.empty) return;
+  const batch = [];
+  snap.forEach(doc => batch.push(doc.id));
+  await Promise.all(batch.map(mid =>
+    deleteDoc(doc(db, "workspaces", workspaceId, "sync_configs", configId, "sync_mappings", mid))
+  ));
+}
+
 async function deleteConfig() {
   if (!pendingDeleteId) return;
   modalConfirm.disabled = true;
   try {
     const deletedCfg = configs.find(c => c.id === pendingDeleteId);
+    await deleteMappingsSubcollection(currentWorkspaceId, pendingDeleteId);
     await deleteDoc(doc(db, "workspaces", currentWorkspaceId, "sync_configs", pendingDeleteId));
     selectedConfigIds.delete(pendingDeleteId);
     closeModal();
@@ -3301,7 +3356,7 @@ async function deleteConfig() {
 if (btnRefresh) btnRefresh.addEventListener('click', () => loadConfigs());
 if (btnSave) btnSave.addEventListener('click', (e) => saveConfig(e, false));
 if (btnSubmit) btnSubmit.addEventListener('click', (e) => saveConfig(e, true));
-configForm.addEventListener('submit', (e) => saveConfig(e, false));
+configForm.addEventListener('submit', (e) => e.preventDefault());
 panelClose.addEventListener('click', closePanel);
 panelOverlay.addEventListener('click', closePanel);
 modalCancel.addEventListener('click', closeModal);
@@ -3327,14 +3382,13 @@ function goToStep(n) {
   });
 
   wizardStep = n;
-  window.resetConfigDirty();
 }
 
 document.getElementById('btn-step1-next')?.addEventListener('click', () => {
   const p1 = document.getElementById('f-tt-connection')?.value;
   const p2 = document.getElementById('f-notion-connection')?.value;
-  if (!p1) { showToast('Please select a saved account for Platform 1.', 'error'); return; }
-  if (!p2) { showToast('Please select a saved account for Platform 2.', 'error'); return; }
+  if (!p1) { showToast('Please complete the setup for Platform 1.', 'error'); return; }
+  if (!p2) { showToast('Please complete the setup for Platform 2.', 'error'); return; }
   if (p1 === p2) { showToast('The source and destination accounts cannot be the same.', 'error'); return; }
   
   loadDefaultMappingsPreset();
@@ -3349,14 +3403,37 @@ document.getElementById('btn-step2-next')?.addEventListener('click', () => {
 });
 document.getElementById('btn-step3-back')?.addEventListener('click', () => goToStep(2));
 
+document.getElementById('btn-step1-save')?.addEventListener('click', (e) => {
+  const p1 = document.getElementById('f-tt-connection')?.value;
+  const p2 = document.getElementById('f-notion-connection')?.value;
+  if (!p1) { showToast('Please complete the setup for Platform 1.', 'error'); return; }
+  if (!p2) { showToast('Please complete the setup for Platform 2.', 'error'); return; }
+  saveConfig(e, false);
+});
+document.getElementById('btn-step2-save')?.addEventListener('click', (e) => {
+  const p1 = document.getElementById('f-tt-connection')?.value;
+  const p2 = document.getElementById('f-notion-connection')?.value;
+  if (!p1) { showToast('Please complete the setup for Platform 1.', 'error'); return; }
+  if (!p2) { showToast('Please complete the setup for Platform 2.', 'error'); return; }
+  const mappings = document.querySelectorAll('.mapping-row');
+  if (mappings.length === 0) { showToast('Please add at least one field mapping.', 'error'); return; }
+  saveConfig(e, false);
+});
+
 // Update node status indicators and load schema when connection changes
 document.getElementById('f-tt-connection')?.addEventListener('change', () => {
   updateNodeStatuses();
   handleConnectionChange('p1');
+  if (document.getElementById('f-tt-connection')?.value && document.getElementById('f-notion-connection')?.value) {
+    autoPopulateSyncName();
+  }
 });
 document.getElementById('f-notion-connection')?.addEventListener('change', () => {
   updateNodeStatuses();
   handleConnectionChange('p2');
+  if (document.getElementById('f-tt-connection')?.value && document.getElementById('f-notion-connection')?.value) {
+    autoPopulateSyncName();
+  }
 });
 
 // Connect provider buttons in node modal
@@ -3622,6 +3699,7 @@ if (msbDelete) {
     for (const id of ids) {
       try {
         const deletedCfg = configs.find(c => c.id === id);
+        await deleteMappingsSubcollection(currentWorkspaceId, id);
         await deleteDoc(doc(db, "workspaces", currentWorkspaceId, "sync_configs", id));
         if (deletedCfg) {
           showToast(`"${deletedCfg.description || id}" deleted`, 'info', {
@@ -3661,7 +3739,10 @@ document.querySelectorAll('th.sortable').forEach(th => {
   });
 });
 
-fSyncType.addEventListener('change', triggerFormFieldVisibility);
+fSyncType.addEventListener('change', () => {
+  triggerFormFieldVisibility();
+  updateStatusMappingUI();
+});
 
 btnAddMapping.addEventListener('click', () => addMappingRow('', ''));
 
@@ -3968,6 +4049,27 @@ function saveNodeModal() {
   }
   
   closeNodeModal();
+
+  // Auto-populate sync name (new configs only, p1 node)
+  if (!editingId && currentNodeId === 'p1') {
+    autoPopulateSyncName();
+  }
+}
+
+function autoPopulateSyncName() {
+  const fDesc = document.getElementById('f-description');
+  if (!fDesc || fDesc.value.trim()) return;
+
+  const p1Name = _dropdownP1Name || 'Platform 1';
+  const p2Name = _dropdownP2Name || 'Platform 2';
+
+  let name = p1Name + ' → ' + p2Name;
+  let counter = 1;
+  while (configs.some(c => c.description === name)) {
+    counter++;
+    name = p1Name + ' → ' + p2Name + ' ' + counter;
+  }
+  fDesc.value = name;
 }
 
 // Bind Node Modal clicks
