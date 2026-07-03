@@ -3545,6 +3545,63 @@ header.legacy-header {
   cursor: not-allowed;
 }
 
+/* ── Admin Overview ───────────────────────────────────────── */
+
+#admin-overview-content .plat-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#admin-overview-content .plat-bar-label {
+  width: 100px;
+  font-size: 0.85rem;
+  color: var(--text-1);
+  text-align: right;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#admin-overview-content .plat-bar-track {
+  flex: 1;
+  height: 22px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+#admin-overview-content .plat-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+#admin-overview-content .plat-bar-count {
+  width: 40px;
+  font-size: 0.82rem;
+  color: var(--text-2);
+  text-align: left;
+  flex-shrink: 0;
+}
+
+#admin-overview-content .stale-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.85rem;
+}
+
+#admin-overview-content .stale-item:last-child {
+  border-bottom: none;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    CONNECTIONS VIEW STYLES
 ═══════════════════════════════════════════════════════════════ */

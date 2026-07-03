@@ -12,7 +12,7 @@ import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.
 import { bindNavEvents, navigateTo } from './js/navigation.js';
 import { renderHubView } from './js/hub.js';
 import { loadConnections, renderConnectionsView, renderConnectionsSkeleton, initiateDirectOAuthFlow } from './js/connections.js';
-import { initAdminIntegrations } from './js/admin-integrations.js';
+import { initAdminIntegrations, setAdminAuth } from './js/admin-integrations.js';
 import { initAdminPlatforms } from './js/admin-platforms.js';
 import './js/integration-setup.js';
 import { showToast } from './js/toast.js';
@@ -584,11 +584,20 @@ const db = getFirestore(app);
   try {
     const settingsRef = doc(db, 'app_settings', 'general');
     const settingsSnap = await Promise.race([getDoc(settingsRef), firestoreTimeout(10000)]);
-    if (settingsSnap.exists() && settingsSnap.data().whatsappNumber) {
-      const waLink = document.getElementById('whatsapp-fab-link');
-      if (waLink) waLink.href = `https://wa.me/${settingsSnap.data().whatsappNumber}`;
-      const adminWaInput = document.getElementById('admin-whatsapp-number');
-      if (adminWaInput) adminWaInput.value = settingsSnap.data().whatsappNumber;
+    if (settingsSnap.exists()) {
+      const data = settingsSnap.data();
+      if (data.whatsappNumber) {
+        const waLink = document.getElementById('whatsapp-fab-link');
+        if (waLink) waLink.href = `https://wa.me/${data.whatsappNumber}`;
+        const adminWaInput = document.getElementById('admin-whatsapp-number');
+        if (adminWaInput) adminWaInput.value = data.whatsappNumber;
+      }
+      const maintCheck = document.getElementById('admin-maintenance-mode');
+      if (maintCheck && data.maintenanceMode) maintCheck.checked = data.maintenanceMode;
+      const maxCfg = document.getElementById('admin-max-configs');
+      if (maxCfg && data.maxConfigsPerUser) maxCfg.value = data.maxConfigsPerUser;
+      const defInterval = document.getElementById('admin-default-sync-interval');
+      if (defInterval && data.defaultSyncIntervalMinutes) defInterval.value = data.defaultSyncIntervalMinutes;
     }
   } catch (err) {
     console.error("Error fetching global settings:", err);
@@ -928,6 +937,7 @@ onAuthStateChanged(auth, async (user) => {
       if (currentUserRole === 'superadmin') {
         initAdminIntegrations(db);
         initAdminPlatforms(db, auth);
+        setAdminAuth(auth);
       }
     }
 
@@ -937,13 +947,23 @@ onAuthStateChanged(auth, async (user) => {
       btnSaveGlobalSettings.dataset.bound = 'true';
       btnSaveGlobalSettings.addEventListener('click', async () => {
         const num = document.getElementById('admin-whatsapp-number').value.trim();
-        if (!num) return showToast('Please enter a valid number', 'error');
+        const maintenanceMode = document.getElementById('admin-maintenance-mode')?.checked || false;
+        const maxConfigs = parseInt(document.getElementById('admin-max-configs')?.value, 10) || 50;
+        const defaultInterval = parseInt(document.getElementById('admin-default-sync-interval')?.value, 10) || 15;
         
         setButtonLoading(btnSaveGlobalSettings, true);
         try {
-          await setDoc(doc(db, 'app_settings', 'general'), { whatsappNumber: num }, { merge: true });
+          await setDoc(doc(db, 'app_settings', 'general'), {
+            whatsappNumber: num,
+            maintenanceMode,
+            maxConfigsPerUser: maxConfigs,
+            defaultSyncIntervalMinutes: defaultInterval,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
           const waLink = document.getElementById('whatsapp-fab-link');
           if (waLink) waLink.href = `https://wa.me/${num}`;
+          const msg = document.getElementById('admin-global-save-msg');
+          if (msg) { msg.textContent = 'Settings saved successfully'; msg.style.display = 'block'; setTimeout(() => { msg.style.display = 'none'; }, 3000); }
           showToast('Settings saved successfully', 'success');
         } catch (err) {
           showToast('Error saving settings: ' + err.message, 'error');

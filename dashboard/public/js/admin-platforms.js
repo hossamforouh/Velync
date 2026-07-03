@@ -1,16 +1,32 @@
-import { collection, doc, setDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, addDoc, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { collection, doc, setDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, addDoc, getDocs, where, updateDoc, limit, startAfter, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
 import { getSkeletonTableHTML, setButtonLoading } from './loading-components.js';
+import { logActivity } from './admin-integrations.js';
 
 let firestoreDb = null;
 let auth = null;
-let platformsUnsubscribe = null;
+
+// Pagination state
+const PLAT_PAGE_SIZE = 50;
+let platLastVisible = null;
+let platHasMore = false;
+let platLoading = false;
+let allPlatformsCache = [];
+let platSearchTerm = '';
+let platSortColumn = 'name';
+let platSortDirection = 'asc';
+let platSelectedIds = new Set();
+let platControlsWired = false;
+
+// Integration count cache (platformId -> count)
+let integrationCountByPlatform = {};
+let countsFetched = false;
 
 export function initAdminPlatforms(dbInstance, authInstance) {
   firestoreDb = dbInstance;
   auth = authInstance;
-  
+
   // Setup Editor UI elements
   const btnAdd = document.getElementById('btn-admin-add-platform');
   const btnClose = document.getElementById('platform-panel-close');
@@ -21,7 +37,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
   const schemaContainer = document.getElementById('platform-schema-container');
   const btnAddSchemaField = document.getElementById('btn-plat-add-schema-field');
   const platError = document.getElementById('plat-error');
-  
+
   // Stepper logic
   let currentStep = 0;
   const stepperItems = document.querySelectorAll('.stepper-item');
@@ -32,39 +48,24 @@ export function initAdminPlatforms(dbInstance, authInstance) {
   const authTypeSelect = document.getElementById('f-plat-auth-type');
 
   function showStep(index) {
-    // Bounds checking
     if (index < 0) index = 0;
     if (index >= tabPanes.length) index = tabPanes.length - 1;
-
     currentStep = index;
-
-    // Update Panes
     tabPanes.forEach((p, i) => {
       if (i === currentStep) p.classList.add('active');
       else p.classList.remove('active');
     });
-
-    // Update Stepper UI
     stepperItems.forEach((item) => {
       const stepIndex = parseInt(item.dataset.step);
       item.classList.remove('active', 'completed');
-      if (stepIndex === currentStep) {
-        item.classList.add('active');
-      } else if (stepIndex < currentStep) {
-        item.classList.add('completed');
-      }
+      if (stepIndex === currentStep) item.classList.add('active');
+      else if (stepIndex < currentStep) item.classList.add('completed');
     });
-
-    // Update Stepper Lines
     const lines = document.querySelectorAll('.stepper-line');
     lines.forEach((line, i) => {
       line.classList.remove('completed');
-      if (i < currentStep) {
-        line.classList.add('completed');
-      }
+      if (i < currentStep) line.classList.add('completed');
     });
-
-    // Update Buttons
     if (btnPrev) btnPrev.style.display = currentStep === 0 ? 'none' : 'inline-block';
     if (btnNext && btnSave) {
       if (currentStep === tabPanes.length - 1) {
@@ -82,7 +83,6 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     const inputs = currentPane.querySelectorAll('input[required], select[required], textarea[required]');
     let isValid = true;
     for (const input of inputs) {
-      // Exclude hidden inputs from validation
       if (input.offsetParent !== null) {
         if (!input.checkValidity()) {
           input.reportValidity();
@@ -96,21 +96,15 @@ export function initAdminPlatforms(dbInstance, authInstance) {
 
   if (btnNext) {
     btnNext.addEventListener('click', () => {
-      if (validateCurrentStep()) {
-        showStep(currentStep + 1);
-      }
+      if (validateCurrentStep()) showStep(currentStep + 1);
     });
   }
 
   if (btnPrev) {
-    btnPrev.addEventListener('click', () => {
-      showStep(currentStep - 1);
-    });
+    btnPrev.addEventListener('click', () => showStep(currentStep - 1));
   }
 
-  function resetTabs() {
-    showStep(0);
-  }
+  function resetTabs() { showStep(0); }
 
   function toCamelCase(str) {
     return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase());
@@ -122,13 +116,11 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       const label = row.querySelector('.schema-label').value.trim();
       return { label, key: toCamelCase(label) };
     }).filter(x => x.key);
-
     schemaRows.forEach(row => {
       const select = row.querySelector('.schema-depends');
       if (!select) return;
       const currentKey = toCamelCase(row.querySelector('.schema-label').value.trim());
       const selectedVal = select.getAttribute('data-selected') || select.value;
-      
       select.innerHTML = '<option value="">-- None --</option>';
       allLabels.forEach(l => {
         if (l.key !== currentKey) {
@@ -174,24 +166,14 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       </div>
       <button type="button" class="btn btn-secondary btn-remove-attr" style="padding: 8px 12px; color: var(--danger); margin-bottom: 0;">✕</button>
     `;
-    
-    // Auto-generate key from value (label)
     const labelInput = row.querySelector('.attr-label');
     const keyInput = row.querySelector('.attr-key');
     labelInput.addEventListener('input', () => {
       const generated = toCamelCase(labelInput.value);
-      if (!keyInput.dataset.userEdited) {
-        keyInput.value = generated;
-      }
+      if (!keyInput.dataset.userEdited) keyInput.value = generated;
     });
-    keyInput.addEventListener('input', () => {
-      keyInput.dataset.userEdited = 'true';
-    });
-    
-    row.querySelector('.btn-remove-attr').addEventListener('click', () => {
-      row.remove();
-    });
-    
+    keyInput.addEventListener('input', () => { keyInput.dataset.userEdited = 'true'; });
+    row.querySelector('.btn-remove-attr').addEventListener('click', () => row.remove());
     attrsContainer.appendChild(row);
   }
 
@@ -228,7 +210,6 @@ export function initAdminPlatforms(dbInstance, authInstance) {
           </select>
         </div>
       </div>
-      
       <div style="display: flex; gap: 12px; align-items: flex-end;">
         <div class="form-row" style="flex: 1; min-width: 150px; margin-bottom: 0;">
           <label>Depends On (Key)</label>
@@ -251,28 +232,19 @@ export function initAdminPlatforms(dbInstance, authInstance) {
         <button type="button" class="btn btn-secondary btn-remove-schema" style="padding: 8px 12px; color: var(--danger); margin-bottom: 0;">✕</button>
       </div>
     `;
-    
     const selectType = row.querySelector('.schema-type');
     const optionsRow = row.querySelector('.schema-options-row');
     const dsRow = row.querySelector('.schema-datasource-row');
-    
     selectType.addEventListener('change', () => {
       const v = selectType.value;
       optionsRow.style.display = v === 'static_select' ? 'block' : 'none';
       dsRow.style.display = v === 'dynamic_select' || v === 'dynamic_multi_select' ? 'block' : 'none';
     });
-
     const labelInput = row.querySelector('.schema-label');
     labelInput.addEventListener('input', () => updateDependencyDropdowns());
-
     const dependsSelect = row.querySelector('.schema-depends');
     dependsSelect.addEventListener('change', (e) => e.target.setAttribute('data-selected', e.target.value));
-
-    row.querySelector('.btn-remove-schema').addEventListener('click', () => {
-      row.remove();
-      updateDependencyDropdowns();
-    });
-    
+    row.querySelector('.btn-remove-schema').addEventListener('click', () => { row.remove(); updateDependencyDropdowns(); });
     schemaContainer.appendChild(row);
     updateDependencyDropdowns();
   }
@@ -300,18 +272,11 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       try {
         const token = await auth.currentUser.getIdToken();
         const res = await fetch(`${API_URL}/api/data-sources`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         });
-        if (res.ok) {
-          cachedDataSources = await res.json();
-        } else {
-          console.error("Failed to fetch data sources");
-          cachedDataSources = [];
-        }
-      } catch(err) {
+        if (res.ok) cachedDataSources = await res.json();
+        else { console.error("Failed to fetch data sources"); cachedDataSources = []; }
+      } catch (err) {
         console.error("Error fetching data sources", err);
         showToast('Failed to load data sources: ' + err.message, 'error');
         cachedDataSources = [];
@@ -321,15 +286,14 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     loadingEl.style.display = 'none';
     platError.style.display = 'none';
     platError.textContent = '';
-    attrsContainer.innerHTML = ''; // clear old rows
-    schemaContainer.innerHTML = ''; // clear old schema rows
-    resetTabs(); // Reset to first tab
+    attrsContainer.innerHTML = '';
+    schemaContainer.innerHTML = '';
+    resetTabs();
     if (platform) {
       document.getElementById('platform-panel-title').textContent = 'Edit Platform';
       document.getElementById('f-plat-doc-id').value = platform.id;
       document.getElementById('f-plat-name').value = platform.name || '';
       document.getElementById('f-plat-logo').value = platform.logo || '';
-      
       document.getElementById('f-plat-auth-type').value = platform.authType || 'manual';
       document.getElementById('f-plat-auth-url').value = platform.authUrl || '';
       document.getElementById('f-plat-token-url').value = platform.tokenUrl || '';
@@ -342,12 +306,9 @@ export function initAdminPlatforms(dbInstance, authInstance) {
         createAttributeRow(label, attr.type || 'text', attr.required);
         if (attr.id || attr.key) {
           const row = attrsContainer.lastElementChild;
-          if (row) {
-            row.querySelector('.attr-key').value = attr.id || attr.key || '';
-          }
+          if (row) row.querySelector('.attr-key').value = attr.id || attr.key || '';
         }
       });
-
       const schema = platform.configSchema || [];
       schema.forEach(field => {
         const opts = field.options ? field.options.join(', ') : '';
@@ -364,12 +325,9 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       document.getElementById('f-plat-client-id').value = '';
       document.getElementById('f-plat-client-secret').value = '';
       document.getElementById('f-plat-guide-url').value = '';
-
-      createAttributeRow(); // one empty row by default
+      createAttributeRow();
     }
-    
     updateAuthUI(document.getElementById('f-plat-auth-type').value);
-    
     navigateTo('admin-platform-editor');
     window.scrollTo(0, 0);
   }
@@ -391,14 +349,12 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     e.preventDefault();
     platError.style.display = 'none';
     platError.textContent = '';
-
     const btnSave = document.getElementById('btn-plat-save');
     setButtonLoading(btnSave, true);
 
     try {
       const docId = document.getElementById('f-plat-doc-id').value;
 
-      // Gather attributes
       const attributes = [];
       const attrRows = attrsContainer.querySelectorAll('.attr-row');
       attrRows.forEach(row => {
@@ -413,7 +369,6 @@ export function initAdminPlatforms(dbInstance, authInstance) {
         }
       });
 
-      // Gather schema fields
       const configSchema = [];
       const schemaRows = schemaContainer.querySelectorAll('.schema-row');
       schemaRows.forEach(row => {
@@ -425,7 +380,6 @@ export function initAdminPlatforms(dbInstance, authInstance) {
         const dependsOn = row.querySelector('.schema-depends').value;
         const visibilityRule = row.querySelector('.schema-visible').value.trim();
         const required = row.querySelector('.schema-required').checked;
-        
         if (id && label) {
           const field = { id, label, type };
           if (required) field.required = true;
@@ -437,7 +391,6 @@ export function initAdminPlatforms(dbInstance, authInstance) {
           }
           if (dependsOn) field.dependsOn = dependsOn;
           if (visibilityRule) field.visibilityRule = visibilityRule;
-          
           configSchema.push(field);
         }
       });
@@ -451,36 +404,31 @@ export function initAdminPlatforms(dbInstance, authInstance) {
         clientId: document.getElementById('f-plat-client-id').value.trim(),
         clientSecret: document.getElementById('f-plat-client-secret').value.trim(),
         guideUrl: document.getElementById('f-plat-guide-url').value.trim(),
-        attributes: attributes,
-        configSchema: configSchema
+        attributes,
+        configSchema
       };
 
       if (docId) {
         platformData.key = docId;
         await setDoc(doc(firestoreDb, 'platforms', docId), platformData);
-
-        // Update name in any integrations that use this platform
         try {
           const q1 = query(collection(firestoreDb, 'integrations'), where('platform1.id', '==', docId));
           const snap1 = await getDocs(q1);
-          snap1.forEach(docSnap => {
-            updateDoc(docSnap.ref, { 'platform1.name': platformData.name });
-          });
-
+          snap1.forEach(docSnap => updateDoc(docSnap.ref, { 'platform1.name': platformData.name }));
           const q2 = query(collection(firestoreDb, 'integrations'), where('platform2.id', '==', docId));
           const snap2 = await getDocs(q2);
-          snap2.forEach(docSnap => {
-            updateDoc(docSnap.ref, { 'platform2.name': platformData.name });
-          });
+          snap2.forEach(docSnap => updateDoc(docSnap.ref, { 'platform2.name': platformData.name }));
         } catch (updateErr) {
           console.warn("Failed to update related integrations:", updateErr);
         }
+        await logActivity('update', 'platform', docId, platformData.name);
       } else {
         const docRef = await addDoc(collection(firestoreDb, 'platforms'), platformData);
         await setDoc(docRef, { key: docRef.id }, { merge: true });
+        await logActivity('create', 'platform', docRef.id, platformData.name);
       }
-
       closeModal();
+      loadPlatformsPage(true);
     } catch (err) {
       console.error("Failed to save platform", err);
       platError.textContent = "Error saving platform: " + err.message;
@@ -490,12 +438,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     }
   });
 
-  // Listen to Firestore
-  if (platformsUnsubscribe) platformsUnsubscribe();
-
-  const q = query(collection(firestoreDb, 'platforms'), orderBy('name'));
-
-  // Toggle Auth UI based on selection
+  // Toggle Auth UI
   if (authTypeSelect) {
     authTypeSelect.addEventListener('change', (e) => updateAuthUI(e.target.value));
   }
@@ -503,9 +446,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
   function updateAuthUI(authType) {
     const oauthGroup = document.getElementById('oauth-fields-group');
     const manualGroup = document.getElementById('manual-fields-group');
-
     if (!oauthGroup || !manualGroup) return;
-
     if (authType === 'oauth') {
       oauthGroup.classList.remove('hidden');
       manualGroup.classList.add('hidden');
@@ -518,118 +459,394 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     showStep(currentStep);
   }
 
-  document.getElementById('admin-platforms-tbody').innerHTML = getSkeletonTableHTML(4, 5);
+  // Wire platforms controls
+  wirePlatformControls();
 
-  platformsUnsubscribe = onSnapshot(q, (snapshot) => {
-    const tbody = document.getElementById('admin-platforms-tbody');
-    tbody.innerHTML = '';
-    
-    if (snapshot.empty) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No platforms found.</td></tr>';
-      return;
-    }
+  // Load first page
+  loadPlatformsPage(true);
+}
 
-    const allPlatforms = [];
+// ─── Paginated Load ──────────────────────────────────────────
 
-    snapshot.forEach(docSnap => {
-      const data = docSnap.data();
-      allPlatforms.push({ ...data, id: docSnap.id });
-      
-      const authTypeDisplay = data.authType === 'oauth' ? 'OAuth 2.0' : (data.authType === 'manual' ? 'Manual' : '<span style="color:var(--text-3)">None</span>');
+async function loadPlatformsPage(reset = false) {
+  if (platLoading) return;
+  platLoading = true;
 
-      const badgeHtml = `<span class="conn-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">${escHtml(data.name)}</span>`;
+  const tbody = document.getElementById('admin-platforms-tbody');
+  if (!tbody) { platLoading = false; return; }
 
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td data-label="ID" style="font-weight: 500;">${data.key || docSnap.id}</td>
-        <td data-label="Name">${badgeHtml}</td>
-        <td data-label="Auth Type" style="font-size: 0.9rem; color: var(--text-2);">${authTypeDisplay}</td>
-        <td data-label="Actions" class="col-actions">
-          <div class="row-actions-group">
-            <button class="row-action-btn edit-plat-btn" data-id="${docSnap.id}" type="button" title="Edit Platform"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
-            <button class="row-action-btn del-plat-btn" data-id="${docSnap.id}" type="button" title="Delete Platform"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
+  if (reset) {
+    platLastVisible = null;
+    platHasMore = false;
+    allPlatformsCache = [];
+    platSelectedIds.clear();
+    updatePlatBulkDeleteBtn();
+    tbody.innerHTML = getSkeletonTableHTML(4, 6);
+  }
+
+  try {
+    let q = query(
+      collection(firestoreDb, 'platforms'),
+      orderBy('name'),
+      limit(PLAT_PAGE_SIZE)
+    );
+    if (platLastVisible) q = query(q, startAfter(platLastVisible));
+
+    const snap = await getDocs(q);
+    const pagePlatforms = [];
+    snap.forEach(docSnap => {
+      const p = { ...docSnap.data(), id: docSnap.id };
+      pagePlatforms.push(p);
+      allPlatformsCache.push(p);
     });
 
-    // Attach Edit / Delete listeners
-    document.querySelectorAll('.edit-plat-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.currentTarget.getAttribute('data-id');
-        const plat = allPlatforms.find(i => i.id === id);
-        if (plat) openModal(plat);
-      });
-    });
+    platLastVisible = snap.docs[snap.docs.length - 1] || null;
+    platHasMore = snap.docs.length === PLAT_PAGE_SIZE;
 
-    document.querySelectorAll('.del-plat-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.currentTarget.getAttribute('data-id');
-        showDeleteModal(id);
-      });
-    });
-  }, (err) => {
-    console.warn('[admin-platforms] Platforms listener error:', err);
+    // Fetch integration counts for these platforms
+    await fetchIntegrationCounts(pagePlatforms);
+
+    renderPlatformTable();
+  } catch (err) {
+    console.warn('[admin-platforms] Load error:', err);
     if (!navigator.onLine) return;
-    const tbody = document.getElementById('admin-platforms-tbody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--rose);">Failed to load platforms. <a href="#" onclick="location.reload()" style="color:var(--violet);">Reload</a></td></tr>';
     showToast('Failed to load platforms', 'error');
-  });
-
-  // Delete Modal Logic
-  let platformToDelete = null;
-  const delOverlay = document.getElementById('platform-delete-modal-overlay');
-  const btnDelCancel = document.getElementById('plat-del-modal-cancel');
-  const btnDelConfirm = document.getElementById('plat-del-modal-confirm');
-  const delName = document.getElementById('plat-del-modal-name');
-
-  function showDeleteModal(id) {
-    platformToDelete = id;
-    delName.textContent = id;
-    delOverlay.classList.add('open');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--rose);">Failed to load. <a href="#" onclick="location.reload()" style="color:var(--violet);">Reload</a></td></tr>';
+  } finally {
+    platLoading = false;
   }
+}
 
-  function hideDeleteModal() {
-    platformToDelete = null;
-    delOverlay.classList.remove('open');
-  }
-
-  if (btnDelCancel) btnDelCancel.addEventListener('click', hideDeleteModal);
-  if (delOverlay) delOverlay.addEventListener('click', (e) => {
-    if (e.target === delOverlay) hideDeleteModal();
-  });
-  
-  if (btnDelConfirm) {
-    btnDelConfirm.addEventListener('click', async () => {
-      if (!platformToDelete) return;
-      const id = platformToDelete;
-      
-      // UI Loading state
-      btnDelConfirm.disabled = true;
-      btnDelConfirm.innerHTML = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></span><span style="vertical-align: middle;">Deleting...</span>';
-      
-      try {
-        const snap = await getDoc(doc(firestoreDb, 'platforms', id));
-        const deletedData = snap.exists() ? snap.data() : null;
-        await deleteDoc(doc(firestoreDb, 'platforms', id));
-        hideDeleteModal();
-        showToast('Platform deleted', 'info', {
-          actionLabel: 'Undo',
-          onAction: async () => {
-            if (deletedData) {
-              await setDoc(doc(firestoreDb, 'platforms', id), deletedData);
-              showToast('Platform restored', 'success');
-            }
-          }
-        });
-      } catch (err) {
-        console.error("Delete failed", err);
-        showToast('Failed to delete platform: ' + err.message, 'error');
-      } finally {
-        btnDelConfirm.disabled = false;
-        btnDelConfirm.textContent = 'Delete';
+async function fetchIntegrationCounts(platforms) {
+  if (countsFetched || !platforms || platforms.length === 0) return;
+  countsFetched = true;
+  try {
+    const snap = await getDocs(collection(firestoreDb, 'integrations'));
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      if (d.platform1?.id) {
+        integrationCountByPlatform[d.platform1.id] = (integrationCountByPlatform[d.platform1.id] || 0) + 1;
+      }
+      if (d.platform2?.id) {
+        integrationCountByPlatform[d.platform2.id] = (integrationCountByPlatform[d.platform2.id] || 0) + 1;
       }
     });
+  } catch (err) {
+    console.warn("Failed to fetch integration counts:", err);
   }
+}
+
+// Allow refreshing counts (called on Refresh button)
+window.refreshPlatformCounts = async function() {
+  countsFetched = false;
+  integrationCountByPlatform = {};
+  await fetchIntegrationCounts(allPlatformsCache);
+  renderPlatformTable();
+};
+
+// ─── Platform Controls (search, sort, bulk, refresh, load more)
+
+function wirePlatformControls() {
+  if (platControlsWired) return;
+  platControlsWired = true;
+
+  const searchInput = document.getElementById('admin-plat-search');
+  const searchClear = document.getElementById('admin-plat-search-clear');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      if (searchClear) searchClear.style.display = searchInput.value ? 'flex' : 'none';
+      clearTimeout(searchInput._timer);
+      searchInput._timer = setTimeout(() => {
+        platSearchTerm = searchInput.value.trim();
+        renderPlatformTable();
+      }, 200);
+    });
+    if (searchClear) {
+      searchClear.addEventListener('click', () => {
+        searchInput.value = '';
+        platSearchTerm = '';
+        renderPlatformTable();
+        searchClear.style.display = 'none';
+      });
+    }
+  }
+
+  // Sortable headers
+  document.querySelectorAll('#admin-plat-table thead th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (platSortColumn === col) {
+        platSortDirection = platSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        platSortColumn = col;
+        platSortDirection = 'asc';
+      }
+      renderPlatformTable();
+    });
+  });
+
+  // Select all
+  const selectAll = document.getElementById('admin-plat-select-all');
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      const visible = getFilteredPlatforms();
+      if (selectAll.checked) visible.forEach(p => platSelectedIds.add(p.id));
+      else visible.forEach(p => platSelectedIds.delete(p.id));
+      renderPlatformTable();
+      updatePlatBulkDeleteBtn();
+    });
+  }
+
+  // Bulk delete
+  const bulkDeleteBtn = document.getElementById('admin-plat-bulk-delete-btn');
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', async () => {
+      const ids = Array.from(platSelectedIds);
+      if (ids.length === 0) return;
+      if (!confirm(`Delete ${ids.length} platform(s)? This cannot be undone.`)) return;
+
+      bulkDeleteBtn.disabled = true;
+      bulkDeleteBtn.textContent = 'Deleting...';
+      let success = 0;
+      for (const id of ids) {
+        try {
+          const snap = await getDoc(doc(firestoreDb, 'platforms', id));
+          const data = snap.exists() ? snap.data() : null;
+          await deleteDoc(doc(firestoreDb, 'platforms', id));
+          await logActivity('delete', 'platform', id, data?.name || id);
+          success++;
+        } catch (err) {
+          console.warn(`Failed to delete platform ${id}:`, err);
+        }
+      }
+      bulkDeleteBtn.disabled = false;
+      bulkDeleteBtn.textContent = 'Delete Selected';
+      platSelectedIds.clear();
+      updatePlatBulkDeleteBtn();
+      showToast(`Deleted ${success} platform(s)`, 'info');
+      loadPlatformsPage(true);
+    });
+  }
+
+  // Refresh
+  const refreshBtn = document.getElementById('admin-plat-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      countsFetched = false;
+      integrationCountByPlatform = {};
+      loadPlatformsPage(true);
+    });
+  }
+
+  // Load more
+  const loadMoreBtn = document.getElementById('admin-plat-load-more');
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', () => loadPlatformsPage(false));
+  }
+}
+
+function updatePlatBulkDeleteBtn() {
+  const btn = document.getElementById('admin-plat-bulk-delete-btn');
+  if (!btn) return;
+  btn.style.display = platSelectedIds.size > 0 ? 'inline-block' : 'none';
+  if (platSelectedIds.size > 0) btn.textContent = `Delete Selected (${platSelectedIds.size})`;
+}
+
+function getFilteredPlatforms() {
+  if (!platSearchTerm) return [...allPlatformsCache];
+  const term = platSearchTerm.toLowerCase();
+  return allPlatformsCache.filter(p =>
+    (p.name || '').toLowerCase().includes(term) ||
+    (p.key || p.id || '').toLowerCase().includes(term) ||
+    (p.authType || '').toLowerCase().includes(term)
+  );
+}
+
+// ─── Render Platform Table ───────────────────────────────────
+
+function renderPlatformTable() {
+  const tbody = document.getElementById('admin-platforms-tbody');
+  if (!tbody) return;
+
+  const filtered = getFilteredPlatforms();
+  const sorted = [...filtered].sort((a, b) => {
+    const dir = platSortDirection === 'asc' ? 1 : -1;
+    let aVal, bVal;
+    switch (platSortColumn) {
+      case 'key': aVal = a.key || a.id || ''; bVal = b.key || b.id || ''; break;
+      case 'name': aVal = a.name || ''; bVal = b.name || ''; break;
+      case 'authType': aVal = a.authType || ''; bVal = b.authType || ''; break;
+      case 'integrationCount':
+        aVal = integrationCountByPlatform[a.id] || 0;
+        bVal = integrationCountByPlatform[b.id] || 0;
+        return (aVal - bVal) * dir;
+      default: aVal = a.name || ''; bVal = b.name || '';
+    }
+    if (aVal < bVal) return -1 * dir;
+    if (aVal > bVal) return 1 * dir;
+    return 0;
+  });
+
+  tbody.innerHTML = '';
+
+  if (sorted.length === 0) {
+    const msg = platSearchTerm
+      ? `No platforms match "${escHtml(platSearchTerm)}"`
+      : 'No platforms found.';
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;">${msg}</td></tr>`;
+    const loadMoreWrap = document.getElementById('admin-plat-load-more-wrap');
+    if (loadMoreWrap) loadMoreWrap.style.display = 'none';
+    const countEl = document.getElementById('admin-plat-count');
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+
+  sorted.forEach(p => {
+    const checked = platSelectedIds.has(p.id) ? 'checked' : '';
+    const authTypeDisplay = p.authType === 'oauth' ? 'OAuth 2.0' : (p.authType === 'manual' ? 'Manual' : '<span style="color:var(--text-3)">None</span>');
+    const badgeHtml = `<span class="conn-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">${escHtml(p.name)}</span>`;
+    const intCount = integrationCountByPlatform[p.id] || 0;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td data-label="Select"><input type="checkbox" class="plat-row-check" data-id="${p.id}" ${checked} /></td>
+      <td data-label="ID" style="font-weight:500;">${escHtml(p.key || p.id)}</td>
+      <td data-label="Name">${badgeHtml}</td>
+      <td data-label="Auth Type" style="font-size:0.9rem;color:var(--text-2);">${authTypeDisplay}</td>
+      <td data-label="Integrations" style="text-align:center;">${intCount}</td>
+      <td data-label="Actions" class="col-actions">
+        <div class="row-actions-group">
+          <button class="row-action-btn edit-plat-btn" data-id="${p.id}" type="button" title="Edit Platform"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+          <button class="row-action-btn del-plat-btn" data-id="${p.id}" type="button" title="Delete Platform"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    tr.querySelector('.edit-plat-btn').addEventListener('click', () => {
+      const plat = allPlatformsCache.find(x => x.id === p.id);
+      if (plat) openModal(plat);
+    });
+
+    tr.querySelector('.del-plat-btn').addEventListener('click', () => {
+      showDeleteModal(p.id, p.name || p.id);
+    });
+
+    tr.querySelector('.plat-row-check').addEventListener('change', (e) => {
+      if (e.target.checked) platSelectedIds.add(p.id);
+      else platSelectedIds.delete(p.id);
+      updatePlatBulkDeleteBtn();
+    });
+  });
+
+  // Select-all state
+  const selectAll = document.getElementById('admin-plat-select-all');
+  if (selectAll) {
+    const visible = getFilteredPlatforms();
+    selectAll.checked = visible.every(p => platSelectedIds.has(p.id)) && visible.length > 0;
+  }
+
+  // Load more
+  const loadMoreWrap = document.getElementById('admin-plat-load-more-wrap');
+  if (loadMoreWrap) {
+    loadMoreWrap.style.display = (platSearchTerm || !platHasMore) ? 'none' : 'block';
+  }
+
+  // Count
+  const countEl = document.getElementById('admin-plat-count');
+  if (countEl) countEl.textContent = `${filtered.length} platform(s)`;
+}
+
+// ─── Delete Modal Logic (with dependency check) ──────────────
+
+let platformToDelete = null;
+let platformToDeleteName = '';
+const delOverlay = document.getElementById('platform-delete-modal-overlay');
+const btnDelCancel = document.getElementById('plat-del-modal-cancel');
+const btnDelConfirm = document.getElementById('plat-del-modal-confirm');
+const delName = document.getElementById('plat-del-modal-name');
+
+async function showDeleteModal(id, displayName) {
+  // Check dependencies first
+  let depCount = 0;
+  try {
+    const q1 = query(collection(firestoreDb, 'integrations'), where('platform1.id', '==', id));
+    const q2 = query(collection(firestoreDb, 'integrations'), where('platform2.id', '==', id));
+    const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+    depCount = snap1.size + snap2.size;
+  } catch (err) {
+    console.warn("Failed to check dependencies:", err);
+  }
+
+  if (depCount > 0) {
+    const proceed = confirm(
+      `"${displayName}" is used by ${depCount} integration(s). Deleting it will orphan those references. Proceed anyway?`
+    );
+    if (!proceed) return;
+  }
+
+  platformToDelete = id;
+  platformToDeleteName = displayName;
+  delName.textContent = displayName || id;
+  delOverlay.classList.add('open');
+}
+
+function hideDeleteModal() {
+  platformToDelete = null;
+  platformToDeleteName = '';
+  delOverlay.classList.remove('open');
+}
+
+if (btnDelCancel) btnDelCancel.addEventListener('click', hideDeleteModal);
+if (delOverlay) delOverlay.addEventListener('click', (e) => {
+  if (e.target === delOverlay) hideDeleteModal();
+});
+
+if (btnDelConfirm) {
+  btnDelConfirm.addEventListener('click', async () => {
+    if (!platformToDelete) return;
+    const id = platformToDelete;
+
+    btnDelConfirm.disabled = true;
+    btnDelConfirm.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span><span style="vertical-align:middle;">Deleting...</span>';
+
+    try {
+      const snap = await getDoc(doc(firestoreDb, 'platforms', id));
+      const deletedData = snap.exists() ? snap.data() : null;
+      await deleteDoc(doc(firestoreDb, 'platforms', id));
+      await logActivity('delete', 'platform', id, platformToDeleteName || id);
+      hideDeleteModal();
+      showToast('Platform deleted', 'info', {
+        actionLabel: 'Undo',
+        onAction: async () => {
+          if (deletedData) {
+            await setDoc(doc(firestoreDb, 'platforms', id), deletedData);
+            await logActivity('restore', 'platform', id, platformToDeleteName || id);
+            showToast('Platform restored', 'success');
+          }
+        }
+      });
+      loadPlatformsPage(true);
+    } catch (err) {
+      console.error("Delete failed", err);
+      showToast('Failed to delete platform: ' + err.message, 'error');
+    } finally {
+      btnDelConfirm.disabled = false;
+      btnDelConfirm.textContent = 'Delete';
+    }
+  });
+}
+
+// ─── Utilities ──────────────────────────────────────────────
+
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escAttr(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
