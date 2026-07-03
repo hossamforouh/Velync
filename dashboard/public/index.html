@@ -786,7 +786,14 @@
               </div>
             </div>
 
-            <div class="toolbar-right">
+             <div class="toolbar-right" style="display:flex;gap:8px;align-items:center;">
+              <label class="auto-refresh-toggle" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.75rem;color:var(--text-3);user-select:none;" title="Auto-refresh every 30s">
+                <input type="checkbox" id="logs-auto-refresh" style="accent-color:var(--violet);cursor:pointer;" />
+                Auto
+              </label>
+              <button class="toolbar-btn" id="logs-export-btn" title="Export as CSV">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              </button>
               <button class="toolbar-btn" id="logs-refresh" title="Refresh logs">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               </button>
@@ -814,6 +821,12 @@
                 <!-- Populated by logs.js -->
               </tbody>
             </table>
+            <div id="logs-load-more-row" style="display:none;padding:16px;text-align:center;border-top:1px solid var(--border);">
+              <button class="btn btn-secondary" id="logs-load-more-btn" style="justify-content:center;gap:6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                Load More
+              </button>
+            </div>
           </div>
         </section>
 
@@ -1312,6 +1325,12 @@
         <i data-feather="alert-circle" style="width:14px;height:14px;"></i> Unsaved changes
       </div>
     </div>
+  </aside>
+
+  <!-- ── Log Detail Panel ────────────────────────────── -->
+  <div class="panel-overlay" id="log-detail-overlay"></div>
+  <aside class="side-panel log-detail-panel" id="log-detail-panel">
+    <!-- Populated by logs.js -->
   </aside>
 
   <!-- ── Node Config Modal ────────────────────────────── -->
