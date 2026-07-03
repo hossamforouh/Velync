@@ -45,6 +45,9 @@ export async function navigateTo(viewName) {
     }
   }
 
+  // Dispatch view-left event for cache invalidation
+  window.dispatchEvent(new CustomEvent('view-left', { detail: { view: currentView } }));
+
   currentView = viewName;
 
   // Toggle view panels

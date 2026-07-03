@@ -30,6 +30,19 @@ export async function renderHubView(db, onNavigate) {
   if (toolbar) toolbar.style.display = 'none';
   document.getElementById('hub-load-more-wrap').style.display = 'none';
 
+  const cached = window.__getViewCache ? window.__getViewCache('hub') : null;
+  if (cached) {
+    platformsMap = cached.platformsMap;
+    allIntegrations = cached.allIntegrations;
+    connectedIds = cached.connectedIds;
+    searchTerm = '';
+    displayCount = PAGE_SIZE;
+    if (toolbar) toolbar.style.display = 'flex';
+    wireHubToolbar();
+    renderCards();
+    return;
+  }
+
   try {
     const [pSnap, iSnap] = await Promise.all([
       getDocs(query(collection(db, 'platforms'))),
@@ -57,6 +70,10 @@ export async function renderHubView(db, onNavigate) {
           connectedIds.add(data.integrationId);
         }
       });
+    }
+
+    if (window.__setViewCache) {
+      window.__setViewCache('hub', { platformsMap, allIntegrations, connectedIds });
     }
   } catch (err) {
     console.error("Error fetching integrations:", err);

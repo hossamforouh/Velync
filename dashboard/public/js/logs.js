@@ -15,7 +15,7 @@ let fetchRequestId = 0;
 let autoRefreshTimer = null;
 let autoRefreshEnabled = false;
 
-/* ── Init ──────────────────────────────────────────────────── */
+/* ── Init ───────────────────────────────────────────────────── */
 
 export async function initLogs(db, workspaceId) {
   currentDb = db;
@@ -29,8 +29,28 @@ export async function initLogs(db, workspaceId) {
     filterListenersAttached = true;
   }
 
+  // Check view cache: skip re-fetch if fresh
+  const cached = window.__getViewCache ? window.__getViewCache('logs') : null;
+  if (cached) {
+    cachedLogs = cached;
+    await renderTable();
+    return;
+  }
+
   await fetchLogs(true);
   startAutoRefresh();
+
+  // Visibility change: pause auto-refresh when tab hidden, resume when visible
+  if (!window._logsVisibilityWired) {
+    window._logsVisibilityWired = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopAutoRefresh();
+      } else if (autoRefreshEnabled) {
+        startAutoRefresh();
+      }
+    });
+  }
 }
 
 /* ── Filters ───────────────────────────────────────────────── */
@@ -173,6 +193,7 @@ async function fetchLogs(reset = false) {
     }
 
     renderLogs();
+    if (window.__setViewCache) window.__setViewCache('logs', cachedLogs);
   } catch (err) {
     console.error("Error fetching logs:", err);
     if (reqId !== fetchRequestId) return;
@@ -181,6 +202,11 @@ async function fetchLogs(reset = false) {
     updateCount(0, 0, f);
     if (loadMoreRow) loadMoreRow.style.display = 'none';
   }
+}
+
+async function renderTable() {
+  await renderLogs();
+  updateLoadMoreVisibility();
 }
 
 /* ── Load More ─────────────────────────────────────────────── */

@@ -11,7 +11,7 @@ import { initLogs } from "./js/logs.js";
 import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
 import { bindNavEvents, navigateTo } from './js/navigation.js';
 import { renderHubView } from './js/hub.js';
-import { loadConnections, renderConnectionsView, renderConnectionsSkeleton, initiateDirectOAuthFlow } from './js/connections.js';
+import { connections, loadConnections, renderConnectionsView, renderConnectionsSkeleton, initiateDirectOAuthFlow } from './js/connections.js';
 import { initAdminIntegrations, setAdminAuth } from './js/admin-integrations.js';
 import { initAdminPlatforms } from './js/admin-platforms.js';
 import './js/integration-setup.js';
@@ -20,6 +20,25 @@ import { confirmDialog, alertDialog, threeWayConfirmDialog } from './js/confirm.
 import { startLoad, endLoad, isLoading } from './js/loading.js';
 import { getSkeletonFormHTML, setButtonLoading } from './js/loading-components.js';
 
+// ─── View Cache (Tab Switching) ────────────────────────────────
+const viewCache = new Map();
+const VIEW_CACHE_TTL = 60000;
+
+window.addEventListener('view-left', (e) => {
+  const viewName = e.detail?.view;
+  if (viewName) viewCache.delete(viewName);
+});
+
+window.__getViewCache = (name) => {
+  const entry = viewCache.get(name);
+  if (entry && Date.now() - entry.time < VIEW_CACHE_TTL) return entry.data;
+  viewCache.delete(name);
+  return null;
+};
+
+window.__setViewCache = (name, data) => {
+  viewCache.set(name, { data, time: Date.now() });
+};
 // ─── Data Sources Registry (Dynamic) ────────────────────────────
 async function fetchPlatformEntities(dataSourceId, connId, parentValue) {
   if (!auth.currentUser) return [];
@@ -1454,9 +1473,16 @@ function wireViewRenderers() {
   const navConnections = document.getElementById('nav-connections');
   if (navConnections) {
     navConnections.addEventListener('click', async () => {
+      const cached = window.__getViewCache ? window.__getViewCache('connections') : null;
+      if (cached) {
+        connections = cached;
+        await renderConnectionsView();
+        return;
+      }
       renderConnectionsSkeleton();
       await loadConnections(true);
       await renderConnectionsView();
+      if (window.__setViewCache) window.__setViewCache('connections', connections);
     });
   }
   // Workspace selector
@@ -3878,10 +3904,19 @@ if (btnLoadTt) {
     
     const loadKey = 'loadTickTick';
     startLoad(loadKey);
-    btnLoadTt.textContent = '⏳ Loading...';
+    btnLoadTt.innerHTML = '⏳ Loading...';
     try {
+      const uid = auth?.currentUser?.uid;
+      if (!uid) throw new Error('Not authenticated');
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(`/api/ticktick/lists?connectionId=${encodeURIComponent(connId)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      const projects = data.lists || [];
       currentProjects = projects;
-      
+
       filterAndPopulateTtLists();
       
       // Auto-trigger tag fetching for the current list

@@ -2,37 +2,55 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSuperAdmin() {
+      return request.auth != null
+        && request.auth.uid == 'o4gf5QBNlnaLXCqfjYmmhVLVNlg1';
+    }
+
+    function isWorkspaceMember(workspaceId) {
+      return request.auth != null && (
+        request.auth.uid == workspaceId ||
+        request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.members
+      );
+    }
+
+    function isWorkspaceMemberFromField() {
+      return request.auth != null && resource != null && resource.data.workspaceId != null && (
+        request.auth.uid == resource.data.workspaceId ||
+        request.auth.uid in get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.members
+      );
+    }
+
+    // Users — any authenticated user can read (needed for admin lookups)
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if false;
     }
 
-    // Collection-group scope for sync_configs (required for collectionGroup queries)
-    match /{path=**}/sync_configs/{configId} {
-      allow read: if request.auth != null;
-      allow write: if false;
-    }
-
+    // Workspaces — owner/member only
     match /workspaces/{workspaceId} {
-      allow read: if request.auth != null;
+      allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
       allow write: if false;
 
+      // Sync configs under a workspace — workspace member only
       match /sync_configs/{configId} {
-        allow read: if request.auth != null;
+        allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
         allow write: if false;
       }
     }
 
+    // Top-level collections with workspaceId field — workspace member only
     match /execution_logs/{logId} {
-      allow read: if request.auth != null;
+      allow read: if isSuperAdmin() || isWorkspaceMemberFromField();
       allow write: if false;
     }
 
     match /connected_accounts/{accountId} {
-      allow read: if request.auth != null;
+      allow read: if isSuperAdmin() || isWorkspaceMemberFromField();
       allow write: if false;
     }
 
+    // Public marketplace data — any authenticated user
     match /platforms/{documentId} {
       allow read: if request.auth != null;
       allow write: if false;
@@ -43,15 +61,23 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // App settings — public reads
     match /app_settings/{documentId} {
       allow read: if true;
       allow write: if false;
     }
 
+    // Activity logs — any authenticated user can read/create (admin audit)
     match /activity_logs/{logId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
       allow update, delete: if false;
+    }
+
+    // Credentials — owner-only
+    match /credentials/{documentId} {
+      allow read: if request.auth != null && request.auth.uid == documentId;
+      allow write: if false;
     }
   }
 }

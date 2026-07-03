@@ -21,6 +21,25 @@ let intSortDirection = 'asc';
 // Bulk state
 let intSelectedIds = new Set();
 
+// Admin view cache (per-tab, 60s TTL)
+const _viewCache = {};
+const _VIEW_CACHE_TTL = 60000;
+
+function _getCached(viewName) {
+  const entry = _viewCache[viewName];
+  if (entry && Date.now() - entry.time < _VIEW_CACHE_TTL) return entry.data;
+  delete _viewCache[viewName];
+  return null;
+}
+
+function _setCached(viewName, data) {
+  _viewCache[viewName] = { data, time: Date.now() };
+}
+
+function _invalidateCache(viewName) {
+  delete _viewCache[viewName];
+}
+
 // Platform cache (for dropdowns — loaded separately)
 let cachedPlatforms = [];
 
@@ -28,11 +47,16 @@ let cachedPlatforms = [];
 let _openModal = null;
 let _closeModal = null;
 
+let _platformsUnsub = null;
+
 export function initAdminIntegrations(db) {
   firestoreDb = db;
 
+  // Unsubscribe any previous listener (cleanup on re-init)
+  if (_platformsUnsub) { _platformsUnsub(); _platformsUnsub = null; }
+
   // Platforms listener (for dropdowns — kept as onSnapshot since it's small)
-  onSnapshot(
+  _platformsUnsub = onSnapshot(
     query(collection(db, 'platforms'), orderBy('name')),
     (snapshot) => {
       cachedPlatforms = [];
@@ -79,6 +103,24 @@ export function initAdminIntegrations(db) {
       const targetId = tab.getAttribute('data-target');
       const targetPane = document.getElementById(targetId);
       if (targetPane) targetPane.style.display = 'block';
+
+      // Map pane ID to cache key
+      const cacheKey = targetId === 'admin-pane-overview' ? 'overview'
+        : targetId === 'admin-pane-marketplace' ? 'marketplace'
+        : targetId === 'admin-pane-activity' ? 'activity'
+        : null;
+
+      const cached = cacheKey ? _getCached(cacheKey) : null;
+      if (cached) {
+        if (cacheKey === 'overview') {
+          _overviewCache = cached;
+          renderOverviewFromCache();
+        } else if (cacheKey === 'marketplace') {
+          allIntegrationsCache = cached;
+          renderAdminTable();
+        }
+        return;
+      }
 
       if (targetId === 'admin-pane-marketplace') {
         loadIntegrationsPage(true);
@@ -384,6 +426,7 @@ async function loadAdminOverview() {
       connDist
     };
     _overviewCacheTime = Date.now();
+    _setCached('overview', _overviewCache);
 
     renderOverviewFromCache();
   } catch (err) {
@@ -590,6 +633,7 @@ async function loadIntegrationsPage(reset = false) {
 
     intLastVisible = snap.docs[snap.docs.length - 1] || null;
     intHasMore = snap.docs.length === INT_PAGE_SIZE;
+    _setCached('marketplace', allIntegrationsCache);
     renderAdminTable();
   } catch (err) {
     console.warn('[admin-integrations] Load error:', err);
@@ -692,7 +736,12 @@ function wireAdminControls() {
   // Refresh
   const refreshBtn = document.getElementById('admin-int-refresh-btn');
   if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => loadIntegrationsPage(true));
+    refreshBtn.addEventListener('click', () => {
+      _invalidateCache('marketplace');
+      _invalidateCache('overview');
+      _invalidateCache('activity');
+      loadIntegrationsPage(true);
+    });
   }
 
   // Load more

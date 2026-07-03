@@ -12,8 +12,18 @@ const syncConfigsRoutes = require('./routes/sync-configs');
 function createApp() {
   const app = express();
 
+  const ALLOWED_ORIGINS = [
+    'https://velync.web.app',
+    'https://velync.firebaseapp.com',
+    'http://localhost:5000',
+    'http://localhost:3000',
+    'http://127.0.0.1:5000',
+  ];
   app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const origin = req.headers.origin;
+    if (origin && ALLOWED_ORIGINS.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,Authorization');
     if (req.method === 'OPTIONS') return res.status(200).end();
