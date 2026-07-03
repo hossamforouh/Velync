@@ -438,104 +438,23 @@
             </div>
           </div>
           
-          <div id="marketplace-grid" class="hub-grid">
-            <!-- SKELETON LOADERS -->
-            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
-              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
-                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
-                <div style="flex: 1;">
-                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
-                  <div class="skeleton-line short" style="height: 14px;"></div>
-                </div>
-              </div>
-              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
-              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
-                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+          <div class="hub-toolbar" id="hub-toolbar" style="display:none;">
+            <div class="hub-toolbar-left">
+              <div class="search-wrap" style="position:relative;width:260px;">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="hub-search" class="filter-input" placeholder="Search integrations..." style="padding-left:32px;width:100%;" />
+                <button id="hub-search-clear" class="search-clear" style="display:none;">✕</button>
               </div>
             </div>
-            
-            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
-              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
-                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
-                <div style="flex: 1;">
-                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
-                  <div class="skeleton-line short" style="height: 14px;"></div>
-                </div>
-              </div>
-              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
-              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
-                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
-              </div>
+            <div class="hub-toolbar-right">
+              <button class="btn btn-secondary btn-sm" id="hub-refresh-btn" title="Refresh" style="padding:6px 10px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              </button>
             </div>
-            
-            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
-              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
-                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
-                <div style="flex: 1;">
-                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
-                  <div class="skeleton-line short" style="height: 14px;"></div>
-                </div>
-              </div>
-              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
-              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
-                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
-              </div>
-            </div>
-            
-            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
-              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
-                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
-                <div style="flex: 1;">
-                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
-                  <div class="skeleton-line short" style="height: 14px;"></div>
-                </div>
-              </div>
-              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
-              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
-                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
-              </div>
-            </div>
-            
-            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
-              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
-                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
-                <div style="flex: 1;">
-                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
-                  <div class="skeleton-line short" style="height: 14px;"></div>
-                </div>
-              </div>
-              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
-              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
-                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
-              </div>
-            </div>
-            
-            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
-              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
-                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
-                <div style="flex: 1;">
-                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
-                  <div class="skeleton-line short" style="height: 14px;"></div>
-                </div>
-              </div>
-              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
-              <div class="skeleton-line" style="width: 80%; height: 14px; margin-bottom: 24px;"></div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="skeleton-line" style="width: 60px; height: 28px; border-radius: 14px;"></div>
-                <div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 50%;"></div>
-              </div>
-            </div>
-            <!-- END SKELETON LOADERS -->
+          </div>
+          <div id="marketplace-grid" class="hub-grid"></div>
+          <div id="hub-load-more-wrap" style="display:none;text-align:center;padding:24px 0;">
+            <button class="btn btn-secondary" id="hub-load-more">Load More</button>
           </div>
         </section>
 
@@ -940,6 +859,14 @@
                 <h2 style="margin: 0;">Marketplace Integrations</h2>
                 <button id="btn-admin-add-integration" class="btn btn-primary"
                   style="padding: 8px 16px; font-size: 14px;">+ Add New</button>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <div class="search-wrap" style="position:relative;width:260px;">
+                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;z-index:1;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input type="text" id="admin-int-search" placeholder="Search by name, ID, or status..." style="padding-left:32px;width:100%;color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:8px 12px 8px 32px;border-radius:8px;font-size:0.85rem;box-sizing:border-box;" />
+                  <button id="admin-int-search-clear" class="search-clear" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-3);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:0.8rem;z-index:1;">✕</button>
+                </div>
               </div>
 
               <div class="connections-table-wrap">
@@ -1614,6 +1541,18 @@
           <button type="submit" class="btn btn-primary" id="btn-int-save">Save</button>
         </div>
       </form>
+    </div>
+  </aside>
+
+  <!-- ── Marketplace Card Detail Panel ───────────────────────── -->
+  <div class="panel-overlay" id="hub-detail-overlay"></div>
+  <aside class="side-panel" id="hub-detail-panel" style="z-index:10001;">
+    <div class="panel-header">
+      <h2 id="hub-detail-title">Integration Details</h2>
+      <button class="panel-close" id="hub-detail-close">✕</button>
+    </div>
+    <div class="panel-body" id="hub-detail-body" style="padding:24px;">
+      <!-- Populated dynamically by hub.js -->
     </div>
   </aside>
 

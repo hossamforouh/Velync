@@ -969,8 +969,13 @@ onAuthStateChanged(auth, async (user) => {
     // Load configs in background — renders when done
     loadConfigs();
     
-    // Pre-render hub on login
-    renderHubView(db, (v) => navigateTo(v));
+    // Wire hub nav to re-render on each visit
+    const navHub = document.getElementById('nav-hub');
+    if (navHub) {
+      navHub.addEventListener('click', () => {
+        renderHubView(db, (v) => navigateTo(v));
+      });
+    }
 
     // Init Avatar Dropdown
     const avatarBtn = document.getElementById('user-avatar');

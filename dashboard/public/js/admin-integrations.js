@@ -4,6 +4,9 @@ import { showToast } from './toast.js';
 
 let firestoreDb = null;
 let integrationsUnsubscribe = null;
+let allIntegrationsCache = [];
+let searchTerm = '';
+let adminIntegrationsWired = false;
 
 export function initAdminIntegrations(db) {
   firestoreDb = db;
@@ -49,17 +52,20 @@ export function initAdminIntegrations(db) {
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      // Remove active from all tabs
       tabs.forEach(t => t.classList.remove('active'));
-      // Hide all panes
       panes.forEach(p => p.style.display = 'none');
       
-      // Activate clicked tab
       tab.classList.add('active');
-      // Show corresponding pane
       const targetId = tab.getAttribute('data-target');
       const targetPane = document.getElementById(targetId);
       if (targetPane) targetPane.style.display = 'block';
+
+      // Lazy subscribe to integrations when Marketplace tab is shown
+      if (targetId === 'admin-pane-marketplace') {
+        subscribeIntegrations();
+      } else {
+        unsubscribeIntegrations();
+      }
     });
   });
 
@@ -178,62 +184,28 @@ export function initAdminIntegrations(db) {
     }
   });
 
-  // Show loading skeleton while initial data loads
-  document.getElementById('admin-integrations-tbody').innerHTML = getSkeletonTableHTML(4, 5);
+  // Wire admin search
+  wireAdminSearch();
 
-  // Listen to Firestore
-  if (integrationsUnsubscribe) integrationsUnsubscribe();
+  // Wire tab switching logic that's already been set up above
+  // The lazy subscription is triggered in the tab click handler
+}
 
-  const q = query(collection(db, 'integrations'), orderBy('name'));
+// ─── Lazy Subscribe / Unsubscribe ───────────────────────────
+
+function subscribeIntegrations() {
+  if (integrationsUnsubscribe) return; // already subscribed
+
+  const tbody = document.getElementById('admin-integrations-tbody');
+  if (tbody) tbody.innerHTML = getSkeletonTableHTML(4, 5);
+
+  const q = query(collection(firestoreDb, 'integrations'), orderBy('name'));
   integrationsUnsubscribe = onSnapshot(q, (snapshot) => {
-    const tbody = document.getElementById('admin-integrations-tbody');
-    tbody.innerHTML = '';
-    
-    if (snapshot.empty) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No integrations found.</td></tr>';
-      return;
-    }
-
-    const allIntegrations = [];
-
+    allIntegrationsCache = [];
     snapshot.forEach(docSnap => {
-      const data = docSnap.data();
-      allIntegrations.push({ ...data, _id: docSnap.id });
-      
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td data-label="ID" style="font-family: monospace; font-size: 0.85rem; color: var(--text-2);">${docSnap.id}</td>
-        <td data-label="Name"><strong>${escHtml(data.name)}</strong></td>
-        <td data-label="Status">
-          <span class="badge ${data.status === 'Active' ? 'badge-success' : 'badge-warning'}">
-            ${data.status}
-          </span>
-        </td>
-        <td data-label="Actions" class="col-actions">
-          <div class="row-actions-group">
-            <button class="row-action-btn edit-int-btn" data-id="${docSnap.id}" type="button" title="Edit Integration"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
-            <button class="row-action-btn del-int-btn" data-id="${docSnap.id}" type="button" title="Delete Integration"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
+      allIntegrationsCache.push({ ...docSnap.data(), _id: docSnap.id });
     });
-
-    // Attach Edit / Delete listeners
-    document.querySelectorAll('.edit-int-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.currentTarget.getAttribute('data-id');
-        const intg = allIntegrations.find(i => i._id === id);
-        if (intg) openModal(intg);
-      });
-    });
-
-    document.querySelectorAll('.del-int-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.currentTarget.getAttribute('data-id');
-        showDeleteModal(id);
-      });
-    });
+    renderAdminTable();
   }, (err) => {
     console.warn('[admin-integrations] Integrations listener error:', err);
     if (!navigator.onLine) return;
@@ -241,60 +213,158 @@ export function initAdminIntegrations(db) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;color:var(--rose);">Failed to load integrations. <a href="#" onclick="location.reload()" style="color:var(--violet);">Reload</a></td></tr>';
     showToast('Failed to load integrations', 'error');
   });
+}
 
-  // Delete Modal Logic
-  let integrationToDelete = null;
-  const delOverlay = document.getElementById('integration-delete-modal-overlay');
-  const btnDelCancel = document.getElementById('int-del-modal-cancel');
-  const btnDelConfirm = document.getElementById('int-del-modal-confirm');
-  const delName = document.getElementById('int-del-modal-name');
-
-  function showDeleteModal(id) {
-    integrationToDelete = id;
-    delName.textContent = id;
-    delOverlay.classList.add('open');
+function unsubscribeIntegrations() {
+  if (integrationsUnsubscribe) {
+    integrationsUnsubscribe();
+    integrationsUnsubscribe = null;
   }
+  allIntegrationsCache = [];
+}
 
-  function hideDeleteModal() {
-    integrationToDelete = null;
-    delOverlay.classList.remove('open');
-  }
+// ─── Admin Search ───────────────────────────────────────────
 
-  if (btnDelCancel) btnDelCancel.addEventListener('click', hideDeleteModal);
-  if (delOverlay) delOverlay.addEventListener('click', (e) => {
-    if (e.target === delOverlay) hideDeleteModal();
-  });
-  
-  if (btnDelConfirm) {
-    btnDelConfirm.addEventListener('click', async () => {
-      if (!integrationToDelete) return;
-      const id = integrationToDelete;
-      
-      // UI Loading state
-      btnDelConfirm.disabled = true;
-      btnDelConfirm.innerHTML = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></span><span style="vertical-align: middle;">Deleting...</span>';
-      
-      try {
-        const snap = await getDoc(doc(firestoreDb, 'integrations', id));
-        const deletedData = snap.exists() ? snap.data() : null;
-        await deleteDoc(doc(firestoreDb, 'integrations', id));
-        hideDeleteModal();
-        showToast('Integration deleted', 'info', {
-          actionLabel: 'Undo',
-          onAction: async () => {
-            if (deletedData) {
-              await setDoc(doc(firestoreDb, 'integrations', id), deletedData);
-              showToast('Integration restored', 'success');
-            }
-          }
-        });
-      } catch (err) {
-        console.error("Delete failed", err);
-        showToast("Failed to delete integration: " + err.message, 'error');
-      } finally {
-        btnDelConfirm.disabled = false;
-        btnDelConfirm.textContent = 'Delete';
+function wireAdminSearch() {
+  if (adminIntegrationsWired) return;
+  adminIntegrationsWired = true;
+
+  const searchInput = document.getElementById('admin-int-search');
+  const searchClear = document.getElementById('admin-int-search-clear');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      if (searchClear) {
+        searchClear.style.display = searchInput.value ? 'flex' : 'none';
       }
+      clearTimeout(searchInput._timer);
+      searchInput._timer = setTimeout(() => {
+        searchTerm = searchInput.value.trim();
+        renderAdminTable();
+      }, 200);
     });
+
+    if (searchClear) {
+      searchClear.addEventListener('click', () => {
+        searchInput.value = '';
+        searchTerm = '';
+        renderAdminTable();
+        searchClear.style.display = 'none';
+      });
+    }
   }
+}
+
+// ─── Render Admin Table ─────────────────────────────────────
+
+function renderAdminTable() {
+  const tbody = document.getElementById('admin-integrations-tbody');
+  if (!tbody) return;
+
+  const filtered = searchTerm
+    ? allIntegrationsCache.filter(int =>
+        (int.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (int._id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (int.status || '').toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : allIntegrationsCache;
+
+  tbody.innerHTML = '';
+
+  if (filtered.length === 0) {
+    const msg = searchTerm
+      ? `No integrations match "${escHtml(searchTerm)}"`
+      : 'No integrations found.';
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:20px;">${msg}</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(intg => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td data-label="ID" style="font-family:monospace;font-size:0.85rem;color:var(--text-2);">${escHtml(intg._id)}</td>
+      <td data-label="Name"><strong>${escHtml(intg.name)}</strong></td>
+      <td data-label="Status">
+        <span class="badge ${intg.status === 'Active' ? 'badge-success' : 'badge-warning'}">${escHtml(intg.status)}</span>
+      </td>
+      <td data-label="Actions" class="col-actions">
+        <div class="row-actions-group">
+          <button class="row-action-btn edit-int-btn" data-id="${intg._id}" type="button" title="Edit Integration"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+          <button class="row-action-btn del-int-btn" data-id="${intg._id}" type="button" title="Delete Integration"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    tr.querySelector('.edit-int-btn').addEventListener('click', () => {
+      const found = allIntegrationsCache.find(i => i._id === intg._id);
+      if (found) openModal(found);
+    });
+
+    tr.querySelector('.del-int-btn').addEventListener('click', () => {
+      showDeleteModal(intg._id, intg.name || intg._id);
+    });
+  });
+}
+
+// ─── Delete Modal Logic ─────────────────────────────────────
+
+let integrationToDelete = null;
+const delOverlay = document.getElementById('integration-delete-modal-overlay');
+const btnDelCancel = document.getElementById('int-del-modal-cancel');
+const btnDelConfirm = document.getElementById('int-del-modal-confirm');
+const delName = document.getElementById('int-del-modal-name');
+
+function showDeleteModal(id, displayName) {
+  integrationToDelete = id;
+  delName.textContent = displayName || id;
+  delOverlay.classList.add('open');
+}
+
+function hideDeleteModal() {
+  integrationToDelete = null;
+  delOverlay.classList.remove('open');
+}
+
+if (btnDelCancel) btnDelCancel.addEventListener('click', hideDeleteModal);
+if (delOverlay) delOverlay.addEventListener('click', (e) => {
+  if (e.target === delOverlay) hideDeleteModal();
+});
+
+if (btnDelConfirm) {
+  btnDelConfirm.addEventListener('click', async () => {
+    if (!integrationToDelete) return;
+    const id = integrationToDelete;
+    
+    btnDelConfirm.disabled = true;
+    btnDelConfirm.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span><span style="vertical-align:middle;">Deleting...</span>';
+    
+    try {
+      const snap = await getDoc(doc(firestoreDb, 'integrations', id));
+      const deletedData = snap.exists() ? snap.data() : null;
+      await deleteDoc(doc(firestoreDb, 'integrations', id));
+      hideDeleteModal();
+      showToast('Integration deleted', 'info', {
+        actionLabel: 'Undo',
+        onAction: async () => {
+          if (deletedData) {
+            await setDoc(doc(firestoreDb, 'integrations', id), deletedData);
+            showToast('Integration restored', 'success');
+          }
+        }
+      });
+    } catch (err) {
+      console.error("Delete failed", err);
+      showToast("Failed to delete integration: " + err.message, 'error');
+    } finally {
+      btnDelConfirm.disabled = false;
+      btnDelConfirm.textContent = 'Delete';
+    }
+  });
+}
+
+// ─── Utilities ──────────────────────────────────────────────
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

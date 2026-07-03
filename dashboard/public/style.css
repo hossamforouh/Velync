@@ -3421,6 +3421,130 @@ header.legacy-header {
   box-shadow: none !important;
 }
 
+/* ── Hub Toolbar ──────────────────────────────────────────── */
+
+.hub-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.hub-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.hub-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.hub-toolbar .search-wrap {
+  position: relative;
+  width: 260px;
+}
+
+.hub-toolbar .search-wrap .search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hub-toolbar .search-wrap .search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.hub-toolbar .search-wrap .search-clear:hover {
+  color: var(--text-1);
+}
+
+.hub-toolbar .filter-input {
+  color: var(--text-1);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.hub-toolbar .filter-input:focus {
+  outline: none;
+  border-color: var(--violet);
+}
+
+/* ── Hub Tags Clickable ───────────────────────────────────── */
+
+.hub-tag {
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.hub-tag:hover {
+  background: var(--violet) !important;
+  color: #fff !important;
+}
+
+/* ── Hub Detail Panel ─────────────────────────────────────── */
+
+#hub-detail-body .hub-logo svg {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  padding: 6px;
+}
+
+#hub-detail-body .hub-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+#hub-detail-body .hub-status-active {
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+}
+
+#hub-detail-body .hub-status-soon {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-3);
+}
+
+#hub-detail-body .hub-cta-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    CONNECTIONS VIEW STYLES
 ═══════════════════════════════════════════════════════════════ */
