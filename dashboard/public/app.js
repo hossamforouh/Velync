@@ -1430,9 +1430,9 @@ function wireViewRenderers() {
   if (navConnections) {
     navConnections.addEventListener('click', async () => {
       renderConnectionsSkeleton();
-      await loadConnections();
-      renderConnectionsView();
-    }, { once: false });
+      await loadConnections(true);
+      await renderConnectionsView();
+    });
   }
   // Workspace selector
   const workspaceSel = document.getElementById('workspace-selector');
@@ -1616,14 +1616,6 @@ function updateStats() {
   if (statTotal) statTotal.textContent   = total;
   if (statEnabled) statEnabled.textContent = enabled;
   if (statDisabled) statDisabled.textContent= disabled;
-}
-
-// ─── Masking ──────────────────────────────────────────────────
-function maskSecret(val) {
-  if (!val) return '—';
-  const s = String(val);
-  if (s.length <= 8) return '••••••••';
-  return s.slice(0, 4) + '••••••••' + s.slice(-4);
 }
 
 // ─── Sorting & Data Grid Helper Functions ──────────────────────
@@ -2100,7 +2092,7 @@ async function loadConfigs(silent = false) {
       window.cachedPlatforms = pSnap.docs.map(d => ({id: d.id, ...d.data()}));
     }
     if (typeof loadConnections === 'function' && (!_connectionsCache || _connectionsCache.length === 0)) {
-      _connectionsCache = await loadConnections();
+      _connectionsCache = await loadConnections(true);
     }
 
     const q = collection(db, "workspaces", currentWorkspaceId, "sync_configs");
@@ -2192,7 +2184,7 @@ async function openPanel(id = null) {
   }
 
   // 2. Load connections and populate the dropdowns
-  _connectionsCache = await loadConnections();
+  _connectionsCache = await loadConnections(true);
 
   // Determine platform providers for filtering connection dropdowns
   let p1Provider = null;
@@ -3615,7 +3607,7 @@ window.addEventListener('connections-refreshed', async (e) => {
   const currentP1 = fTtConnection.value;
   const currentP2 = fNotionConnection.value;
 
-  _connectionsCache = await loadConnections();
+  _connectionsCache = await loadConnections(true);
   const cfgId = document.getElementById('form-id')?.value?.trim() || null;
   populateConnectionDropdowns(_connectionsCache, cfgId, _dropdownP1Provider, _dropdownP2Provider);
 

@@ -5130,3 +5130,65 @@ header.legacy-header {
   text-decoration: underline !important;
   color: var(--violet) !important;
 }
+
+/* ── Sortable Table Headers ─────────────────────────────────── */
+#connections-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+#connections-table th.sortable:hover {
+  color: var(--violet);
+}
+
+#connections-table th.sortable .sort-arrow::after {
+  content: '';
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0.3;
+  font-size: 0.7rem;
+}
+
+#connections-table th.sortable.sort-asc .sort-arrow::after {
+  content: '▲';
+  opacity: 1;
+  color: var(--violet);
+}
+
+#connections-table th.sortable.sort-desc .sort-arrow::after {
+  content: '▼';
+  opacity: 1;
+  color: var(--violet);
+}
+
+/* ── Connections Load More ──────────────────────────────────── */
+#conn-load-more-btn {
+  min-width: 160px;
+  transition: all 0.2s ease;
+}
+
+#conn-load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Connections Search ─────────────────────────────────────── */
+#conn-search {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  padding: 8px 32px 8px 32px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+  width: 100%;
+  min-width: 180px;
+  transition: border-color 0.2s;
+}
+
+#conn-search:focus {
+  border-color: var(--violet);
+}
