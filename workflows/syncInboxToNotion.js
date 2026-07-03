@@ -111,8 +111,8 @@ async function createNotionPage(notionService, properties, content, dbSchema, fa
 
   if (templateId) {
     console.log(`[Notion Service] Creating page using template ID: ${templateId}...`);
-    const dataSourceId = await notionService.getDataSourceId();
-    
+    const { dataSourceId, isRealDataSource } = await notionService.getDataSourceId();
+
     const axios = require('axios');
     const headers = {
       'Authorization': `Bearer ${notionService.notionToken}`,
@@ -120,21 +120,33 @@ async function createNotionPage(notionService, properties, content, dbSchema, fa
       'Content-Type': 'application/json'
     };
 
-    const payload = {
-      parent: {
-        type: 'data_source_id',
-        data_source_id: dataSourceId
-      },
-      template: {
-        type: 'template_id',
-        template_id: templateId
-      },
-      properties: properties
-    };
+    const buildPayload = (parentType) => ({
+      parent: parentType === 'database_id'
+        ? { type: 'database_id', database_id: dataSourceId }
+        : { type: 'data_source_id', data_source_id: dataSourceId },
+      template: { type: 'template_id', template_id: templateId },
+      properties,
+    });
 
-    const res = await axios.post('https://api.notion.com/v1/pages', payload, { headers });
-    page = res.data;
-    shouldDelay = true;
+    try {
+      // Try database_id first for regular databases; if that fails, fall back to data_source_id
+      const res = await axios.post(
+        'https://api.notion.com/v1/pages',
+        isRealDataSource ? buildPayload('data_source_id') : buildPayload('database_id'),
+        { headers }
+      );
+      page = res.data;
+      shouldDelay = true;
+    } catch (firstErr) {
+      if (!isRealDataSource && firstErr.response?.status === 404) {
+        console.log(`[Notion Service] Retrying with data_source_id parent type...`);
+        const res = await axios.post('https://api.notion.com/v1/pages', buildPayload('data_source_id'), { headers });
+        page = res.data;
+        shouldDelay = true;
+      } else {
+        throw firstErr;
+      }
+    }
   } else {
     // Check if the database has any templates (indicating a default template may be applied)
     const templates = await notionService.listTemplates().catch(() => []);
@@ -381,29 +393,30 @@ async function mapTickTickToNotion(ticktickItem, mappings, notionDbSchema, tickt
         let mappedStatusName = null;
         
         const numVal = Number(value);
-        if (statusMappings && statusMappings.incompleteDefault && statusMappings.completeDefault) {
-          if (numVal === 2) {
+        if (statusMappings) {
+          if (numVal === 2 && statusMappings.completeDefault) {
             mappedStatusName = statusMappings.completeDefault;
-          } else {
+          } else if (numVal !== 2 && statusMappings.incompleteDefault) {
             mappedStatusName = statusMappings.incompleteDefault;
           }
-        } else {
+        }
+        if (!mappedStatusName) {
           if (numVal === 2) {
-            // Look for "Completed" or similar in options
             const match = statusOptions.find(opt => 
               ['completed', 'complete', 'done'].includes(opt.name.toLowerCase())
             );
-            mappedStatusName = match ? match.name : (statusOptions.find(opt => opt.color === 'green')?.name || 'Completed');
+            mappedStatusName = match ? match.name : (statusOptions.find(opt => opt.color === 'green')?.name || statusOptions[0]?.name);
           } else {
-            // Look for "Not Started" or similar in options
             const match = statusOptions.find(opt => 
-              ['not started', 'to-do', 'todo'].includes(opt.name.toLowerCase())
+              ['not started', 'to-do', 'todo', 'in progress'].includes(opt.name.toLowerCase())
             );
-            mappedStatusName = match ? match.name : (statusOptions[0]?.name || 'Not Started');
+            mappedStatusName = match ? match.name : statusOptions[0]?.name;
           }
         }
         
-        properties[notionProperty] = { status: { name: mappedStatusName } };
+        if (mappedStatusName) {
+          properties[notionProperty] = { status: { name: mappedStatusName } };
+        }
         break;
       case 'multi_select':
         let tags = [];
@@ -575,8 +588,8 @@ async function mapNotionToTickTick(notionPage, mappings, targetEntity, notionSer
  * Resolves which TickTick items are syncable based on tags and parent hierarchy.
  */
 function getSyncableTickTickItems(items, syncTag, ticktickToMapping) {
-  if (!syncTag) return items;
-  const syncTagLower = syncTag.toLowerCase();
+  if (!syncTag || (Array.isArray(syncTag) && syncTag.length === 0)) return items;
+  const syncTags = Array.isArray(syncTag) ? syncTag.map(t => t.toLowerCase()) : [syncTag.toLowerCase()];
 
   const itemMap = new Map();
   for (const item of items) {
@@ -591,8 +604,8 @@ function getSyncableTickTickItems(items, syncTag, ticktickToMapping) {
       return isSyncableMap.get(item.id);
     }
 
-    // Direct match: has the sync tag
-    const hasTag = item.tags && item.tags.some(tag => tag.toLowerCase() === syncTagLower);
+    // Direct match: has one of the sync tags
+    const hasTag = item.tags && item.tags.some(tag => syncTags.includes(tag.toLowerCase()));
     if (hasTag) {
       isSyncableMap.set(item.id, true);
       return true;
@@ -623,8 +636,8 @@ function getSyncableTickTickItems(items, syncTag, ticktickToMapping) {
  * Resolves which Notion pages are syncable based on tags and parent hierarchy.
  */
 function getSyncableNotionPages(pages, syncTag, tagPropName, parentPropName, mappedNotionPageIds, notionToMapping) {
-  if (!syncTag) return pages;
-  const syncTagLower = syncTag.toLowerCase();
+  if (!syncTag || (Array.isArray(syncTag) && syncTag.length === 0)) return pages;
+  const syncTags = Array.isArray(syncTag) ? syncTag.map(t => t.toLowerCase()) : [syncTag.toLowerCase()];
 
   const pageMap = new Map();
   for (const page of pages) {
@@ -651,12 +664,12 @@ function getSyncableNotionPages(pages, syncTag, tagPropName, parentPropName, map
       const propVal = page.properties[tagPropName];
       if (propVal) {
         if (propVal.type === 'multi_select') {
-          hasTag = (propVal.multi_select || []).some(opt => opt.name.toLowerCase() === syncTagLower);
+          hasTag = (propVal.multi_select || []).some(opt => syncTags.includes(opt.name.toLowerCase()));
         } else if (propVal.type === 'select') {
-          hasTag = propVal.select?.name?.toLowerCase() === syncTagLower;
+          hasTag = syncTags.includes(propVal.select?.name?.toLowerCase());
         } else if (propVal.type === 'rich_text') {
           const text = (propVal.rich_text || []).map(t => t.plain_text).join('').toLowerCase();
-          hasTag = text.includes(syncTagLower);
+          hasTag = syncTags.some(t => text.includes(t));
         }
       }
     }
@@ -806,12 +819,12 @@ async function runSyncForConfig(config, configId = 'unknown') {
     const notionConfig = config.notion || {
       integrationToken: config.p2Settings?.accessToken || config.p2Creds?.accessToken,
       databaseId: config.p2Settings?.database,
-      templateId: config.p2Settings?.templateId
+      templateId: config.p2Settings?.templateId || config.p2Settings?.template
     };
     const ticktickConfig = config.ticktick || {
       accessToken: config.p1Settings?.accessToken || config.p1Creds?.accessToken,
       listName: config.p1Settings?.listName,
-      syncTag: config.p1Settings?.tags,
+      syncTag: config.p1Settings?.syncTag || config.p1Settings?.tags,
       clientId: config.p1Creds?.clientId,
       clientSecret: config.p1Creds?.clientSecret
     };
@@ -821,7 +834,7 @@ async function runSyncForConfig(config, configId = 'unknown') {
     syncType = syncTypeMap[syncType] || syncType;
     const deleteAfterSync = config.deleteAfterSync === true;
     const targetEntity = config.targetEntity || config.p1Settings?.targetEntity || 'Tasks';
-    const syncTag = (ticktickConfig.syncTag || '').toLowerCase();
+    const syncTag = Array.isArray(ticktickConfig.syncTag) ? ticktickConfig.syncTag : (ticktickConfig.syncTag || '').toLowerCase();
     const listName = ticktickConfig.listName || 'Inbox';
     const templateId = notionConfig.templateId || null;
 

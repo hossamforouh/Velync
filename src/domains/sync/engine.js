@@ -54,7 +54,7 @@ async function runSync(config, configId) {
     const filter = { ...p1Settings, ...(config.filterConfig || {}) };
     delete filter.targetEntity;
     
-    config.templateId = p2Settings.templateId || config.templateId;
+    config.templateId = p2Settings.templateId || p2Settings.template || config.templateId;
 
     const sourceCreds = sourceConnId ? { ...await resolveConnectorCreds(workspaceId, sourceConnId), ...p1Settings } : { ...p1Settings };
     const destCreds = destConnId ? { ...await resolveConnectorCreds(workspaceId, destConnId), databaseId: p2Settings.database, ...p2Settings } : { databaseId: p2Settings.database, ...p2Settings };

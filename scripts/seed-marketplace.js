@@ -18,7 +18,7 @@ const platforms = [
     attributes: [],
     configSchema: [
       { id: 'listName', label: 'List / Project', type: 'dynamic_select', dataSource: 'fetchTickTickLists' },
-      { id: 'syncTag', label: 'Sync Tag (optional)', type: 'text', description: 'Only sync items with this tag' },
+      { id: 'syncTag', label: 'Sync Tags (optional)', type: 'dynamic_multi_select', dataSource: 'fetchTickTickTags', description: 'Only sync items with selected tags' },
     ],
   },
   {

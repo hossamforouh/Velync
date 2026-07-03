@@ -251,7 +251,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
          }
          
           const loadData = async () => {
-            if (selectEl.classList.contains('is-loading')) return;
+            if (!selectEl || selectEl.classList.contains('is-loading')) return;
             if (field.dataSource) {
               const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
               if (!connId) {
@@ -280,6 +280,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                   selectEl.innerHTML = '<option value="">-- Select --</option>' + items.map(i => `<option value="${escAttr(i.value)}" ${val === i.value ? 'selected' : ''}>${escHtml(i.label)}</option>`).join('');
                   if (val) selectEl.value = val;
                 }
+                selectEl.dispatchEvent(new Event('change'));
                 
                 // Reset button on success
                 btnRef.textContent = 'Refresh';
@@ -295,6 +296,89 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
               } finally {
                 selectEl.classList.remove('is-loading');
                 selectEl.disabled = false;
+                btnRef.style.display = 'inline-block';
+              }
+            }
+          };
+         btnRef.addEventListener('click', loadData);
+         if (shouldAutoLoad) loadData();
+      }, 0);
+    } else if (field.type === 'dynamic_multi_select') {
+      const saved = parseSavedMultiValue(val);
+      row.innerHTML = `<label for="f-${prefix}-${escAttr(field.id)}" style="display: flex; align-items: center; gap: 4px; width: 100%;">
+                        <span>${escHtml(cleanLabel)}${isReq ? '<span class="required-mark">*</span>' : ''}</span>
+                        <span style="margin-left: auto; display: flex; align-items: center;">
+                          <a href="#" class="btn-refresh-ds" style="font-size: 0.8rem; color: var(--primary); text-decoration: underline;" onclick="event.preventDefault();">Refresh</a>
+                        </span>
+                      </label>
+                      <div class="ds-input-container" style="position: relative; width: 100%;">
+                        <div class="ds-multi-select ms-empty">
+                          <div class="ms-placeholder">— Select a connection first —</div>
+                        </div>
+                        <input type="hidden" data-schema-id="${escAttr(field.id)}" value='${escAttr(JSON.stringify(saved))}' />
+                      </div>`;
+                        
+      // Attach fetch logic
+      setTimeout(async () => {
+         const msEl = row.querySelector('.ds-multi-select');
+         const btnRef = row.querySelector('.btn-refresh-ds');
+         if(window.feather) window.feather.replace();
+         
+         const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
+         let shouldAutoLoad = !!connId;
+         if (shouldAutoLoad && field.dependsOn) {
+            const parentEl = container.querySelector(`[data-schema-id="${field.dependsOn}"]`);
+            const pVal = parentEl ? (parentEl.type === 'checkbox' ? parentEl.checked : parentEl.value) : (existingData[field.dependsOn] !== undefined ? String(existingData[field.dependsOn]) : '');
+            if (field.visibilityRule) {
+              shouldAutoLoad = field.visibilityRule.split(',').map(s => s.trim()).includes(String(pVal));
+            } else {
+              shouldAutoLoad = String(pVal).trim().length > 0;
+            }
+         }
+         
+          const loadData = async () => {
+            if (!msEl || msEl.classList.contains('is-loading')) return;
+            if (field.dataSource) {
+              const connIdLocal = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
+              if (!connIdLocal) { msEl.className = 'ds-multi-select ms-empty'; msEl.innerHTML = '<div class="ms-placeholder">— Select a connection first —</div>'; return; }
+              
+              btnRef.style.display = 'none';
+              msEl.className = 'ds-multi-select is-loading';
+              msEl.textContent = `Fetching ${cleanLabel}...`;
+              
+              try {
+                let parentVal = '';
+                if (field.dependsOn) {
+                  const parentEl = container.querySelector(`[data-schema-id="${field.dependsOn}"]`);
+                  if (parentEl) parentVal = parentEl.type === 'checkbox' ? parentEl.checked : parentEl.value;
+                }
+                const items = await fetchPlatformEntities(field.dataSource, connIdLocal, parentVal);
+                if (items.length === 0) {
+                  msEl.className = 'ds-multi-select ms-empty';
+                  msEl.innerHTML = '<div class="ms-placeholder">— No tags available —</div>';
+                } else {
+                  const savedVals = parseSavedMultiValue(val);
+                  msEl.className = 'ds-multi-select has-options';
+                  msEl.innerHTML = items.map(i => {
+                    const checked = savedVals.includes(i.value) ? 'checked' : '';
+                    return `<label class="ms-option">
+                      <input type="checkbox" class="ms-cb" value="${escAttr(i.value)}" ${checked} />
+                      <span>${escHtml(i.label)}</span>
+                    </label>`;
+                  }).join('');
+                  msEl.querySelectorAll('.ms-cb').forEach(cb => cb.addEventListener('change', () => updateMsHidden(msEl)));
+                  updateMsHidden(msEl);
+                }
+                
+                btnRef.textContent = 'Refresh';
+                btnRef.style.color = 'var(--primary)';
+              } catch (e) {
+                console.error("DataSource Error:", e);
+                msEl.className = 'ds-multi-select ms-empty';
+                msEl.innerHTML = '<div class="ms-error">Error loading</div>';
+                btnRef.textContent = 'Fetch Failed — Retry';
+                btnRef.style.color = '#ef4444';
+              } finally {
                 btnRef.style.display = 'inline-block';
               }
             }
@@ -331,7 +415,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                }
                childRow.style.display = isVisible ? 'block' : 'none';
                
-                if (childField.type === 'dynamic_select' && isVisible) {
+                 if ((childField.type === 'dynamic_select' || childField.type === 'dynamic_multi_select') && isVisible) {
                   const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
                   if (connId) {
                     const btnRef = childRow.querySelector('.btn-refresh-ds');
@@ -371,13 +455,33 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
   }, 100);
 };
 
+window.parseSavedMultiValue = function(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  try { return JSON.parse(val); } catch { return val.split(',').map(s => s.trim()).filter(Boolean); }
+};
+
+window.updateMsHidden = function(container) {
+  const hidden = container.closest('.ds-input-container')?.querySelector('input[type="hidden"][data-schema-id]');
+  if (!hidden) return;
+  const checked = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+  hidden.value = JSON.stringify(checked);
+  if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+};
+
 window.harvestDynamicFields = function(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return {};
   const data = {};
   container.querySelectorAll('[data-schema-id]').forEach(el => {
     const id = el.getAttribute('data-schema-id');
-    data[id] = el.type === 'checkbox' ? el.checked : el.value;
+    if (el.type === 'hidden') {
+      try { data[id] = JSON.parse(el.value); } catch { data[id] = el.value; }
+    } else if (el.type === 'checkbox') {
+      data[id] = el.checked;
+    } else {
+      data[id] = el.value;
+    }
   });
   return data;
 };
@@ -3929,6 +4033,7 @@ const nodeModalTitle = document.getElementById('node-modal-title');
 let currentNodeId = null;
 
 function openNodeModal(nodeId) {
+  window.cachedPlatforms = null;
   currentNodeId = nodeId;
   const p1Name = window._p1DisplayName || 'Platform 1';
   const p2Name = window._p2DisplayName || 'Platform 2';
@@ -4093,9 +4198,9 @@ function escAttr(str) {
 window.escAttr = escAttr;
 function fmtDate(iso) {
   try {
-    if (iso && typeof iso === 'object' && iso.toDate) return iso.toDate().toLocaleDateString(undefined, { dateStyle:'medium' });
-    if (iso && typeof iso === 'object' && iso.toMillis) return new Date(iso.toMillis()).toLocaleDateString(undefined, { dateStyle:'medium' });
-    return new Date(iso).toLocaleDateString(undefined, { dateStyle:'medium' });
+    if (iso && typeof iso === 'object' && iso.toDate) return iso.toDate().toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+    if (iso && typeof iso === 'object' && iso.toMillis) return new Date(iso.toMillis()).toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+    return new Date(iso).toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
   } catch { return iso; }
 }
 

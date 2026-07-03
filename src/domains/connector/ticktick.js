@@ -2,6 +2,13 @@ const { Connector } = require('./interface');
 const { TickTickService } = require('../../../services/ticktick');
 const { register } = require('./registry');
 
+function filterByTag(items, filter = {}) {
+  const raw = filter.syncTag ?? filter.tags;
+  if (!raw || (Array.isArray(raw) && raw.length === 0) || (!Array.isArray(raw) && !String(raw).trim())) return items;
+  const tags = Array.isArray(raw) ? raw.map(t => t.toLowerCase()) : [String(raw).toLowerCase()];
+  return items.filter(item => item.tags && item.tags.some(t => tags.includes(t.toLowerCase())));
+}
+
 class TickTickConnector extends Connector {
   async connect() {
     const svc = new TickTickService(this.credentials);
@@ -25,17 +32,17 @@ class TickTickConnector extends Connector {
         const checkins = await svc.getHabitCheckins(habit.id).catch(() => ({ checkins: [] }));
         results.push({ ...habit, title: habit.name, ...checkins });
       }
-      return results;
+      return filterByTag(results, filter);
     }
 
     const tasks = await svc.getTasksFromList(listName);
-    if (entityType === 'Notes') return tasks.filter(t => t.kind === 'NOTE');
+    if (entityType === 'Notes') return filterByTag(tasks.filter(t => t.kind === 'NOTE'), filter);
     const items = tasks.filter(t => t.kind !== 'NOTE');
     try {
       const completed = await svc.getCompletedTasksFromList(listName);
       items.push(...completed.filter(t => t.kind !== 'NOTE'));
     } catch {}
-    return items;
+    return filterByTag(items, filter);
   }
 
   async create(entityType, data) {

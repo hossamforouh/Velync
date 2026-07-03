@@ -213,13 +213,14 @@ export function initAdminPlatforms(dbInstance, authInstance) {
             <option value="toggle" ${type === 'toggle' ? 'selected' : ''}>Toggle Switch</option>
             <option value="static_select" ${type === 'static_select' ? 'selected' : ''}>Static Dropdown</option>
             <option value="dynamic_select" ${type === 'dynamic_select' ? 'selected' : ''}>Dynamic Dropdown</option>
+            <option value="dynamic_multi_select" ${type === 'dynamic_multi_select' ? 'selected' : ''}>Dynamic Multi-Select</option>
           </select>
         </div>
         <div class="form-row schema-options-row" style="flex: 1.5; min-width: 150px; margin-bottom: 0; display: ${type === 'static_select' ? 'block' : 'none'};">
           <label>Options (comma separated)</label>
           <input type="text" class="schema-options" placeholder="Tasks, Notes" value="${options}" />
         </div>
-        <div class="form-row schema-datasource-row" style="flex: 1.5; min-width: 150px; margin-bottom: 0; display: ${type === 'dynamic_select' ? 'block' : 'none'};">
+        <div class="form-row schema-datasource-row" style="flex: 1.5; min-width: 150px; margin-bottom: 0; display: ${type === 'dynamic_select' || type === 'dynamic_multi_select' ? 'block' : 'none'};">
           <label>Data Source Function</label>
           <select class="schema-datasource">
             <option value="">-- Select Source --</option>
@@ -258,7 +259,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     selectType.addEventListener('change', () => {
       const v = selectType.value;
       optionsRow.style.display = v === 'static_select' ? 'block' : 'none';
-      dsRow.style.display = v === 'dynamic_select' ? 'block' : 'none';
+      dsRow.style.display = v === 'dynamic_select' || v === 'dynamic_multi_select' ? 'block' : 'none';
     });
 
     const labelInput = row.querySelector('.schema-label');
@@ -431,7 +432,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
           if (type === 'static_select' && optionsStr) {
             field.options = optionsStr.split(',').map(o => o.trim()).filter(o => o);
           }
-          if (type === 'dynamic_select' && dataSource) {
+          if ((type === 'dynamic_select' || type === 'dynamic_multi_select') && dataSource) {
             field.dataSource = dataSource;
           }
           if (dependsOn) field.dependsOn = dependsOn;

@@ -69,9 +69,5 @@ if (process.argv.includes('--test-connections')) {
   })();
 } else {
   startServer();
-  if (process.env.PORT) {
-    startScheduler();
-  } else {
-    logger.info('server', 'No PORT set — scheduler disabled');
-  }
+  startScheduler();
 }

@@ -422,10 +422,12 @@ class NotionService {
 
   /**
    * Retrieves the internal data_source_id for a database by fetching its metadata.
-   * @returns {Promise<string>}
+   * Returns {dataSourceId, isRealDataSource} where isRealDataSource is true only
+   * when the database has actual data_sources (synced database).
+   * @returns {Promise<{dataSourceId: string, isRealDataSource: boolean}>}
    */
   async getDataSourceId() {
-    if (this.dataSourceId) return this.dataSourceId;
+    if (this.dataSourceId !== undefined && this._dataSourceMeta) return this._dataSourceMeta;
     const headers = {
       'Authorization': `Bearer ${this.notionToken}`,
       'Notion-Version': '2026-03-11',
@@ -434,11 +436,14 @@ class NotionService {
     try {
       const res = await axios.get(`https://api.notion.com/v1/databases/${this.databaseId}`, { headers });
       const dataSources = res.data.data_sources || [];
-      this.dataSourceId = dataSources.length > 0 ? dataSources[0].id : this.databaseId;
-      return this.dataSourceId;
+      const isRealDataSource = dataSources.length > 0;
+      this.dataSourceId = isRealDataSource ? dataSources[0].id : this.databaseId;
+      this._dataSourceMeta = { dataSourceId: this.dataSourceId, isRealDataSource };
+      return this._dataSourceMeta;
     } catch (err) {
       console.error('[Notion Service] Failed to retrieve data source ID:', err.message);
-      return this.databaseId;
+      this._dataSourceMeta = { dataSourceId: this.databaseId, isRealDataSource: false };
+      return this._dataSourceMeta;
     }
   }
 
@@ -453,7 +458,7 @@ class NotionService {
       'Content-Type': 'application/json'
     };
     try {
-      const dataSourceId = await this.getDataSourceId();
+      const { dataSourceId } = await this.getDataSourceId();
       const res = await axios.get(`https://api.notion.com/v1/data_sources/${dataSourceId}/templates`, { headers });
       return res.data.templates || [];
     } catch (err) {
