@@ -21,25 +21,30 @@ service cloud.firestore {
       );
     }
 
-    // Users — any authenticated user can read (needed for admin lookups)
+    // Users — user can read/write own doc, others can read (needed for admin lookups)
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow write: if false;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Workspaces — owner/member only
+    // Workspaces — owner/member read, owner write
     match /workspaces/{workspaceId} {
       allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
-      allow write: if false;
+      allow write: if isSuperAdmin() || request.auth.uid == workspaceId;
 
-      // Sync configs under a workspace — workspace member only
+      // Sync configs under a workspace — workspace member read/write
       match /sync_configs/{configId} {
-        allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
-        allow write: if false;
+        allow read, write: if isSuperAdmin() || isWorkspaceMember(workspaceId);
       }
     }
 
-    // Top-level collections with workspaceId field — workspace member only
+    // Collection-group scope for sync_configs (required for collectionGroup queries)
+    match /{path=**}/sync_configs/{configId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    // Top-level collections with workspaceId field — workspace member read only
     match /execution_logs/{logId} {
       allow read: if isSuperAdmin() || isWorkspaceMemberFromField();
       allow write: if false;
@@ -61,10 +66,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // App settings — public reads
+    // App settings — public reads, superadmin writes only
     match /app_settings/{documentId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isSuperAdmin();
     }
 
     // Activity logs — any authenticated user can read/create (admin audit)
@@ -74,7 +79,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Credentials — owner-only
+    // Credentials — owner-only read
     match /credentials/{documentId} {
       allow read: if request.auth != null && request.auth.uid == documentId;
       allow write: if false;

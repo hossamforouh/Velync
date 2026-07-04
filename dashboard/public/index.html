@@ -1552,10 +1552,22 @@
         <a href="#" class="settings-tab" data-tab="workspace">
           <span class="icon"><i data-feather="briefcase"></i></span> Workspace
         </a>
-        <a href="#" class="settings-tab" data-tab="billing">
-          <span class="icon"><i data-feather="credit-card"></i></span> Billing & Plan
-        </a>
-      </div>
+      <a href="#" class="settings-tab" data-tab="billing">
+        <span class="icon"><i data-feather="credit-card"></i></span> Billing & Plan
+      </a>
+      <a href="#" class="settings-tab" data-tab="notifications">
+        <span class="icon"><i data-feather="bell"></i></span> Notifications
+      </a>
+      <a href="#" class="settings-tab" data-tab="api-keys">
+        <span class="icon"><i data-feather="key"></i></span> API Keys
+      </a>
+      <a href="#" class="settings-tab" data-tab="sessions">
+        <span class="icon"><i data-feather="smartphone"></i></span> Sessions
+      </a>
+      <a href="#" class="settings-tab" data-tab="account">
+        <span class="icon"><i data-feather="shield"></i></span> Account
+      </a>
+    </div>
 
       <div class="settings-content">
 
@@ -1658,12 +1670,127 @@
               <li>✓ Team Collaboration</li>
             </ul>
             <button class="btn btn-primary">Upgrade to Pro</button>
+        </div>
+      </div>
+
+      <!-- Notifications Tab -->
+      <div class="settings-pane" id="pane-notifications" style="display: none;">
+        <h2>Notifications</h2>
+        <p class="settings-subtitle">Configure which events trigger email notifications.</p>
+
+        <div class="notif-row">
+          <div class="notif-info">
+            <div class="notif-label">Sync Success</div>
+            <div class="notif-desc">Email when a sync completes successfully</div>
           </div>
+          <label class="toggle">
+            <input type="checkbox" id="notif-sync-success" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="notif-row">
+          <div class="notif-info">
+            <div class="notif-label">Sync Failure</div>
+            <div class="notif-desc">Email when a sync fails</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="notif-sync-failure" checked />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="notif-row">
+          <div class="notif-info">
+            <div class="notif-label">Invite Received</div>
+            <div class="notif-desc">Email when someone invites you to a workspace</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="notif-invite" checked />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="notif-row">
+          <div class="notif-info">
+            <div class="notif-label">Weekly Summary</div>
+            <div class="notif-desc">Weekly digest of sync activity</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="notif-weekly" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div id="notif-msg" style="font-size:0.85rem;margin-top:16px;"></div>
+      </div>
+
+      <!-- API Keys Tab -->
+      <div class="settings-pane" id="pane-api-keys" style="display: none;">
+        <h2>API Keys</h2>
+        <p class="settings-subtitle">Manage API tokens for programmatic access. Store keys securely — they are shown only once.</p>
+
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <input type="text" id="api-key-label-input" class="admin-input" placeholder="e.g. Production CLI" style="flex:1;" />
+          <button class="btn btn-primary btn-sm" id="btn-create-api-key">Generate Key</button>
         </div>
 
+        <div id="new-key-display" style="display:none;background:var(--grad-card);border:1px solid var(--primary);border-radius:8px;padding:16px;margin-bottom:20px;">
+          <div style="font-size:0.85rem;color:var(--text-3);margin-bottom:8px;">⚠️ Copy this key now. You won't be able to see it again.</div>
+          <code id="new-key-value" style="display:block;background:var(--bg-3);padding:12px;border-radius:6px;word-break:break-all;font-size:0.85rem;"></code>
+          <button class="btn btn-secondary btn-sm" id="btn-copy-key" style="margin-top:8px;">Copy</button>
+        </div>
+
+        <div id="api-keys-list">
+          <div style="color:var(--text-3);font-size:0.9rem;">No API keys created yet.</div>
+        </div>
+        <div id="api-key-msg" style="font-size:0.85rem;margin-top:12px;"></div>
       </div>
+
+      <!-- Sessions Tab -->
+      <div class="settings-pane" id="pane-sessions" style="display: none;">
+        <h2>Sessions</h2>
+        <p class="settings-subtitle">Manage your active sessions and sign out of devices.</p>
+
+        <div class="session-card" id="current-session-card">
+          <div class="session-info">
+            <div class="session-device">Current Session</div>
+            <div class="session-details" id="session-current-details">This device</div>
+          </div>
+          <span class="badge badge-success">Active</span>
+        </div>
+
+        <div style="margin-top:24px;padding:20px;background:var(--grad-card);border:1px solid var(--glass-hover);border-radius:12px;">
+          <h3 style="font-size:1rem;font-weight:600;margin:0 0 8px;">Revoke Other Sessions</h3>
+          <p style="color:var(--text-3);font-size:0.85rem;margin:0 0 16px;">Sign out of all other devices. You will stay signed in here.</p>
+          <button class="btn btn-secondary btn-sm" id="btn-revoke-sessions">Logout All Other Devices</button>
+          <div id="sessions-msg" style="font-size:0.85rem;margin-top:12px;"></div>
+        </div>
+      </div>
+
+      <!-- Account Tab -->
+      <div class="settings-pane" id="pane-account" style="display: none;">
+        <h2>Account</h2>
+        <p class="settings-subtitle">Export your data or permanently delete your account.</p>
+
+        <div style="padding:20px;background:var(--grad-card);border:1px solid var(--glass-hover);border-radius:12px;margin-bottom:24px;">
+          <h3 style="font-size:1rem;font-weight:600;margin:0 0 8px;">Export Data</h3>
+          <p style="color:var(--text-3);font-size:0.85rem;margin:0 0 16px;">Download all your data including profiles, workspaces, connections, and logs.</p>
+          <button class="btn btn-secondary btn-sm" id="btn-export-data">Export My Data</button>
+          <div id="export-msg" style="font-size:0.85rem;margin-top:12px;"></div>
+        </div>
+
+        <div style="padding:20px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.3);border-radius:12px;">
+          <h3 style="font-size:1rem;font-weight:600;margin:0 0 8px;color:var(--rose);">Danger Zone</h3>
+          <p style="color:var(--text-3);font-size:0.85rem;margin:0 0 16px;">Permanently delete your account and all associated data. This action is irreversible.</p>
+          <button class="btn btn-danger btn-sm" id="btn-delete-account">Delete My Account</button>
+          <div id="delete-account-msg" style="font-size:0.85rem;margin-top:12px;"></div>
+        </div>
+      </div>
+
     </div>
   </div>
+</div>
 
   <!-- ── Marketplace Integration Modal ────────────────────── -->
   <div class="panel-overlay" id="integration-modal-overlay" style="z-index: 10000;"></div>

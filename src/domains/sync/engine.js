@@ -32,6 +32,26 @@ async function runSync(config, configId) {
   }
   runningConfigs.add(configId);
 
+  // Plan enforcement: check if workspace exceeds maxConfigsPerUser limit
+  try {
+    const settingsDoc = await db.collection('app_settings').doc('general').get();
+    const settings = settingsDoc.data() || {};
+    const maxConfigs = settings.maxConfigsPerUser;
+    if (maxConfigs && config.workspaceId) {
+      const activeSnap = await db.collection('workspaces').doc(config.workspaceId)
+        .collection('sync_configs')
+        .where('status', '==', 'active')
+        .get();
+      if (activeSnap.size > maxConfigs) {
+        logger.warn('sync', `Workspace "${config.workspaceId}" has ${activeSnap.size} active configs, limit is ${maxConfigs}. Skipping "${configId}".`);
+        runningConfigs.delete(configId);
+        return;
+      }
+    }
+  } catch (err) {
+    logger.warn('sync', 'Failed to check plan limits, proceeding anyway', { error: err.message });
+  }
+
   const logRef = await db.collection('execution_logs').add({
     configId, configName: config.description || configId, workspaceId: config.workspaceId,
     startTime: new Date().toISOString(), status: 'running',

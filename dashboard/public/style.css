@@ -4194,6 +4194,56 @@ header.legacy-header {
   font-size: 0.95rem;
 }
 
+/* ── Notification Rows ─────────────────────────────────────── */
+.notif-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--bg-3);
+}
+
+.notif-row:last-child {
+  border-bottom: none;
+}
+
+.notif-info {
+  flex: 1;
+}
+
+.notif-label {
+  font-weight: 500;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.notif-desc {
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+/* ── Session Card ──────────────────────────────────────────── */
+.session-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--grad-card);
+  border: 1px solid var(--glass-hover);
+  border-radius: 12px;
+}
+
+.session-device {
+  font-weight: 500;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.session-details {
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
 /* ── Collaborator List ──────────────────────────────────────── */
 .collaborator-list {
   background: var(--grad-card);

@@ -601,10 +601,9 @@ const db = getFirestore(app);
 // ─── Global Settings Initialization ───────────────────────────
 (async () => {
   try {
-    const settingsRef = doc(db, 'app_settings', 'general');
-    const settingsSnap = await Promise.race([getDoc(settingsRef), firestoreTimeout(10000)]);
-    if (settingsSnap.exists()) {
-      const data = settingsSnap.data();
+    const res = await fetch('/api/settings/global');
+    if (res.ok) {
+      const data = await res.json();
       if (data.whatsappNumber) {
         const waLink = document.getElementById('whatsapp-fab-link');
         if (waLink) waLink.href = `https://wa.me/${data.whatsappNumber}`;
@@ -972,13 +971,18 @@ onAuthStateChanged(auth, async (user) => {
         
         setButtonLoading(btnSaveGlobalSettings, true);
         try {
-          await setDoc(doc(db, 'app_settings', 'general'), {
-            whatsappNumber: num,
-            maintenanceMode,
-            maxConfigsPerUser: maxConfigs,
-            defaultSyncIntervalMinutes: defaultInterval,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
+          const token = await auth.currentUser.getIdToken();
+          const res = await fetch('/api/settings/global', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              whatsappNumber: num,
+              maintenanceMode,
+              maxConfigsPerUser: maxConfigs,
+              defaultSyncIntervalMinutes: defaultInterval
+            })
+          });
+          if (!res.ok) throw new Error(await res.text());
           const waLink = document.getElementById('whatsapp-fab-link');
           if (waLink) waLink.href = `https://wa.me/${num}`;
           const msg = document.getElementById('admin-global-save-msg');
@@ -1431,10 +1435,249 @@ onAuthStateChanged(auth, async (user) => {
                 }
              });
            });
-        } catch (err) {
-           collabContainer.innerHTML = '<div style="color: #f43f5e; font-size: 0.85rem;">Failed to load team</div>';
+         } catch (err) {
+            collabContainer.innerHTML = '<div style="color: #f43f5e; font-size: 0.85rem;">Failed to load team</div>';
         }
-      }    }
+      }
+
+      // ─── Notifications Tab ────────────────────────────────────
+      const notifToggles = [
+        'notif-sync-success', 'notif-sync-failure',
+        'notif-invite', 'notif-weekly'
+      ];
+      const notifMsg = document.getElementById('notif-msg');
+
+      async function loadNotifPrefs() {
+        try {
+          const snap = await getDoc(doc(db, 'users', user.uid));
+          if (!snap.exists()) return;
+          const prefs = snap.data().notificationPrefs || {};
+          notifToggles.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.checked = prefs[id] === true;
+          });
+        } catch (_) {}
+      }
+
+      notifToggles.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('change', async () => {
+            try {
+              const prefs = {};
+              notifToggles.forEach(i => { const e = document.getElementById(i); if (e) prefs[i] = e.checked; });
+              await updateDoc(doc(db, 'users', user.uid), { notificationPrefs: prefs });
+              if (notifMsg) { notifMsg.textContent = 'Preferences saved'; notifMsg.style.color = '#34d399'; setTimeout(() => { notifMsg.textContent = ''; }, 2000); }
+            } catch (err) {
+              if (notifMsg) { notifMsg.textContent = 'Failed to save: ' + err.message; notifMsg.style.color = '#f43f5e'; }
+            }
+          });
+        }
+      });
+
+      // ─── API Keys Tab ─────────────────────────────────────────
+      const apiKeyMsg = document.getElementById('api-key-msg');
+      const newKeyDisplay = document.getElementById('new-key-display');
+      const newKeyValue = document.getElementById('new-key-value');
+      const btnCreateKey = document.getElementById('btn-create-api-key');
+      const apiKeyLabelInput = document.getElementById('api-key-label-input');
+      const apiKeysList = document.getElementById('api-keys-list');
+
+      async function loadApiKeys() {
+        try {
+          const token = await auth.currentUser.getIdToken();
+          const res = await fetch('/api/settings/api-keys', { headers: { 'Authorization': `Bearer ${token}` } });
+          if (!res.ok) throw new Error(await res.text());
+          const keys = await res.json();
+          if (keys.length === 0) {
+            apiKeysList.innerHTML = '<div style="color:var(--text-3);font-size:0.9rem;">No API keys created yet.</div>';
+            return;
+          }
+          apiKeysList.innerHTML = keys.map(k => `
+            <div class="collaborator-item" style="padding:12px 16px;">
+              <div class="collab-info" style="flex:1;">
+                <div class="collab-name">${escHtml(k.label)}</div>
+                <div class="collab-email" style="font-family:monospace;">${escHtml(k.prefix)}… · Created ${new Date(k.createdAt).toLocaleDateString()}</div>
+              </div>
+              <button class="btn btn-icon delete-invite-btn" data-key-id="${k.id}" title="Revoke" style="color:#f43f5e;background:rgba(244,63,94,0.1);padding:6px;border:none;cursor:pointer;border-radius:6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+          `).join('');
+          apiKeysList.querySelectorAll('.delete-invite-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              const keyId = e.currentTarget.dataset.keyId;
+              if (!keyId) return;
+              try {
+                const token = await auth.currentUser.getIdToken();
+                const r = await fetch(`/api/settings/api-keys/${keyId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                if (!r.ok) throw new Error(await r.text());
+                loadApiKeys();
+              } catch (err) {
+                showToast('Failed to revoke key: ' + err.message, 'error');
+              }
+            });
+          });
+        } catch (err) {
+          apiKeysList.innerHTML = '<div style="color:var(--rose);font-size:0.9rem;">Failed to load API keys.</div>';
+        }
+      }
+
+      if (btnCreateKey && apiKeyLabelInput) {
+        btnCreateKey.addEventListener('click', async () => {
+          const label = apiKeyLabelInput.value.trim();
+          if (!label) { showToast('Enter a label for the key', 'warning'); return; }
+          btnCreateKey.disabled = true;
+          btnCreateKey.textContent = 'Generating...';
+          try {
+            const token = await auth.currentUser.getIdToken();
+            const res = await fetch('/api/settings/api-keys', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ label })
+            });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            newKeyValue.textContent = data.key;
+            newKeyDisplay.style.display = 'block';
+            apiKeyLabelInput.value = '';
+            loadApiKeys();
+          } catch (err) {
+            showToast('Failed to create key: ' + err.message, 'error');
+          } finally {
+            btnCreateKey.disabled = false;
+            btnCreateKey.textContent = 'Generate Key';
+          }
+        });
+      }
+
+      const btnCopyKey = document.getElementById('btn-copy-key');
+      if (btnCopyKey && newKeyValue) {
+        btnCopyKey.addEventListener('click', () => {
+          navigator.clipboard.writeText(newKeyValue.textContent).then(() => {
+            btnCopyKey.textContent = 'Copied!';
+            setTimeout(() => { btnCopyKey.textContent = 'Copy'; }, 2000);
+          }).catch(() => {
+            newKeyValue.select();
+            document.execCommand('copy');
+          });
+        });
+      }
+
+      // ─── Sessions Tab ─────────────────────────────────────────
+      const btnRevokeSessions = document.getElementById('btn-revoke-sessions');
+      const sessionsMsg = document.getElementById('sessions-msg');
+      const sessionDetails = document.getElementById('session-current-details');
+
+      if (sessionDetails) {
+        sessionDetails.textContent = `${navigator.userAgent || 'Unknown browser'} · ${new Date().toLocaleDateString()}`;
+      }
+
+      if (btnRevokeSessions) {
+        btnRevokeSessions.addEventListener('click', async () => {
+          btnRevokeSessions.disabled = true;
+          btnRevokeSessions.textContent = 'Revoking...';
+          try {
+            const token = await auth.currentUser.getIdToken();
+            const res = await fetch('/api/settings/revoke-sessions', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            if (sessionsMsg) {
+              sessionsMsg.textContent = data.message;
+              sessionsMsg.style.color = '#34d399';
+            }
+            showToast('All other sessions revoked', 'success');
+          } catch (err) {
+            if (sessionsMsg) { sessionsMsg.textContent = 'Failed: ' + err.message; sessionsMsg.style.color = '#f43f5e'; }
+          } finally {
+            btnRevokeSessions.disabled = false;
+            btnRevokeSessions.textContent = 'Logout All Other Devices';
+          }
+        });
+      }
+
+      // ─── Account Tab ──────────────────────────────────────────
+      const btnExportData = document.getElementById('btn-export-data');
+      const exportMsg = document.getElementById('export-msg');
+      const btnDeleteAccount = document.getElementById('btn-delete-account');
+      const deleteAccountMsg = document.getElementById('delete-account-msg');
+
+      if (btnExportData) {
+        btnExportData.addEventListener('click', async () => {
+          btnExportData.disabled = true;
+          btnExportData.textContent = 'Exporting...';
+          try {
+            const token = await auth.currentUser.getIdToken();
+            const res = await fetch('/api/settings/export-data', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `velync-export-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            if (exportMsg) { exportMsg.textContent = `Exported ${Object.keys(data).length} data sections`; exportMsg.style.color = '#34d399'; }
+          } catch (err) {
+            if (exportMsg) { exportMsg.textContent = 'Export failed: ' + err.message; exportMsg.style.color = '#f43f5e'; }
+          } finally {
+            btnExportData.disabled = false;
+            btnExportData.textContent = 'Export My Data';
+          }
+        });
+      }
+
+      if (btnDeleteAccount) {
+        btnDeleteAccount.addEventListener('click', async () => {
+          const confirmed = await confirmDialog({
+            title: 'Delete Account?',
+            message: 'This will permanently delete your account, all workspaces, sync configs, connections, and execution logs. This action cannot be undone.',
+            confirmText: 'Delete My Account',
+            confirmClass: 'btn-danger'
+          });
+          if (!confirmed) return;
+
+          const doubleConfirm = await confirmDialog({
+            title: 'Are you absolutely sure?',
+            message: 'Type "DELETE" to confirm permanent account deletion.',
+            confirmText: 'DELETE'
+          });
+          if (!doubleConfirm) return;
+
+          btnDeleteAccount.disabled = true;
+          btnDeleteAccount.textContent = 'Deleting...';
+          try {
+            const token = await auth.currentUser.getIdToken();
+            const res = await fetch('/api/settings/delete-account', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error(await res.text());
+            showToast('Account deleted. Redirecting...', 'info');
+            setTimeout(() => {
+              signOut(auth).then(() => location.reload());
+            }, 2000);
+          } catch (err) {
+            if (deleteAccountMsg) { deleteAccountMsg.textContent = 'Failed: ' + err.message; deleteAccountMsg.style.color = '#f43f5e'; }
+            btnDeleteAccount.disabled = false;
+            btnDeleteAccount.textContent = 'Delete My Account';
+          }
+        });
+      }
+
+      // ─── Tab-switch triggers for new panes ────────────────────
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          const t = tab.dataset.tab;
+          if (t === 'notifications' && user) loadNotifPrefs();
+          if (t === 'api-keys') loadApiKeys();
+        });
+      });
+    }
   } else {
     authOverlay.style.display = 'flex';
     appContainer.style.display = 'none';

@@ -8,6 +8,8 @@ const schemaRoutes = require('./routes/schema');
 const syncRoutes = require('./routes/sync');
 const workspaceRoutes = require('./routes/workspace');
 const syncConfigsRoutes = require('./routes/sync-configs');
+const settingsRoutes = require('./routes/settings');
+const { maintenanceMode } = require('./middleware/maintenance');
 
 function createApp() {
   const app = express();
@@ -36,11 +38,16 @@ function createApp() {
     res.send('Velync Integration Platform is running.');
   });
 
+  // ─── Maintenance mode middleware ─────────────────────────────────
+  app.use('/api', maintenanceMode);
+
+  // ─── Routes ──────────────────────────────────────────────────────
   app.use(authRoutes);
   app.use('/api', platformRoutes);
   app.use('/api', schemaRoutes);
   app.use('/api', workspaceRoutes);
   app.use('/api', syncConfigsRoutes);
+  app.use('/api/settings', settingsRoutes);
   app.use(syncRoutes);
 
   app.use((req, res) => {
