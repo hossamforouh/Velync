@@ -1,18 +1,32 @@
 const { Router } = require('express');
-const { Firestore } = require('@google-cloud/firestore');
 const axios = require('axios');
+const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { encrypt } = require('../../../utils/encryption');
+const db = require('../../core/db');
 const logger = require('../../core/logger');
+const config = require('../../core/config');
 
-const db = new Firestore();
 const router = Router();
 
-router.post('/oauth/exchange', verifyAuth, async (req, res) => {
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+  }
+  next();
+};
+
+router.post('/oauth/exchange', verifyAuth, [
+  body('code').isString().trim().notEmpty(),
+  body('platformId').isString().trim().notEmpty(),
+  body('label').optional().isString().trim(),
+  body('workspaceId').optional().isString().trim(),
+  body('redirectUri').optional().isString(),
+], validate, async (req, res) => {
   try {
     const uid = req.user.uid;
     const { code, platformId, label, workspaceId, redirectUri } = req.body;
-    if (!code || !platformId) return res.status(400).json({ error: 'Missing code or platformId' });
 
     const platformDoc = await db.collection('platforms').doc(platformId).get();
     if (!platformDoc.exists) return res.status(404).json({ error: 'Platform not found' });
@@ -35,6 +49,7 @@ router.post('/oauth/exchange', verifyAuth, async (req, res) => {
         'Authorization': `Basic ${basicAuth}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
+      timeout: config.externalApiTimeout,
     });
 
     const data = response.data;

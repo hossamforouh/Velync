@@ -1,13 +1,20 @@
 const { Router } = require('express');
-const { Firestore } = require('@google-cloud/firestore');
+const { body, query, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
 const { NotionService } = require('../../../services/notion');
 const { TickTickService } = require('../../../services/ticktick');
 const logger = require('../../core/logger');
 
-const db = new Firestore();
 const router = Router();
+
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+  }
+  next();
+};
 
 router.get('/data-sources', verifyAuth, (req, res) => {
   res.json([
@@ -19,15 +26,17 @@ router.get('/data-sources', verifyAuth, (req, res) => {
   ]);
 });
 
-router.post('/platform-entities', verifyAuth, async (req, res) => {
+router.post('/platform-entities', verifyAuth, [
+  body('connectionId').isString().trim().notEmpty(),
+  body('dataSourceId').optional().isString(),
+  body('providerName').optional().isString(),
+  body('parentValue').optional().isString(),
+], validate, async (req, res) => {
   try {
     const { connectionId, providerName, dataSourceId, parentValue } = req.body;
     logger.info('platform', 'platform-entities called', { connectionId, dataSourceId, parentValue, uid: req.user?.uid });
-    if (!connectionId) throw new Error('Connection ID required');
 
-    logger.info('platform', 'resolving connection tokens', { connectionId });
     const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-    logger.info('platform', 'creds resolved', { hasAccessToken: !!creds.accessToken, tokenLength: creds.accessToken?.length });
     let entities = [];
 
     switch (dataSourceId) {
@@ -54,7 +63,6 @@ router.post('/platform-entities', verifyAuth, async (req, res) => {
         logger.info('platform', 'calling NotionService.listDatabases', { tokenPrefix: creds.accessToken?.substring(0, 10) });
         const notion = new NotionService(creds.accessToken);
         const databases = await notion.listDatabases();
-        logger.info('platform', 'listDatabases returned', { count: databases?.length });
         entities = (databases || []).map(db => ({ id: db.id, name: db.title || db.id }));
         break;
       }
@@ -77,11 +85,11 @@ router.post('/platform-entities', verifyAuth, async (req, res) => {
   }
 });
 
-
-router.get('/notion/databases', verifyAuth, async (req, res) => {
+router.get('/notion/databases', verifyAuth, [
+  query('connectionId').isString().trim().notEmpty(),
+], validate, async (req, res) => {
   try {
     const connectionId = req.query.connectionId;
-    if (!connectionId) throw new Error('Connection ID required');
     const creds = await resolveConnectionTokens(req.user.uid, connectionId);
     const notion = new NotionService(creds.accessToken);
     const databases = await notion.listDatabases();
@@ -91,10 +99,11 @@ router.get('/notion/databases', verifyAuth, async (req, res) => {
   }
 });
 
-router.get('/ticktick/lists', verifyAuth, async (req, res) => {
+router.get('/ticktick/lists', verifyAuth, [
+  query('connectionId').isString().trim().notEmpty(),
+], validate, async (req, res) => {
   try {
     const connectionId = req.query.connectionId;
-    if (!connectionId) throw new Error('Connection ID required');
     const creds = await resolveConnectionTokens(req.user.uid, connectionId);
     const ticktick = new TickTickService(creds);
     const lists = await ticktick.getProjects();
@@ -104,7 +113,10 @@ router.get('/ticktick/lists', verifyAuth, async (req, res) => {
   }
 });
 
-router.post('/notion-databases', verifyAuth, async (req, res) => {
+router.post('/notion-databases', verifyAuth, [
+  body('connectionId').optional().isString(),
+  body('token').optional().isString(),
+], validate, async (req, res) => {
   try {
     const { connectionId, token } = req.body;
     let actualToken = token;
@@ -121,10 +133,13 @@ router.post('/notion-databases', verifyAuth, async (req, res) => {
   }
 });
 
-router.post('/notion-database-schema', verifyAuth, async (req, res) => {
+router.post('/notion-database-schema', verifyAuth, [
+  body('databaseId').isString().trim().notEmpty(),
+  body('connectionId').optional().isString(),
+  body('token').optional().isString(),
+], validate, async (req, res) => {
   try {
     const { connectionId, databaseId, token } = req.body;
-    if (!databaseId) throw new Error('Notion database ID is required');
     let actualToken = token;
     if (connectionId) {
       const creds = await resolveConnectionTokens(req.user.uid, connectionId);
@@ -145,7 +160,11 @@ router.post('/notion-database-schema', verifyAuth, async (req, res) => {
   }
 });
 
-router.post('/notion-database-templates', verifyAuth, async (req, res) => {
+router.post('/notion-database-templates', verifyAuth, [
+  body('databaseId').isString().trim().notEmpty(),
+  body('connectionId').optional().isString(),
+  body('token').optional().isString(),
+], validate, async (req, res) => {
   try {
     const { connectionId, databaseId, token } = req.body;
     if (!databaseId) throw new Error('Notion database ID is required');

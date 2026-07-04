@@ -1,6 +1,7 @@
 const { Client } = require('@notionhq/client');
 const axios = require('axios');
-const FormData = require('form-data');
+const config = require('../src/core/config');
+const http = axios.create({ timeout: config.externalApiTimeout });
 
 class NotionService {
   /**
@@ -13,6 +14,7 @@ class NotionService {
     this.databaseId = databaseId;
     this.client = new Client({
       auth: this.notionToken,
+      timeoutMs: config.externalApiTimeout,
     });
   }
 
@@ -434,7 +436,7 @@ class NotionService {
       'Content-Type': 'application/json'
     };
     try {
-      const res = await axios.get(`https://api.notion.com/v1/databases/${this.databaseId}`, { headers });
+      const res = await http.get(`https://api.notion.com/v1/databases/${this.databaseId}`, { headers });
       const dataSources = res.data.data_sources || [];
       const isRealDataSource = dataSources.length > 0;
       this.dataSourceId = isRealDataSource ? dataSources[0].id : this.databaseId;
@@ -459,7 +461,7 @@ class NotionService {
     };
     try {
       const { dataSourceId } = await this.getDataSourceId();
-      const res = await axios.get(`https://api.notion.com/v1/data_sources/${dataSourceId}/templates`, { headers });
+      const res = await http.get(`https://api.notion.com/v1/data_sources/${dataSourceId}/templates`, { headers });
       return res.data.templates || [];
     } catch (err) {
       console.error('[Notion Service] Failed to list database templates:', err.message);

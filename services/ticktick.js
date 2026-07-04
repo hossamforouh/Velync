@@ -1,4 +1,6 @@
 const axios = require('axios');
+const config = require('../src/core/config');
+const http = axios.create({ timeout: config.externalApiTimeout });
 
 /**
  * TickTick API Service Wrapper
@@ -43,7 +45,7 @@ class TickTickService {
       console.log('[TickTick Service] Authenticating via OAuth2 Client Credentials (Client ID + Secret)...');
       try {
         const credentialsBase64 = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
-        const response = await axios.post(
+        const response = await http.post(
           'https://ticktick.com/oauth/token?grant_type=client_credentials',
           {},
           {
@@ -78,7 +80,7 @@ class TickTickService {
    */
   async getProjects() {
     await this.authenticate();
-    const res = await axios.get(`${this.officialBaseUrl}/project`, {
+    const res = await http.get(`${this.officialBaseUrl}/project`, {
       headers: { 'Authorization': `Bearer ${this.accessToken}` }
     });
     const projects = res.data || [];
@@ -125,7 +127,7 @@ class TickTickService {
     const tagSet = new Set();
     for (const project of projects) {
       try {
-        const taskRes = await axios.get(`${this.officialBaseUrl}/project/${project.id}/data`, {
+        const taskRes = await http.get(`${this.officialBaseUrl}/project/${project.id}/data`, {
           headers: { 'Authorization': `Bearer ${this.accessToken}` }
         });
         const tasks = taskRes.data?.tasks || [];
@@ -161,7 +163,7 @@ class TickTickService {
   async _getUncompletedTasksOfficial() {
     console.log('[TickTick Service] Fetching tasks via official API...');
     try {
-      const projectRes = await axios.get(`${this.officialBaseUrl}/project`, {
+      const projectRes = await http.get(`${this.officialBaseUrl}/project`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` }
       });
 
@@ -170,7 +172,7 @@ class TickTickService {
 
       for (const project of projects) {
         try {
-          const taskRes = await axios.get(`${this.officialBaseUrl}/project/${project.id}/data`, {
+          const taskRes = await http.get(`${this.officialBaseUrl}/project/${project.id}/data`, {
             headers: { 'Authorization': `Bearer ${this.accessToken}` }
           });
 
@@ -197,7 +199,7 @@ class TickTickService {
   async _getUncompletedTasksUnofficial() {
     console.log('[TickTick Service] Fetching tasks via unofficial batch endpoint...');
     try {
-      const response = await axios.get(`${this.unofficialBaseUrl}/batch/check/0`, {
+      const response = await http.get(`${this.unofficialBaseUrl}/batch/check/0`, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
         }
@@ -226,7 +228,7 @@ class TickTickService {
     } else {
       console.log('[TickTick Service] Fetching Inbox tasks via official API...');
       try {
-        const res = await axios.get(`${this.officialBaseUrl}/project/inbox/data`, {
+        const res = await http.get(`${this.officialBaseUrl}/project/inbox/data`, {
           headers: { 'Authorization': `Bearer ${this.accessToken}` }
         });
         return res.data.tasks ? res.data.tasks.filter(t => t.status === 0) : [];
@@ -254,7 +256,7 @@ class TickTickService {
     if (this.isUnofficial) {
       console.log(`[TickTick Service] Querying projects to find list "${listName}" (unofficial)...`);
       try {
-        const response = await axios.get(`${this.unofficialBaseUrl}/batch/check/0`, {
+        const response = await http.get(`${this.unofficialBaseUrl}/batch/check/0`, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
           }
@@ -279,7 +281,7 @@ class TickTickService {
     } else {
       console.log(`[TickTick Service] Querying projects to find list "${listName}" (official)...`);
       try {
-        const projectRes = await axios.get(`${this.officialBaseUrl}/project`, {
+        const projectRes = await http.get(`${this.officialBaseUrl}/project`, {
           headers: { 'Authorization': `Bearer ${this.accessToken}` }
         });
 
@@ -295,7 +297,7 @@ class TickTickService {
         }
 
         console.log(`[TickTick Service] Fetching tasks for list "${listName}" (ID: ${project.id}) via official API...`);
-        const taskRes = await axios.get(`${this.officialBaseUrl}/project/${project.id}/data`, {
+        const taskRes = await http.get(`${this.officialBaseUrl}/project/${project.id}/data`, {
           headers: { 'Authorization': `Bearer ${this.accessToken}` }
         });
 
@@ -325,7 +327,7 @@ class TickTickService {
     // Resolve project ID first
     let projectId = 'inbox';
     if (normalizedList !== 'inbox') {
-      const projectRes = await axios.get(`${this.officialBaseUrl}/project`, {
+      const projectRes = await http.get(`${this.officialBaseUrl}/project`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` }
       });
       const projects = projectRes.data;
@@ -353,7 +355,7 @@ class TickTickService {
 
     try {
       console.log(`[TickTick Service] Fetching completed tasks for list "${listName}" (project ID: ${projectId}) since ${payload.startDate} via official API...`);
-      const response = await axios.post(`${this.officialBaseUrl}/task/completed`, payload, {
+      const response = await http.post(`${this.officialBaseUrl}/task/completed`, payload, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
@@ -383,7 +385,7 @@ class TickTickService {
     } else {
       console.log(`[TickTick Service] Deleting task ${taskId} from project ${projectId}...`);
       try {
-        await axios.delete(`${this.officialBaseUrl}/project/${projectId}/task/${taskId}`, {
+        await http.delete(`${this.officialBaseUrl}/project/${projectId}/task/${taskId}`, {
           headers: { 'Authorization': `Bearer ${this.accessToken}` }
         });
         console.log(`[TickTick Service] ✅ Task ${taskId} successfully deleted.`);
@@ -407,7 +409,7 @@ class TickTickService {
       const createPayload = { ...taskData };
       delete createPayload.parentId;
 
-      const response = await axios.post(`${this.officialBaseUrl}/task`, createPayload, {
+      const response = await http.post(`${this.officialBaseUrl}/task`, createPayload, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
@@ -441,7 +443,7 @@ class TickTickService {
     await this.authenticate();
     console.log(`[TickTick Service] Updating task ${taskId}...`);
     try {
-      const response = await axios.post(`${this.officialBaseUrl}/task/${taskId}`, taskData, {
+      const response = await http.post(`${this.officialBaseUrl}/task/${taskId}`, taskData, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
@@ -462,7 +464,7 @@ class TickTickService {
     await this.authenticate();
     console.log('[TickTick Service] Fetching habits...');
     try {
-      const response = await axios.get(`${this.officialBaseUrl}/habit`, {
+      const response = await http.get(`${this.officialBaseUrl}/habit`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` }
       });
       return response.data || [];
@@ -481,7 +483,7 @@ class TickTickService {
     await this.authenticate();
     console.log(`[TickTick Service] Fetching check-ins for habit: ${habitId}...`);
     try {
-      const response = await axios.get(`${this.officialBaseUrl}/habit/${habitId}/checkin`, {
+      const response = await http.get(`${this.officialBaseUrl}/habit/${habitId}/checkin`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` }
       });
       return response.data || {};
@@ -500,7 +502,7 @@ class TickTickService {
     await this.authenticate();
     console.log(`[TickTick Service] Creating new habit: "${habitData.name}"...`);
     try {
-      const response = await axios.post(`${this.officialBaseUrl}/habit`, habitData, {
+      const response = await http.post(`${this.officialBaseUrl}/habit`, habitData, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
@@ -524,7 +526,7 @@ class TickTickService {
     console.log(`[TickTick Service] Updating habit ${habitId}...`);
     try {
       // API typically supports POST or PUT. We will use POST matching task updates
-      const response = await axios.post(`${this.officialBaseUrl}/habit/${habitId}`, habitData, {
+      const response = await http.post(`${this.officialBaseUrl}/habit/${habitId}`, habitData, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
@@ -546,7 +548,7 @@ class TickTickService {
     console.log(`[TickTick Service] Deleting/archiving habit ${habitId}...`);
     try {
       // First attempt DELETE
-      await axios.delete(`${this.officialBaseUrl}/habit/${habitId}`, {
+      await http.delete(`${this.officialBaseUrl}/habit/${habitId}`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` }
       });
       console.log(`[TickTick Service] ✅ Habit ${habitId} deleted successfully via DELETE.`);

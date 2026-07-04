@@ -4,7 +4,7 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return request.auth != null
-        && request.auth.uid == 'o4gf5QBNlnaLXCqfjYmmhVLVNlg1';
+        && exists(/databases/$(database)/documents/superadmins/$(request.auth.uid));
     }
 
     function isWorkspaceMember(workspaceId) {
@@ -21,20 +21,54 @@ service cloud.firestore {
       );
     }
 
-    // Users — user can read/write own doc, others can read (needed for admin lookups)
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
     }
 
-    // Workspaces — owner/member read, owner write
+    // Basic field validation helpers
+    function validString(val) { return val.is(string) && val.size() <= 5000; }
+    function validEmail(val) { return val.is(string) && val.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'); }
+    function validTimestamp(val) { return val.is(string); }
+
+    // ─── Superadmins ──────────────────────────────────────────
+    match /superadmins/{uid} {
+      allow read: if request.auth != null;
+      allow write: if isSuperAdmin();
+    }
+
+    // ─── Users ────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['email'])
+        && request.resource.data.email is string;
+      allow update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['name', 'email', 'notificationPrefs', 'workspaceId', 'authVersion', 'lastSessionRevokedAt', 'updatedAt']);
+      allow delete: if isOwner(userId);
+    }
+
+    // ─── Workspaces ───────────────────────────────────────────
     match /workspaces/{workspaceId} {
       allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
-      allow write: if isSuperAdmin() || request.auth.uid == workspaceId;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAny(['name']);
+      allow update: if isSuperAdmin() || request.auth.uid == workspaceId
+        && request.resource.data.keys().hasAny(['name', 'description', 'members', 'invitedEmails', 'ownerId']);
+      allow delete: if false;
 
-      // Sync configs under a workspace — workspace member read/write
+      // Sync configs under a workspace
       match /sync_configs/{configId} {
-        allow read, write: if isSuperAdmin() || isWorkspaceMember(workspaceId);
+        allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
+        allow create: if isWorkspaceMember(workspaceId)
+          && request.resource.data.keys().hasAny(['description', 'platform1', 'platform2']);
+        allow update: if isWorkspaceMember(workspaceId);
+        allow delete: if isWorkspaceMember(workspaceId);
+
+        // Sync mappings subcollection
+        match /sync_mappings/{mappingId} {
+          allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
+          allow write: if isSuperAdmin() || isWorkspaceMember(workspaceId);
+        }
       }
     }
 
@@ -44,7 +78,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Top-level collections with workspaceId field — workspace member read only
+    // Top-level collections with workspaceId field
     match /execution_logs/{logId} {
       allow read: if isSuperAdmin() || isWorkspaceMemberFromField();
       allow write: if false;
@@ -52,10 +86,24 @@ service cloud.firestore {
 
     match /connected_accounts/{accountId} {
       allow read: if isSuperAdmin() || isWorkspaceMemberFromField();
-      allow write: if false;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAny(['provider', 'userId'])
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+        && get(/databases/$(database)/documents/connected_accounts/$(accountId)).data.userId == request.auth.uid;
     }
 
-    // Public marketplace data — any authenticated user
+    // ─── Mail collection (for firestore-send-email extension) ──
+    match /mail/{mailId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAny(['to', 'message']);
+      allow update, delete: if false;
+    }
+
+    // ─── Public marketplace data ──────────────────────────────
     match /platforms/{documentId} {
       allow read: if request.auth != null;
       allow write: if false;
@@ -66,22 +114,29 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // App settings — public reads, superadmin writes only
+    // ─── App settings ─────────────────────────────────────────
     match /app_settings/{documentId} {
       allow read: if true;
       allow write: if isSuperAdmin();
     }
 
-    // Activity logs — any authenticated user can read/create (admin audit)
+    // ─── Activity logs ────────────────────────────────────────
     match /activity_logs/{logId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if false;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAny(['action', 'timestamp']);
+      allow update, delete: if isSuperAdmin();
     }
 
-    // Credentials — owner-only read
+    // ─── Credentials ──────────────────────────────────────────
     match /credentials/{documentId} {
       allow read: if request.auth != null && request.auth.uid == documentId;
+      allow write: if false;
+    }
+
+    // ─── API Keys (server-side only via Admin SDK) ────────────
+    match /api_keys/{keyId} {
+      allow read: if false;
       allow write: if false;
     }
   }

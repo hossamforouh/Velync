@@ -1046,7 +1046,15 @@ async function loadActivityLog(reset = false) {
   }
 }
 
+const activityLogThrottle = new Map();
+
 async function logActivity(action, targetType, targetId, targetName) {
+  const now = Date.now();
+  const throttleKey = `${action}:${targetType}`;
+  const lastLog = activityLogThrottle.get(throttleKey);
+  if (lastLog && (now - lastLog) < 2000) return;
+  activityLogThrottle.set(throttleKey, now);
+
   try {
     let userId = 'system', userEmail = 'system@velync.app', userDisplayName = '';
     try {

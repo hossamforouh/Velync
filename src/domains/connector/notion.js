@@ -32,7 +32,7 @@ class NotionConnector extends Connector {
     } catch (err) {
       console.error(`[NotionConnector] Failed to fetch database schema:`, err.message);
     }
-    const { createNotionPage } = require('../../../workflows/syncInboxToNotion');
+    const { createNotionPage } = require('./notion-page');
     return createNotionPage(svc, properties, content, dbSchema, data.title || 'Untitled', children || [], templateId);
   }
 

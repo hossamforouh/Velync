@@ -1,13 +1,21 @@
 const { Router } = require('express');
+const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
 const { getConnector } = require('../../domains/connector/registry');
 const { suggestMappings } = require('../../domains/sync/mapping-suggester');
+const db = require('../../core/db');
 const logger = require('../../core/logger');
-const { Firestore } = require('@google-cloud/firestore');
 
 const router = Router();
-const db = new Firestore();
+
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+  }
+  next();
+};
 
 async function resolvePlatform(platformId) {
   try {
@@ -26,15 +34,20 @@ async function resolvePlatform(platformId) {
   }
 }
 
-router.post('/suggest-mappings', verifyAuth, async (req, res) => {
+router.post('/suggest-mappings', verifyAuth, [
+  body('sourceConnectionId').isString().trim().notEmpty(),
+  body('destConnectionId').isString().trim().notEmpty(),
+  body('sourcePlatform').isString().trim().notEmpty(),
+  body('destPlatform').isString().trim().notEmpty(),
+  body('entityType').optional().isString(),
+  body('context').optional().isObject(),
+], validate, async (req, res) => {
   try {
-    const { 
-      sourceConnectionId, destConnectionId, 
-      sourcePlatform, destPlatform, 
-      entityType, context = {} 
+    const {
+      sourceConnectionId, destConnectionId,
+      sourcePlatform, destPlatform,
+      entityType, context = {}
     } = req.body;
-    
-    console.log("[Suggest Mappings] Request body:", JSON.stringify(req.body));
 
     if (!sourceConnectionId || !destConnectionId || !sourcePlatform || !destPlatform) {
       return res.status(400).json({ success: false, error: 'Missing required connection or platform IDs' });
@@ -63,11 +76,11 @@ router.post('/suggest-mappings', verifyAuth, async (req, res) => {
       sourceInstance.getSchema(entityType || 'Tasks', context.source || {}),
       destInstance.getSchema(context.dest?.entityType || 'Database', context.dest || {})
     ]);
-    
+
     const data = await suggestMappings(sourceSchema, destSchema);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       suggestions: data.suggestions || [],
       sourceSchema,
       destSchema

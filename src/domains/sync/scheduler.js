@@ -1,11 +1,10 @@
 const cron = require('node-cron');
-const { Firestore } = require('@google-cloud/firestore');
-const { runSyncForConfig } = require('../../../workflows/syncInboxToNotion');
 const { runSync } = require('./engine');
+const db = require('../../core/db');
 const logger = require('../../core/logger');
 
-const db = new Firestore();
 const activeJobs = {};
+let retryCount = 0;
 
 function startScheduler() {
   cron.schedule('*/1 * * * *', () => {
@@ -14,15 +13,19 @@ function startScheduler() {
 
   function listenToConfigs() {
     db.collectionGroup('sync_configs')
+      .where('status', '==', 'active')
       .onSnapshot((snapshot) => {
-      logger.info('scheduler', `Firestore update: ${snapshot.docChanges().length} changes`);
+      retryCount = 0;
+      const currentJobIds = new Set(Object.keys(activeJobs));
+      const seenIds = new Set();
 
       snapshot.docChanges().forEach((change) => {
         const configId = change.doc.id;
         const config = change.doc.data();
         const configName = config.description || configId;
+        seenIds.add(configId);
 
-        if (change.type === 'removed' || (config.status || (config.enabled ? 'active' : 'paused')) !== 'active') {
+        if (change.type === 'removed') {
           if (activeJobs[configId]) {
             logger.info('scheduler', `Stopping job for "${configName}"`);
             activeJobs[configId].stop();
@@ -50,11 +53,7 @@ function startScheduler() {
         activeJobs[configId] = cron.schedule(safeSchedule, async () => {
           logger.info('scheduler', `Executing "${configName}"`);
           try {
-            if (config.platform1) {
-              await runSync(config, configId);
-            } else {
-              await runSyncForConfig(config, configId);
-            }
+            await runSync(config, configId);
           } catch (err) {
             logger.error('scheduler', `Failed "${configName}"`, { error: err.message });
           }
@@ -62,9 +61,20 @@ function startScheduler() {
 
         activeJobs[configId].start();
       });
+
+      // Stop jobs for configs no longer in the active snapshot
+      for (const jobId of currentJobIds) {
+        if (!seenIds.has(jobId) && activeJobs[jobId]) {
+          logger.info('scheduler', `Stopping orphaned job for "${jobId}"`);
+          activeJobs[jobId].stop();
+          delete activeJobs[jobId];
+        }
+      }
     }, (err) => {
-      logger.error('scheduler', 'Firestore listener error, retrying in 30s', { error: err.message });
-      setTimeout(listenToConfigs, 30000);
+      retryCount++;
+      const delay = Math.min(30000 * Math.pow(2, retryCount - 1), 300000);
+      logger.error('scheduler', `Firestore listener error (attempt ${retryCount}), retrying in ${delay}ms`, { error: err.message });
+      setTimeout(listenToConfigs, delay);
     });
   }
 

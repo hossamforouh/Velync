@@ -1,21 +1,29 @@
-const { Firestore } = require('@google-cloud/firestore');
 const { decrypt } = require('../../../utils/encryption');
 const { ConnectionError } = require('../../core/errors');
-
-const db = new Firestore();
+const db = require('../../core/db');
 
 async function resolveConnectionTokens(uid, connectionId) {
   const connDoc = await db.collection('connected_accounts').doc(connectionId).get();
   if (!connDoc.exists) throw new ConnectionError('Connection not found');
   const connData = connDoc.data();
-  if (connData.userId !== uid && connData.workspaceId !== uid) {
-    throw new ConnectionError('Unauthorized access to connection');
+
+  // Authorize: connection owner or workspace member
+  if (connData.userId !== uid) {
+    if (!connData.workspaceId) {
+      throw new ConnectionError('Unauthorized access to connection');
+    }
+    const wsDoc = await db.collection('workspaces').doc(connData.workspaceId).get();
+    if (!wsDoc.exists) throw new ConnectionError('Workspace not found');
+    const ws = wsDoc.data();
+    const members = ws.members || [];
+    if (ws.ownerId !== uid && !members.includes(uid)) {
+      throw new ConnectionError('Unauthorized access to connection');
+    }
   }
 
   const provider = connData.provider;
-
-  // Try reading from credentials collection first (OAuth path)
-  const credsDoc = await db.collection('credentials').doc(connData.userId || uid).get();
+  const credsOwnerId = connData.userId || connData.workspaceId || uid;
+  const credsDoc = await db.collection('credentials').doc(credsOwnerId).get();
   if (credsDoc.exists) {
     const credsData = credsDoc.data();
     if (credsData[provider]) {
@@ -29,7 +37,6 @@ async function resolveConnectionTokens(uid, connectionId) {
     }
   }
 
-  // Fallback: read credentials directly from the connection document (non-OAuth path)
   if (connData.accessToken || connData.clientId) {
     return {
       accessToken: connData.accessToken || '',
@@ -39,7 +46,6 @@ async function resolveConnectionTokens(uid, connectionId) {
     };
   }
 
-  // Last resort: extract tokens from the attributes array
   if (connData.attributes && Array.isArray(connData.attributes)) {
     const accessAttr = connData.attributes.find(a => a.id === 'accessToken' || a.id === 'AccessToken');
     const clientIdAttr = connData.attributes.find(a => a.id === 'clientId' || a.id === 'ClientId');

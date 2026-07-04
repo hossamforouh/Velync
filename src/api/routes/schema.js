@@ -1,32 +1,40 @@
 const { Router } = require('express');
+const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
 const { getConnector } = require('../../domains/connector/registry');
+const db = require('../../core/db');
 const logger = require('../../core/logger');
 
 const router = Router();
 
-router.post('/schema', verifyAuth, async (req, res) => {
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+  }
+  next();
+};
+
+router.post('/schema', verifyAuth, [
+  body('connectionId').isString().trim().notEmpty(),
+  body('platform').isString().trim().notEmpty(),
+  body('entityType').optional().isString(),
+  body('context').optional().isObject(),
+], validate, async (req, res) => {
   try {
     const { connectionId, platform, entityType, context = {} } = req.body;
-    if (!connectionId || !platform) {
-      return res.status(400).json({ success: false, error: 'connectionId and platform required' });
-    }
 
     const creds = await resolveConnectionTokens(req.user.uid, connectionId);
     let ConnectorClass;
     try {
       ConnectorClass = getConnector(platform);
     } catch (e) {
-      // Fallback: Check if platform is a Firestore document ID and resolve its key or name
-      const { Firestore } = require('@google-cloud/firestore');
-      const db = new Firestore();
       const platDoc = await db.collection('platforms').doc(platform).get();
       if (platDoc.exists) {
         const platData = platDoc.data();
         let resolvedPlatform = platData.key || platData.name?.toLowerCase() || platData.title?.toLowerCase() || platform;
-        
-        // Intelligent fallback for custom platforms missing name/key
+
         if (resolvedPlatform === platform) {
            if (platData.authUrl?.includes('ticktick')) resolvedPlatform = 'ticktick';
            if (platData.authUrl?.includes('notion')) resolvedPlatform = 'notion';
@@ -52,12 +60,14 @@ router.post('/schema', verifyAuth, async (req, res) => {
   }
 });
 
-router.post('/schema/suggest', verifyAuth, async (req, res) => {
+router.post('/schema/suggest', verifyAuth, [
+  body('sourceSchema').isObject().notEmpty(),
+  body('destSchema').isObject().notEmpty(),
+  body('sourcePlatform').optional().isString(),
+  body('destPlatform').optional().isString(),
+], validate, async (req, res) => {
   try {
     const { sourceSchema, destSchema, sourcePlatform, destPlatform } = req.body;
-    if (!sourceSchema || !destSchema) {
-      return res.status(400).json({ success: false, error: 'sourceSchema and destSchema required' });
-    }
 
     const suggestions = [];
     const sourceFields = Object.entries(sourceSchema);

@@ -1,11 +1,10 @@
-const { Firestore } = require('@google-cloud/firestore');
 const { decrypt } = require('../../../utils/encryption');
 const { getConnector } = require('../connector');
+const db = require('../../core/db');
 const logger = require('../../core/logger');
 const { mapSourceToDest } = require('./mapper');
 const { resolveConflict } = require('./conflict');
 
-const db = new Firestore();
 const runningConfigs = new Set();
 
 async function resolveConnectorCreds(workspaceId, connectionId) {
@@ -32,7 +31,6 @@ async function runSync(config, configId) {
   }
   runningConfigs.add(configId);
 
-  // Plan enforcement: check if workspace exceeds maxConfigsPerUser limit
   try {
     const settingsDoc = await db.collection('app_settings').doc('general').get();
     const settings = settingsDoc.data() || {};
@@ -66,14 +64,14 @@ async function runSync(config, configId) {
     const destPlatformId = config.platform2 || config.destPlatform;
     const fieldMappings = config.fieldMappings || [];
     const syncType = config.syncType || 'Source_to_Dest';
-    
+
     const p1Settings = config.p1Settings || {};
     const p2Settings = config.p2Settings || {};
     const entityType = p1Settings.targetEntity || p2Settings.targetEntity || config.targetEntity || 'Tasks';
-    
+
     const filter = { ...p1Settings, ...(config.filterConfig || {}) };
     delete filter.targetEntity;
-    
+
     config.templateId = p2Settings.templateId || p2Settings.template || config.templateId;
 
     const sourceCreds = sourceConnId ? { ...await resolveConnectorCreds(workspaceId, sourceConnId), ...p1Settings } : { ...p1Settings };
@@ -81,10 +79,10 @@ async function runSync(config, configId) {
 
     let resolvedSourcePlatform = sourcePlatformId;
     let resolvedDestPlatform = destPlatformId;
-    
+
     const p1Doc = await db.collection('platforms').doc(sourcePlatformId).get();
     if (p1Doc.exists && p1Doc.data().name) resolvedSourcePlatform = p1Doc.data().name.toLowerCase();
-    
+
     const p2Doc = await db.collection('platforms').doc(destPlatformId).get();
     if (p2Doc.exists && p2Doc.data().name) resolvedDestPlatform = p2Doc.data().name.toLowerCase();
 
@@ -112,21 +110,47 @@ async function runSync(config, configId) {
     const activeSourceIds = new Set(sourceItems.map(i => i.id));
     const activeDestIds = new Set(destItems.map(i => i.id));
 
-    const saveMapping = async (sourceId, destId, srcMod, destMod) => {
-      const data = { sourceEntityId: sourceId, destEntityId: destId, sourceEntityType: entityType, lastSyncedAt: new Date().toISOString(), sourceLastModified: srcMod, destLastEdited: destMod };
-      const existing = sourceToMapping.get(sourceId);
-      if (existing) await db.collection('workspaces').doc(workspaceId).collection('sync_configs').doc(configId).collection('sync_mappings').doc(existing.mappingId).update(data);
-      else {
-        const ref = await db.collection('workspaces').doc(workspaceId).collection('sync_configs').doc(configId).collection('sync_mappings').add(data);
-        data.mappingId = ref.id;
+    const saveMappingBatch = async (operations) => {
+      if (operations.length === 0) return;
+      const batch = db.batch();
+      const mappingsRef = db.collection('workspaces').doc(workspaceId)
+        .collection('sync_configs').doc(configId).collection('sync_mappings');
+      for (const op of operations) {
+        if (op.type === 'set') {
+          batch.set(mappingsRef.doc(op.id), op.data);
+        } else if (op.type === 'update') {
+          batch.update(mappingsRef.doc(op.id), op.data);
+        } else if (op.type === 'delete') {
+          batch.delete(mappingsRef.doc(op.id));
+        }
       }
-      sourceToMapping.set(sourceId, data);
-      destToMapping.set(destId, data);
+      await batch.commit();
     };
 
-    const removeMapping = async (mapping) => {
+    const pendingOps = [];
+
+    const queueSaveMapping = (sourceId, destId, srcMod, destMod) => {
+      const data = {
+        sourceEntityId: sourceId, destEntityId: destId,
+        sourceEntityType: entityType, lastSyncedAt: new Date().toISOString(),
+        sourceLastModified: srcMod, destLastEdited: destMod
+      };
+      const existing = sourceToMapping.get(sourceId);
+      if (existing) {
+        pendingOps.push({ type: 'update', id: existing.mappingId, data });
+        Object.assign(existing, data);
+      } else {
+        const tempId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        pendingOps.push({ type: 'set', id: tempId, data: { ...data, tempId } });
+        data.mappingId = tempId;
+        sourceToMapping.set(sourceId, data);
+        destToMapping.set(destId, data);
+      }
+    };
+
+    const queueRemoveMapping = (mapping) => {
       if (mapping?.mappingId) {
-        await db.collection('workspaces').doc(workspaceId).collection('sync_configs').doc(configId).collection('sync_mappings').doc(mapping.mappingId).delete().catch(() => {});
+        pendingOps.push({ type: 'delete', id: mapping.mappingId });
         sourceToMapping.delete(mapping.sourceEntityId);
         destToMapping.delete(mapping.destEntityId);
       }
@@ -144,11 +168,11 @@ async function runSync(config, configId) {
         if (!mapping) {
           const created = await dest.create(entityType, { properties, content, title: item.title || item.name || 'Untitled', children: item.items, templateId: config.templateId });
           const modTime = created?.last_edited_time || created?.modifiedTime || new Date().toISOString();
-          await saveMapping(item.id, created.id, item.modifiedTime, modTime);
+          queueSaveMapping(item.id, created.id, item.modifiedTime, modTime);
           synced++;
           if (config.deleteAfterSync) {
             await source.delete(entityType, item.id, item.projectId);
-            await removeMapping(mapping);
+            queueRemoveMapping(mapping);
             deleted++;
           }
         } else {
@@ -156,12 +180,12 @@ async function runSync(config, configId) {
           if (conflict !== 'no_change') {
             await dest.update(entityType, mapping.destEntityId, { properties, content });
             const updated = typeof dest.retrieve === 'function' ? await dest.retrieve(entityType, mapping.destEntityId) : {};
-            await saveMapping(item.id, mapping.destEntityId, item.modifiedTime, updated.last_edited_time || new Date().toISOString());
+            queueSaveMapping(item.id, mapping.destEntityId, item.modifiedTime, updated.last_edited_time || new Date().toISOString());
             synced++;
           }
           if (config.deleteAfterSync) {
             await source.delete(entityType, item.id, item.projectId);
-            await removeMapping(mapping);
+            queueRemoveMapping(mapping);
             deleted++;
           }
         }
@@ -171,6 +195,9 @@ async function runSync(config, configId) {
       }
     }
 
+    // Flush batched mapping writes
+    await saveMappingBatch(pendingOps.splice(0));
+
     if (syncType === 'Bidirectional') {
       for (const page of destItems) {
         try {
@@ -178,20 +205,21 @@ async function runSync(config, configId) {
           const mapped = { title: page.properties?.Name?.title?.[0]?.plain_text || 'Untitled' };
           mapped.projectId = filter.listName?.toLowerCase() === 'inbox' ? 'inbox' : undefined;
           const created = await source.create(entityType, mapped);
-          await saveMapping(null, page.id, new Date().toISOString(), created.modifiedTime || new Date().toISOString());
+          queueSaveMapping(null, page.id, new Date().toISOString(), created.modifiedTime || new Date().toISOString());
           synced++;
         } catch (err) {
           logger.error('sync', `Failed bidirectional dest item`, { error: err.message });
           failed++;
         }
       }
+      await saveMappingBatch(pendingOps.splice(0));
     }
 
     for (const [sourceId, mapping] of sourceToMapping.entries()) {
       if (!activeSourceIds.has(sourceId) && activeDestIds.has(mapping.destEntityId)) {
         try {
           await dest.delete(entityType, mapping.destEntityId);
-          await removeMapping(mapping);
+          queueRemoveMapping(mapping);
           deleted++;
         } catch (err) {
           logger.error('sync', `Failed deletion propagation`, { error: err.message });
@@ -199,6 +227,8 @@ async function runSync(config, configId) {
         }
       }
     }
+    await saveMappingBatch(pendingOps.splice(0));
+
   } catch (err) {
     logger.error('sync', `Config "${configId}" failed`, { error: err.message });
     if (logRef) await logRef.update({ status: 'error', endTime: new Date().toISOString(), error: err.message }).catch(() => {});

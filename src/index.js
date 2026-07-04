@@ -2,8 +2,8 @@ const admin = require('firebase-admin');
 const { startServer } = require('./api/server');
 const { startScheduler } = require('./domains/sync/scheduler');
 const logger = require('./core/logger');
-const { runSyncWorkflow } = require('../workflows/syncInboxToNotion');
 const { testConfigConnections } = require('./cli/test');
+const db = require('./core/db');
 
 require('./domains/connector');
 
@@ -11,12 +11,18 @@ try {
   admin.initializeApp();
 } catch (e) {}
 
+// Graceful shutdown for CLI mode
+async function shutdown(signal) {
+  logger.info('cli', `${signal} received — exiting`);
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 if (process.argv.includes('--test-connections')) {
   (async () => {
     logger.info('cli', 'Starting connection tests');
     try {
-      const { Firestore } = require('@google-cloud/firestore');
-      const db = new Firestore();
       const allDocs = await db.collectionGroup('sync_configs').get();
       const activeDocs = allDocs.docs.filter(d => {
         const c = d.data();
@@ -36,38 +42,24 @@ if (process.argv.includes('--test-connections')) {
   })();
 } else if (process.argv.includes('--run-sync')) {
   (async () => {
-    const { Firestore } = require('@google-cloud/firestore');
     const { runSync } = require('./domains/sync/engine');
-    const { getConnector } = require('./domains/connector/registry');
-    const { resolveConnectionTokens } = require('./domains/connection/resolver');
-    const db = new Firestore();
-    const allDocs = await db.collectionGroup('sync_configs').get();
-    const activeDocs = allDocs.docs.filter(d => {
-      const c = d.data();
-      return c.status === 'active' || (c.enabled === true && !c.status);
-    });
-    let legacyCount = 0, newCount = 0;
-    for (const doc of activeDocs) {
+    const allDocs = await db.collectionGroup('sync_configs')
+      .where('status', '==', 'active')
+      .get();
+    let count = 0;
+    for (const doc of allDocs.docs) {
       const config = doc.data();
-      if (config.sourcePlatform) {
-        try {
-          await runSync(config, doc.id);
-          newCount++;
-        } catch (err) {
-          logger.error('cli', `Sync failed for "${config.description}": ${err.message}`);
-        }
-      } else {
-        legacyCount++;
+      try {
+        await runSync(config, doc.id);
+        count++;
+      } catch (err) {
+        logger.error('cli', `Sync failed for "${config.description}": ${err.message}`);
       }
     }
-    if (legacyCount > 0) {
-      logger.info('cli', `Running legacy sync for ${legacyCount} configs`);
-      await runSyncWorkflow(true);
-    }
-    logger.info('cli', `Sync complete — ${newCount} new engine, ${legacyCount} legacy`);
+    logger.info('cli', `Sync complete — ${count} configs processed`);
     process.exit(0);
   })();
 } else {
-  startServer();
+  const server = startServer();
   startScheduler();
 }

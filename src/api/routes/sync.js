@@ -1,6 +1,7 @@
 const { Router } = require('express');
-const { runSyncWorkflow } = require('../../../workflows/syncInboxToNotion');
+const { runSync } = require('../../domains/sync/engine');
 const { verifyAuth } = require('../middleware/auth');
+const db = require('../../core/db');
 const logger = require('../../core/logger');
 
 const router = Router();
@@ -8,10 +9,18 @@ const router = Router();
 router.post('/sync', verifyAuth, async (req, res) => {
   logger.info('sync', 'Manual sync triggered', { user: req.user?.uid });
   try {
-    await runSyncWorkflow(true);
-    res.json({ success: true, message: 'Sync workflow executed successfully.' });
+    const snap = await db.collectionGroup('sync_configs')
+      .where('status', '==', 'active')
+      .get();
+    const results = [];
+    for (const doc of snap.docs) {
+      const config = doc.data();
+      const result = await runSync(config, doc.id);
+      results.push({ configId: doc.id, description: config.description, ...result });
+    }
+    res.json({ success: true, results });
   } catch (err) {
-    logger.error('sync', 'Sync workflow failed', { error: err.message });
+    logger.error('sync', 'Sync failed', { error: err.message });
     res.status(500).json({ success: false, error: err.message });
   }
 });

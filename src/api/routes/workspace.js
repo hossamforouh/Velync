@@ -1,12 +1,20 @@
 const { Router } = require('express');
-const { Firestore, FieldValue } = require('@google-cloud/firestore');
+const { FieldValue } = require('@google-cloud/firestore');
+const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
+const db = require('../../core/db');
 const logger = require('../../core/logger');
 
-const db = new Firestore();
 const router = Router();
 
-// GET /api/workspace — get current workspace
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+  }
+  next();
+};
+
 router.get('/workspace', verifyAuth, async (req, res) => {
   try {
     const userDoc = await db.collection('users').doc(req.user.uid).get();
@@ -22,11 +30,11 @@ router.get('/workspace', verifyAuth, async (req, res) => {
   }
 });
 
-// POST /api/workspace/invite — add email to workspace invites
-router.post('/workspace/invite', verifyAuth, async (req, res) => {
+router.post('/workspace/invite', verifyAuth, [
+  body('email').isEmail().normalizeEmail(),
+], validate, async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, error: 'Email required' });
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     if (!userDoc.exists) return res.status(404).json({ success: false, error: 'User not found' });
     const workspaceId = userDoc.data().workspaceId;
@@ -41,11 +49,11 @@ router.post('/workspace/invite', verifyAuth, async (req, res) => {
   }
 });
 
-// POST /api/workspace/join — accept invite and join workspace
-router.post('/workspace/join', verifyAuth, async (req, res) => {
+router.post('/workspace/join', verifyAuth, [
+  body('workspaceId').isString().trim().notEmpty(),
+], validate, async (req, res) => {
   try {
     const { workspaceId } = req.body;
-    if (!workspaceId) return res.status(400).json({ success: false, error: 'workspaceId required' });
     const userEmail = req.user.firebase?.identities?.email?.[0] || '';
     const wsRef = db.collection('workspaces').doc(workspaceId);
     const ws = await wsRef.get();
@@ -66,11 +74,11 @@ router.post('/workspace/join', verifyAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/workspace/invite — remove an invited email
-router.delete('/workspace/invite', verifyAuth, async (req, res) => {
+router.delete('/workspace/invite', verifyAuth, [
+  body('email').isEmail().normalizeEmail(),
+], validate, async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, error: 'Email required' });
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     if (!userDoc.exists) return res.status(404).json({ success: false, error: 'User not found' });
     const workspaceId = userDoc.data().workspaceId;
@@ -84,11 +92,11 @@ router.delete('/workspace/invite', verifyAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/workspace/member — remove a member
-router.delete('/workspace/member', verifyAuth, async (req, res) => {
+router.delete('/workspace/member', verifyAuth, [
+  body('userId').isString().trim().notEmpty(),
+], validate, async (req, res) => {
   try {
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ success: false, error: 'userId required' });
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     if (!userDoc.exists) return res.status(404).json({ success: false, error: 'User not found' });
     const workspaceId = userDoc.data().workspaceId;

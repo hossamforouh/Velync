@@ -17,8 +17,12 @@ const config = {
   firebase: {
     projectId: process.env.GOOGLE_CLOUD_PROJECT,
   },
+  superadminUids: (process.env.SUPERADMIN_UIDS || 'o4gf5QBNlnaLXCqfjYmmhVLVNlg1').split(',').map(s => s.trim()).filter(Boolean),
   isCloudRun: !!process.env.PORT,
   nodeEnv: process.env.NODE_ENV || 'development',
+  apiKeyAuthEnabled: process.env.API_KEY_AUTH_ENABLED !== 'false',
+  externalApiTimeout: parseInt(process.env.EXTERNAL_API_TIMEOUT, 10) || 30000,
+  maxRequestBodySize: process.env.MAX_REQUEST_BODY_SIZE || '1mb',
 };
 
 module.exports = config;
