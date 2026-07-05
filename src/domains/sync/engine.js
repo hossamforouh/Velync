@@ -202,6 +202,8 @@ async function runSync(config, configId) {
     // or MAX_ITEMS_PER_RUN, since an incomplete ID set would cause false-positive deletions.
     const allSourceIds = (await source.fetchIds(entityType, filter)).map(i => i.id);
     const allDestIds = (await dest.fetchIds(entityType, filter)).map(i => i.id);
+    const allSourceIdSet = new Set(allSourceIds);
+    const allDestIdSet = new Set(allDestIds);
 
     const mappingsSnapshot = await db.collection('workspaces').doc(workspaceId)
       .collection('sync_configs').doc(configId).collection('sync_mappings').get();
@@ -270,7 +272,7 @@ async function runSync(config, configId) {
     for (const item of sourceItems) {
       try {
         let mapping = sourceToMapping.get(item.id);
-        if (mapping && !activeDestIds.has(mapping.destEntityId)) mapping = null;
+        if (mapping && !allDestIdSet.has(mapping.destEntityId)) mapping = null;
 
         const { properties, content } = mapSourceToDest(item, fieldMappings, {}, destSchema, config.statusMappings);
 
@@ -340,7 +342,7 @@ async function runSync(config, configId) {
     }
 
     for (const [sourceId, mapping] of sourceToMapping.entries()) {
-      if (!allSourceIds.includes(sourceId) && allDestIds.includes(mapping.destEntityId)) {
+      if (!allSourceIdSet.has(sourceId) && allDestIdSet.has(mapping.destEntityId)) {
         try {
           await retryWithBackoff(() => dest.delete(entityType, mapping.destEntityId));
           queueRemoveMapping(mapping);
