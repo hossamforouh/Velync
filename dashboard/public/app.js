@@ -4,7 +4,7 @@
    ============================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app-check.js";
 import { initLogs } from "./js/logs.js";
@@ -1153,6 +1153,132 @@ onAuthStateChanged(auth, async (user) => {
         });
       }
 
+      // Change Password Logic
+      const btnChangePassword = document.getElementById('btn-change-password');
+      const currentPwInput = document.getElementById('settings-current-password');
+      const newPwInput = document.getElementById('settings-new-password');
+      const confirmPwInput = document.getElementById('settings-confirm-password');
+      const pwMsg = document.getElementById('password-change-msg');
+      if (btnChangePassword && currentPwInput && newPwInput && confirmPwInput) {
+        btnChangePassword.addEventListener('click', async () => {
+          if (pwMsg) { pwMsg.textContent = ''; pwMsg.style.color = ''; }
+
+          const hasPasswordProvider = (auth.currentUser.providerData || []).some(p => p.providerId === 'password');
+          if (!hasPasswordProvider) {
+            if (pwMsg) { pwMsg.textContent = 'No password set on this account. Use "Forgot Password" on the sign-in page to set one.'; pwMsg.style.color = '#f43f5e'; }
+            return;
+          }
+
+          // Determine the sign-in method used in the current session
+          let signInProvider = 'password';
+          try {
+            const tokenResult = await auth.currentUser.getIdTokenResult();
+            signInProvider = tokenResult.claims?.firebase?.sign_in_provider || 'password';
+          } catch (_) {}
+
+          const viaPassword = signInProvider === 'password';
+          const currentPw = currentPwInput.value;
+          const newPw = newPwInput.value;
+          const confirmPw = confirmPwInput.value;
+
+          if (viaPassword) {
+            if (!currentPw) {
+              if (pwMsg) { pwMsg.textContent = 'Current password is required.'; pwMsg.style.color = '#f43f5e'; }
+              return;
+            }
+            if (currentPw === newPw) {
+              if (pwMsg) { pwMsg.textContent = 'New password must be different from current password.'; pwMsg.style.color = '#f43f5e'; }
+              return;
+            }
+          }
+          if (!newPw || !confirmPw) {
+            if (pwMsg) { pwMsg.textContent = 'New password and confirmation are required.'; pwMsg.style.color = '#f43f5e'; }
+            return;
+          }
+          if (newPw.length < 6) {
+            if (pwMsg) { pwMsg.textContent = 'New password must be at least 6 characters.'; pwMsg.style.color = '#f43f5e'; }
+            return;
+          }
+          if (newPw !== confirmPw) {
+            if (pwMsg) { pwMsg.textContent = 'New passwords do not match.'; pwMsg.style.color = '#f43f5e'; }
+            return;
+          }
+          if (isCommonPassword(newPw)) {
+            if (pwMsg) { pwMsg.textContent = 'This password is too common and easily guessed. Please choose a stronger one.'; pwMsg.style.color = '#f43f5e'; }
+            return;
+          }
+
+          setButtonLoading(btnChangePassword, true);
+          try {
+            if (viaPassword) {
+              const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPw);
+              await reauthenticateWithCredential(auth.currentUser, credential);
+            }
+            await updatePassword(auth.currentUser, newPw);
+            if (pwMsg) { pwMsg.textContent = 'Password updated successfully!'; pwMsg.style.color = '#34d399'; }
+            currentPwInput.value = '';
+            newPwInput.value = '';
+            confirmPwInput.value = '';
+          } catch (err) {
+            if (pwMsg) {
+              if (err.code === 'auth/wrong-password') {
+                pwMsg.textContent = 'Current password is incorrect.';
+              } else if (err.code === 'auth/weak-password') {
+                pwMsg.textContent = 'New password is too weak. Use at least 6 characters.';
+              } else if (err.code === 'auth/requires-recent-login') {
+                pwMsg.textContent = 'Please sign out and sign in again before changing your password.';
+              } else {
+                pwMsg.textContent = 'Failed to update password: ' + err.message;
+              }
+              pwMsg.style.color = '#f43f5e';
+            }
+          } finally {
+            setButtonLoading(btnChangePassword, false);
+            setTimeout(() => {
+              if (pwMsg && pwMsg.style.color === 'rgb(52, 211, 153)') {
+                pwMsg.textContent = '';
+              }
+            }, 4000);
+          }
+        });
+      }
+
+      // ─── Settings password strength & match indicators ─────
+      const settingsNewPw = document.getElementById('settings-new-password');
+      const settingsStrengthFill = document.getElementById('settings-strength-fill');
+      const settingsStrengthLabel = document.getElementById('settings-strength-label');
+      const settingsReqs = document.getElementById('settings-password-reqs');
+      if (settingsNewPw && settingsStrengthFill && settingsStrengthLabel && settingsReqs) {
+        settingsNewPw.addEventListener('input', () => {
+          updatePasswordStrengthUI(settingsStrengthFill, settingsStrengthLabel, settingsReqs, settingsNewPw.value);
+        });
+      }
+
+      const settingsConfirmPw = document.getElementById('settings-confirm-password');
+      const matchIcon = document.getElementById('settings-match-icon');
+      const matchText = document.getElementById('settings-match-text');
+      if (settingsNewPw && settingsConfirmPw && matchIcon && matchText) {
+        const updateMatch = () => {
+          if (!settingsConfirmPw.value) {
+            matchIcon.innerHTML = '';
+            matchText.textContent = '';
+            matchText.className = 'match-text';
+            return;
+          }
+          if (settingsNewPw.value === settingsConfirmPw.value) {
+            matchIcon.innerHTML = feather.icons['check'].toSvg({ width:14, height:14, style:'color:#22c55e' });
+            matchText.textContent = 'Passwords match';
+            matchText.className = 'match-text match-success';
+          } else {
+            matchIcon.innerHTML = feather.icons['x'].toSvg({ width:14, height:14, style:'color:#f43f5e' });
+            matchText.textContent = 'Passwords do not match';
+            matchText.className = 'match-text match-error';
+          }
+        };
+        settingsConfirmPw.addEventListener('input', updateMatch);
+        settingsNewPw.addEventListener('input', updateMatch);
+      }
+
       // Save Workspace Logic
       const btnSaveWorkspace = document.getElementById('btn-save-workspace');
       const workspaceNameInput = document.getElementById('settings-workspace-name');
@@ -1732,6 +1858,25 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
 
+    // Reset auth form to login mode
+    isSignUpMode = false;
+    isResetMode = false;
+    if (authForm) authForm.reset();
+    if (authBoxTitle) authBoxTitle.textContent = 'Welcome Back';
+    if (authBoxSubtitle) authBoxSubtitle.textContent = 'Sign in to manage your workspace.';
+    if (btnAuthSubmit) btnAuthSubmit.textContent = 'Sign In';
+    if (authToggleText) authToggleText.textContent = "Don't have an account?";
+    if (authToggleLink) authToggleLink.textContent = 'Sign Up';
+    if (authPasswordGroup) authPasswordGroup.style.display = 'block';
+    if (authPassword) authPassword.required = true;
+    if (authDivider) authDivider.style.display = 'flex';
+    if (btnLogin) btnLogin.style.display = 'flex';
+    if (forgotPasswordLink) forgotPasswordLink.style.display = 'block';
+    authError.style.display = 'none';
+    authError.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+    authError.style.color = '#EF4444';
+    authError.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+
     // Clear all user-specific DOM to prevent stale data flash on next login
     const userAvatar = document.getElementById('user-avatar');
     if (userAvatar) userAvatar.textContent = '';
@@ -1748,6 +1893,19 @@ onAuthStateChanged(auth, async (user) => {
     const settingsEmail = document.getElementById('settings-email');
     if (settingsEmail) settingsEmail.value = '';
     if (userEmailSpan) userEmailSpan.textContent = '';
+
+    // Reset auth form password strength meter
+    const authPwInput = document.getElementById('auth-password');
+    if (authPwInput) authPwInput.value = '';
+    const authStrength = document.getElementById('auth-password-strength');
+    if (authStrength) authStrength.style.display = 'none';
+    const authFill = document.getElementById('auth-strength-fill');
+    if (authFill) authFill.style.width = '0%';
+    const authLabel = document.getElementById('auth-strength-label');
+    if (authLabel) { authLabel.textContent = ''; authLabel.style.color = ''; }
+    const authReqs = document.getElementById('auth-password-reqs');
+    if (authReqs) authReqs.querySelectorAll('li').forEach(li => li.classList.remove('valid'));
+
     currentWorkspaceId = null;
     isSuperadmin = false;
     if (workspaceSelectTom) {
@@ -1817,6 +1975,84 @@ function getAuthErrorMessage(error) {
   }
 }
 
+// ─── Password Security Utilities ──────────────────────────────
+const COMMON_PASSWORDS = new Set([
+  'password','password1','password123','12345678','123456789',
+  'qwerty123','qwerty1','abc123','letmein','welcome',
+  'monkey','dragon','master','admin','admin123',
+  'login','hello','passw0rd','shadow','sunshine',
+  'trustno1','iloveyou','princess','football','baseball',
+  'whatever','superman','batman','starwars','1234',
+  '000000','111111','11111111','222222','333333',
+  '444444','555555','666666','777777','888888',
+  '999999','123123','1234567890','qwertyuiop','asdfghjkl',
+]);
+
+function evaluatePasswordStrength(password) {
+  if (!password) return { score:0, checks:{}, label:'', color:'transparent', pct:0 };
+  const checks = {
+    length: password.length >= 8,
+    lowercase: /[a-z]/.test(password),
+    uppercase: /[A-Z]/.test(password),
+    number: /\d/.test(password),
+    special: /[^a-zA-Z0-9]/.test(password),
+  };
+  const score = Object.values(checks).filter(Boolean).length;
+  const pct = (score / 5) * 100;
+  const levels = [
+    { label:'', color:'transparent' },
+    { label:'Weak', color:'#f43f5e' },
+    { label:'Fair', color:'#f97316' },
+    { label:'Good', color:'#eab308' },
+    { label:'Strong', color:'#22c55e' },
+    { label:'Very Strong', color:'#16a34a' },
+  ];
+  return { score, checks, ...levels[score], pct };
+}
+
+function updatePasswordStrengthUI(fillEl, labelEl, reqsEl, password) {
+  const r = evaluatePasswordStrength(password);
+  if (fillEl) { fillEl.style.width = r.pct + '%'; fillEl.style.background = r.color; }
+  if (labelEl) { labelEl.textContent = r.label; labelEl.style.color = r.color; }
+  if (reqsEl) {
+    reqsEl.querySelectorAll('li').forEach(li => {
+      const req = li.dataset.req;
+      if (req && req in r.checks) li.classList.toggle('valid', r.checks[req]);
+    });
+  }
+  return r;
+}
+
+function togglePasswordVisibility(btn, input) {
+  const hidden = input.type === 'password';
+  input.type = hidden ? 'text' : 'password';
+  btn.innerHTML = feather.icons[hidden ? 'eye-off' : 'eye'].toSvg({ width:18, height:18 });
+  btn.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+}
+
+function isCommonPassword(password) {
+  return COMMON_PASSWORDS.has(password.toLowerCase().trim());
+}
+
+// ─── Wire toggle buttons at page load ─────────────────────────
+document.querySelectorAll('.password-toggle').forEach(btn => {
+  const input = btn.closest('.password-input-wrapper').querySelector('input');
+  btn.addEventListener('click', () => togglePasswordVisibility(btn, input));
+});
+
+// ─── Wire auth password strength meter ────────────────────────
+(function initAuthPasswordStrength() {
+  const pwInput = document.getElementById('auth-password');
+  const fill = document.getElementById('auth-strength-fill');
+  const label = document.getElementById('auth-strength-label');
+  const reqs = document.getElementById('auth-password-reqs');
+  if (!pwInput || !fill || !label || !reqs) return;
+  pwInput.addEventListener('input', () => {
+    if (document.getElementById('auth-password-strength').style.display === 'none') return;
+    updatePasswordStrengthUI(fill, label, reqs, pwInput.value);
+  });
+})();
+
 authToggleLink.addEventListener('click', (e) => {
   e.preventDefault();
   
@@ -1837,6 +2073,17 @@ authToggleLink.addEventListener('click', (e) => {
   if(authDivider) authDivider.style.display = 'flex';
   if(btnLogin) btnLogin.style.display = 'flex';
   if(forgotPasswordLink) forgotPasswordLink.style.display = isSignUpMode ? 'none' : 'block';
+
+  const authStrength = document.getElementById('auth-password-strength');
+  if (authStrength) authStrength.style.display = isSignUpMode ? 'block' : 'none';
+  if (!isSignUpMode && authPassword) {
+    const fill = document.getElementById('auth-strength-fill');
+    const label = document.getElementById('auth-strength-label');
+    const reqs = document.getElementById('auth-password-reqs');
+    if (fill) fill.style.width = '0%';
+    if (label) { label.textContent = ''; label.style.color = ''; }
+    if (reqs) reqs.querySelectorAll('li').forEach(li => li.classList.remove('valid'));
+  }
 
   if (isSignUpMode) {
     authBoxTitle.textContent = "Create an Account";
@@ -1909,6 +2156,9 @@ authForm.addEventListener('submit', async (e) => {
         throw resetErr;
       }
     } else if (isSignUpMode) {
+      if (isCommonPassword(password)) {
+        throw new Error('This password is too common and easily guessed. Please choose a stronger password.');
+      }
       await createUserWithEmailAndPassword(auth, email, password);
       if (analytics) logEvent(analytics, 'sign_up', { method: 'email' });
     } else {
