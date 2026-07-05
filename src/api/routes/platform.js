@@ -1,10 +1,8 @@
 const { Router } = require('express');
-const { body, query, validationResult } = require('express-validator');
+const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
 const { getConnector } = require('../../domains/connector/registry');
-const { NotionService } = require('../../../services/notion');
-const { TickTickService } = require('../../../services/ticktick');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -84,103 +82,6 @@ router.post('/platform-entities', verifyAuth, [
     res.json({ success: true, entities });
   } catch (err) {
     logger.error('platform', 'Failed to fetch entities', { error: err.message, stack: err.stack?.split('\n').slice(0,5).join(' | ') });
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.get('/notion/databases', verifyAuth, [
-  query('connectionId').isString().trim().notEmpty(),
-], validate, async (req, res) => {
-  try {
-    const connectionId = req.query.connectionId;
-    const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-    const notion = new NotionService(creds.accessToken);
-    const databases = await notion.listDatabases();
-    res.json({ success: true, databases });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.get('/ticktick/lists', verifyAuth, [
-  query('connectionId').isString().trim().notEmpty(),
-], validate, async (req, res) => {
-  try {
-    const connectionId = req.query.connectionId;
-    const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-    const ticktick = new TickTickService(creds);
-    const lists = await ticktick.getProjects();
-    res.json({ success: true, lists: lists || [] });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.post('/notion-databases', verifyAuth, [
-  body('connectionId').optional().isString(),
-  body('token').optional().isString(),
-], validate, async (req, res) => {
-  try {
-    const { connectionId, token } = req.body;
-    let actualToken = token;
-    if (connectionId) {
-      const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-      actualToken = creds.accessToken;
-    }
-    if (!actualToken) throw new Error('Token or Connection ID required');
-    const notion = new NotionService(actualToken);
-    const databases = await notion.listDatabases();
-    res.json({ success: true, databases });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.post('/notion-database-schema', verifyAuth, [
-  body('databaseId').isString().trim().notEmpty(),
-  body('connectionId').optional().isString(),
-  body('token').optional().isString(),
-], validate, async (req, res) => {
-  try {
-    const { connectionId, databaseId, token } = req.body;
-    let actualToken = token;
-    if (connectionId) {
-      const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-      actualToken = creds.accessToken;
-    }
-    if (!actualToken) throw new Error('Token or Connection ID required');
-    const notion = new NotionService(actualToken, databaseId);
-    const properties = await notion.getDatabaseSchema();
-    const schema = {};
-    for (const [key, prop] of Object.entries(properties)) {
-      schema[key] = { label: prop.name || key, type: prop.type };
-      if (prop.type === 'status' && prop.status) schema[key].options = prop.status.options;
-      if (prop.type === 'select' && prop.select) schema[key].options = prop.select.options;
-    }
-    res.json({ success: true, schema });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.post('/notion-database-templates', verifyAuth, [
-  body('databaseId').isString().trim().notEmpty(),
-  body('connectionId').optional().isString(),
-  body('token').optional().isString(),
-], validate, async (req, res) => {
-  try {
-    const { connectionId, databaseId, token } = req.body;
-    if (!databaseId) throw new Error('Notion database ID is required');
-    let actualToken = token;
-    if (connectionId) {
-      const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-      actualToken = creds.accessToken;
-    }
-    if (!actualToken) throw new Error('Token or Connection ID required');
-    const notion = new NotionService(actualToken, databaseId);
-    const templates = await notion.listTemplates();
-    res.json({ success: true, templates });
-  } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });

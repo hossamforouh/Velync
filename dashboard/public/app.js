@@ -453,6 +453,9 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 }
             }
           });
+          if (prefix === 'p2') {
+            setTimeout(() => loadDefaultMappingsPreset(), 0);
+          }
         });
         
         inputEl.addEventListener('input', () => {
@@ -753,8 +756,6 @@ const fIntervalValue = document.getElementById('f-interval-value');
 const fIntervalUnit = document.getElementById('f-interval-unit');
 const fSourceConnection = document.getElementById('f-source-connection');
 const fDestConnection = document.getElementById('f-dest-connection');
-const fNDbId       = document.getElementById('f-n-dbid');
-const fNToken      = document.getElementById('f-n-token');
 const lastRunRow   = document.getElementById('last-run-row');
 const fLastRun     = document.getElementById('f-last-run');
 
@@ -768,9 +769,6 @@ const mappingsContainer = document.getElementById('mappings-container');
 const fSourceList        = document.getElementById('f-source-list');
 const fTtTag         = document.getElementById('f-tt-tag');
 
-const btnLoadTt    = document.getElementById('btn-load-tt');
-const btnLoadNotion = document.getElementById('btn-load-notion');
-
 const sectionStatusMapping = document.getElementById('section-status-mapping');
 let currentStatusState = {
   options: [],
@@ -780,7 +778,6 @@ let currentStatusState = {
   completeDefault: ''
 };
 
-let notionDbSelect;
 let notionDbProperties = {}; // name -> { type, ... } property metadata
 let sourceSchema = {}; // fieldKey -> { type, label } from /api/schema
 let _connectionsCache = [];
@@ -831,34 +828,6 @@ document.addEventListener('DOMContentLoaded', () => {
       e.returnValue = '';
     }
   });
-
-  if (fNDbId && window.TomSelect) {
-    notionDbSelect = new TomSelect("#f-n-dbid", {
-      create: false,
-      sortField: { field: "text", direction: "asc" },
-      placeholder: "Select a database...",
-      maxOptions: null
-    });
-    notionDbSelect.on('change', async (value) => {
-      if (value) {
-        try {
-          const connId = document.getElementById('f-dest-connection')?.value;
-          await fetchNotionDbSchema(value, connId);
-          await fetchNotionDbTemplates(value, connId);
-          updateStatusMappingUI();
-        } catch (err) {
-          console.error('Error handling database change:', err);
-          showToast('Failed to load database schema', 'error');
-        }
-      } else {
-        const row = document.getElementById('notion-template-row');
-        if (row) row.style.display = 'none';
-        const select = document.getElementById('f-n-template');
-        if (select) select.innerHTML = '<option value="">No Template (Default Layout)</option>';
-        updateStatusMappingUI();
-      }
-    });
-  }
 
   // Removed TomSelect init for status fields (now handled by custom modal)
 });
@@ -2847,9 +2816,6 @@ async function openPanel(id = null) {
       const p2Conn = _connectionsCache.find(c => c.id === cfg.platform2ConnectionId);
       if (p2Conn) {
         window.renderSchemaForPlatform(p2Conn.provider, 'dest-dynamic-container', 'p2', cfg.p2Settings || {});
-        if (cfg.p2Settings?.databaseId) {
-          await fetchNotionDbSchema(cfg.p2Settings.databaseId, cfg.platform2ConnectionId, false);
-        }
       }
 
       // Restore mappings only when both schemas are available (connections configured)
@@ -3431,93 +3397,6 @@ function filterAndPopulateTtLists() {
   }
 }
 
-async function fetchNotionDbSchema(databaseId, connectionId, showToasts = true) {
-  if (!connectionId || !databaseId) return;
-  try {
-    const user = auth.currentUser;
-    const idToken = await user.getIdToken();
-    const res = await fetch(`${API_URL}/notion-database-schema`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`
-      },
-      body: JSON.stringify({ connectionId, databaseId })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to load database schema');
-    }
-    notionDbProperties = data.schema || {};
-    
-    // Rerender destination property selectors in existing mapping rows
-    const rows = mappingsContainer.querySelectorAll('.mapping-row');
-    rows.forEach(row => {
-      const selectDest = row.querySelector('.map-dest') || row.querySelector('.map-notion');
-      const currentVal = selectDest.value;
-      
-      let dOptions = `<option value="__content__" ${currentVal === '__content__' ? 'selected' : ''}>[Page Content / Body]</option>`;
-      Object.entries(notionDbProperties).forEach(([key, f]) => {
-        dOptions += `<option value="${key}" ${key === currentVal ? 'selected' : ''}>${f.label || key} (${f.type})</option>`;
-      });
-      selectDest.innerHTML = dOptions;
-    });
-
-    if (showToasts) showToast('Loaded database schema properties successfully!', 'success');
-    updateStatusMappingUI();
-  } catch (err) {
-    console.error('Schema Load Error:', err);
-    if (showToasts) showToast(`Error loading database properties: ${err.message}`, 'error');
-  }
-}
-
-async function fetchNotionDbTemplates(dbId, connectionId, selectedTemplateId = null) {
-  const row = document.getElementById('notion-template-row');
-  const select = document.getElementById('f-n-template');
-  if (!row || !select) return;
-
-  if (!dbId || !connectionId) {
-    row.style.display = 'none';
-    select.innerHTML = '<option value="">No Template (Default Layout)</option>';
-    return;
-  }
-
-  row.style.display = 'flex';
-  select.innerHTML = '<option value="">Loading templates...</option>';
-  select.disabled = true;
-
-  try {
-    const user = auth.currentUser;
-    const idToken = await user.getIdToken();
-    const res = await fetch(`${API_URL}/notion-database-templates`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`
-      },
-      body: JSON.stringify({ connectionId, databaseId: dbId })
-    });
-    const data = await res.json();
-    if (data.success) {
-      let optionsHtml = '<option value="">No Template (Default Layout)</option>';
-      const templates = data.templates || [];
-      templates.forEach(tpl => {
-        const selected = tpl.id === selectedTemplateId ? 'selected' : '';
-        optionsHtml += `<option value="${escAttr(tpl.id)}" ${selected}>${escHtml(tpl.name || 'Untitled Template')}</option>`;
-      });
-      select.innerHTML = optionsHtml;
-    } else {
-      console.error('Failed to load templates:', data.error);
-      select.innerHTML = `<option value="">Error: ${escHtml(data.error || 'Unknown error')}</option>`;
-    }
-  } catch (err) {
-    console.error('Error loading templates:', err);
-    select.innerHTML = '<option value="">Error loading templates</option>';
-  } finally {
-    select.disabled = false;
-  }
-}
-
 async function fetchSourceSchema(connectionId, platform, entityType) {
   if (!connectionId || !platform) return;
   // Use the platform ID directly — backend route resolves connector via registry
@@ -3597,13 +3476,6 @@ function clearForm() {
   }
 
   if (lastRunRow) lastRunRow.style.display = 'none';
-  if (notionDbSelect) {
-    notionDbSelect.clear();
-    notionDbSelect.clearOptions();
-  } else if (fNDbId) {
-    fNDbId.innerHTML   = '<option value="">Select a database...</option>';
-    fNDbId.value       = '';
-  }
   const templateRow = document.getElementById('notion-template-row');
   if (templateRow) templateRow.style.display = 'none';
   const templateSelect = document.getElementById('f-n-template');
@@ -3707,19 +3579,6 @@ async function fillForm(cfg, opts = {}) {
       fLastRun.textContent = isNaN(d.getTime()) ? cfg.lastRunAt : d.toLocaleString();
     } else {
       lastRunRow.style.display = 'none';
-    }
-  }
-  const dbId = cfg.notion?.databaseId || '';
-  if (dbId) {
-    if (notionDbSelect) {
-      notionDbSelect.addOption({value: dbId, text: `Current DB (${dbId.substring(0, 8)}...)`});
-      notionDbSelect.setValue(dbId);
-    } else {
-      const opt = document.createElement('option');
-      opt.value = dbId;
-      opt.textContent = `Current DB (${dbId.substring(0, 8)}...)`;
-      fNDbId.appendChild(opt);
-      fNDbId.value = dbId;
     }
   }
   
@@ -4452,100 +4311,7 @@ fSyncType.addEventListener('change', () => {
 
 btnAddMapping.addEventListener('click', () => addMappingRow('', ''));
 
-// TickTick Data Loading
-if (btnLoadTt) {
-  btnLoadTt.addEventListener('click', async () => {
-    const connId = fSourceConnection?.value;
-    if (!connId) {
-      showToast('Please select a TickTick connection first', 'error');
-      return;
-    }
-    
-    const loadKey = 'loadTickTick';
-    startLoad(loadKey);
-    btnLoadTt.innerHTML = '⏳ Loading...';
-    try {
-      const uid = auth?.currentUser?.uid;
-      if (!uid) throw new Error('Not authenticated');
-      const token = await auth.currentUser.getIdToken();
-      const res = await fetch(`/api/ticktick/lists?connectionId=${encodeURIComponent(connId)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      const data = await res.json();
-      const projects = data.lists || [];
-      currentProjects = projects;
 
-      filterAndPopulateTtLists();
-      
-      // Auto-trigger tag fetching for the current list
-      fSourceList.dispatchEvent(new Event('change'));
-      
-      showToast(`Loaded ${projects.length} projects successfully!`, 'success');
-    } catch (err) {
-      console.error('TickTick API Error:', err);
-      showToast(!navigator.onLine ? 'No internet available' : `Error loading TickTick projects: ${err.message}. Check token or adblockers.`, 'error');
-    } finally {
-      btnLoadTt.innerHTML = `${feather.icons['refresh-cw'].toSvg({width: 12, height: 12})} Load Data`;
-      endLoad(loadKey);
-    }
-  });
-}
-
-if (btnLoadNotion) {
-  btnLoadNotion.addEventListener('click', async () => {
-    const token = fNToken.value.trim();
-    if (!token) {
-      showToast('Please enter your Notion Integration Token first.', 'warning');
-      return;
-    }
-    
-    const loadKey = 'loadNotion';
-    startLoad(loadKey);
-    btnLoadNotion.textContent = '⏳ Loading...';
-    try {
-      const res = await fetch(`${API_URL}/notion-databases`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      });
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to load databases');
-      }
-      
-      const currentVal = fNDbId.value;
-      
-      if (notionDbSelect) {
-        notionDbSelect.clearOptions();
-        data.databases.forEach(db => {
-          notionDbSelect.addOption({value: db.id, text: db.title});
-        });
-        notionDbSelect.refreshOptions(false);
-        if (currentVal) notionDbSelect.setValue(currentVal);
-      } else {
-        fNDbId.innerHTML = '<option value="">Select a database...</option>';
-        data.databases.forEach(db => {
-          const opt = document.createElement('option');
-          opt.value = db.id;
-          opt.textContent = db.title;
-          fNDbId.appendChild(opt);
-        });
-        if (Array.from(fNDbId.options).some(o => o.value === currentVal)) {
-          fNDbId.value = currentVal;
-        }
-      }
-      
-      showToast(`Loaded ${data.databases.length} databases successfully!`, 'success');
-    } catch (err) {
-      console.error('Notion API Error:', err);
-      showToast(!navigator.onLine ? 'No internet available' : `Error loading Notion databases: ${err.message}.`, 'error');
-    } finally {
-      btnLoadNotion.innerHTML = `${feather.icons['refresh-cw'].toSvg({width: 12, height: 12})} Load DBs`;
-      endLoad(loadKey);
-    }
-  });
-}
 
 if (fSourceList) {
   fSourceList.addEventListener('change', async () => {
