@@ -857,6 +857,20 @@ document.addEventListener('DOMContentLoaded', () => {
 const API_URL = window.VELYNC_CONFIG.apiBase.replace(/\/$/, '') + '/api';
 let currentProjects = [];
 
+// ─── Avatar Dropdown (module-level so handlers are ready immediately) ───
+const avatarBtn = document.getElementById('user-avatar');
+const avatarDrop = document.getElementById('avatar-dropdown');
+if (avatarBtn && avatarDrop) {
+  avatarBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    avatarDrop.classList.toggle('show');
+  });
+  document.addEventListener('click', () => {
+    avatarDrop.classList.remove('show');
+  });
+  avatarDrop.addEventListener('click', (e) => e.stopPropagation());
+}
+
 // ─── Auth Flow ────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
   const globalLoader = document.getElementById('global-loader');
@@ -1033,20 +1047,6 @@ onAuthStateChanged(auth, async (user) => {
       navHub.addEventListener('click', () => {
         renderHubView(db, (v) => navigateTo(v));
       });
-    }
-
-    // Init Avatar Dropdown
-    const avatarBtn = document.getElementById('user-avatar');
-    const avatarDrop = document.getElementById('avatar-dropdown');
-    if (avatarBtn && avatarDrop) {
-      avatarBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        avatarDrop.classList.toggle('show');
-      });
-      document.addEventListener('click', () => {
-        avatarDrop.classList.remove('show');
-      });
-      avatarDrop.addEventListener('click', (e) => e.stopPropagation());
     }
 
     // Sidebar toggle for mobile
