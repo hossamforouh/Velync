@@ -453,7 +453,9 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 }
             }
           });
-          setTimeout(() => loadDefaultMappingsPreset(), 0);
+          if (field.type === 'dynamic_select' && !field.dependsOn) {
+            setTimeout(() => loadDefaultMappingsPreset(), 0);
+          }
         });
         
         inputEl.addEventListener('input', () => {
