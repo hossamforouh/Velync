@@ -806,6 +806,7 @@
               <button class="admin-tab active" data-target="admin-pane-overview">Overview</button>
               <button class="admin-tab" data-target="admin-pane-global">Global Settings</button>
               <button class="admin-tab" data-target="admin-pane-platforms">Platforms</button>
+              <button class="admin-tab" data-target="admin-pane-plans">Plans</button>
               <button class="admin-tab" data-target="admin-pane-marketplace">Marketplace</button>
               <button class="admin-tab" data-target="admin-pane-activity">Activity Log</button>
             </div>
@@ -992,6 +993,47 @@
                 <div id="admin-plat-load-more-wrap" style="display:none;padding:16px;text-align:center;">
                   <button id="admin-plat-load-more" class="btn btn-secondary btn-sm">Load More</button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Plans Pane -->
+          <div class="admin-pane" id="admin-pane-plans" style="display: none;">
+            <div class="surface-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2 style="margin: 0;">Plans &amp; Pricing</h2>
+                <div style="display:flex;gap:8px;">
+                  <button id="admin-plans-refresh-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">⟳ Refresh</button>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+                <span id="admin-plans-count" style="color:var(--text-3);font-size:0.82rem;"></span>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input type="text" id="f-admin-new-plan-id" class="admin-input" placeholder="new-plan-id" style="width:160px;" />
+                  <button id="btn-admin-create-plan" class="btn btn-primary btn-sm" type="submit" form="admin-plans-add-form">+ New Plan</button>
+                </div>
+                <form id="admin-plans-add-form" style="display:contents;"></form>
+              </div>
+
+              <div class="connections-table-wrap">
+                <table class="connections-table" id="admin-plans-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Name</th>
+                      <th>Price</th>
+                      <th>Max Configs</th>
+                      <th>Min Interval</th>
+                      <th>Max Items</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-plans-tbody">
+                    <tr><td colspan="8" style="text-align:center;padding:20px;">Loading...</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1204,6 +1246,87 @@
             </form>
           </div>
     </div>
+    </section>
+
+    <!-- ── Plan Editor ──────────────────────────────────────────── -->
+    <section class="view-panel" id="view-admin-plan-editor" style="display: none;" aria-label="Plan Editor">
+      <div style="width: 100%; height: 100%; padding: 24px; box-sizing: border-box;">
+        <div class="panel-header"
+          style="padding-left: 0; padding-right: 0; background: transparent; border-bottom: 1px solid var(--border); margin-bottom: 24px;">
+          <h2 id="plan-editor-panel-title" style="font-size: 1.5rem;">Edit Plan</h2>
+          <button class="panel-close" id="plan-editor-close" style="position: relative; right: 0; top: 0;">✕</button>
+        </div>
+        <div class="panel-body" style="padding: 0; overflow-y: visible;">
+          <form id="plan-editor-form">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div class="form-row">
+                <label for="f-plan-id">Plan ID</label>
+                <input id="f-plan-id" type="text" class="admin-input" readonly />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-name">Plan Name *</label>
+                <input id="f-plan-name" type="text" class="admin-input" required />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-desc">Description</label>
+                <input id="f-plan-desc" type="text" class="admin-input" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-price-monthly">Monthly Price ($)</label>
+                <input id="f-plan-price-monthly" type="number" class="admin-input" step="0.01" min="0" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-price-annual">Annual Price ($)</label>
+                <input id="f-plan-price-annual" type="number" class="admin-input" step="0.01" min="0" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-max-configs">Max Active Configs</label>
+                <input id="f-plan-max-configs" type="number" class="admin-input" min="1" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-min-interval">Min Sync Interval (minutes)</label>
+                <input id="f-plan-min-interval" type="number" class="admin-input" min="1" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-max-items">Max Items Per Run</label>
+                <input id="f-plan-max-items" type="number" class="admin-input" min="1" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-log-retention">Log Retention (days)</label>
+                <input id="f-plan-log-retention" type="number" class="admin-input" min="1" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-sort-order">Sort Order</label>
+                <input id="f-plan-sort-order" type="number" class="admin-input" min="0" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-connector-tiers">Connector Tiers (comma-separated)</label>
+                <input id="f-plan-connector-tiers" type="text" class="admin-input" placeholder="basic, premium" />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-stripe-monthly">Stripe Price ID (Monthly)</label>
+                <input id="f-plan-stripe-monthly" type="text" class="admin-input" placeholder="price_..." />
+              </div>
+              <div class="form-row">
+                <label for="f-plan-stripe-annual">Stripe Price ID (Annual)</label>
+                <input id="f-plan-stripe-annual" type="text" class="admin-input" placeholder="price_..." />
+              </div>
+              <div class="form-row" style="display:flex;align-items:center;gap:12px;">
+                <label class="toggle">
+                  <input type="checkbox" id="f-plan-is-default" />
+                  <span class="toggle-track"></span>
+                  <span class="toggle-thumb"></span>
+                </label>
+                <span>Default plan for new workspaces</span>
+              </div>
+            </div>
+            <div class="panel-actions" style="display: flex; gap: 8px; margin-top: 24px;">
+              <button type="button" class="btn btn-secondary" id="btn-plan-cancel">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="btn-plan-save" style="margin-left: auto;">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </section>
     </main>
   </div><!-- /platform-body -->
@@ -1658,34 +1781,14 @@
           <h2>Billing & Plan</h2>
           <p class="settings-subtitle">Manage your subscription and billing details.</p>
 
-          <div class="billing-card current-plan">
-            <div class="plan-header">
-              <h3>Free Tier</h3>
-              <span class="plan-price">$0<span>/mo</span></span>
-            </div>
-            <ul class="plan-features">
-              <li>✓ 2 Active Flows maximum</li>
-              <li>✓ 15-minute sync polling velocity</li>
-              <li>✓ Community Support</li>
-            </ul>
-            <button class="btn btn-secondary" disabled>Current Plan</button>
+          <div id="billing-plan-display">
+            <div style="color:var(--text-3);font-size:0.9rem;">Loading plan info...</div>
           </div>
 
-          <div class="billing-card upgrade-plan"
-            style="margin-top: 24px; border: 1px solid var(--primary); background: rgba(110,86,207,0.05);">
-            <div class="plan-header">
-              <h3>Pro Tier</h3>
-              <span class="plan-price">$19<span>/mo</span></span>
-            </div>
-            <ul class="plan-features">
-              <li>✓ <strong>Unlimited</strong> Active Flows</li>
-              <li>✓ <strong>1-minute</strong> sync velocity / Webhooks</li>
-              <li>✓ Priority Support</li>
-              <li>✓ Team Collaboration</li>
-            </ul>
-            <button class="btn btn-primary">Upgrade to Pro</button>
+          <div id="billing-subscription-area" style="margin-top:24px;"></div>
+
+          <div id="billing-checkout-area" style="margin-top:24px;"></div>
         </div>
-      </div>
 
       <!-- Notifications Tab -->
       <div class="settings-pane" id="pane-notifications" style="display: none;">

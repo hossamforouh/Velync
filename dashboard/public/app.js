@@ -14,6 +14,8 @@ import { renderHubView } from './js/hub.js';
 import { connections, loadConnections, renderConnectionsView, renderConnectionsSkeleton, initiateDirectOAuthFlow } from './js/connections.js';
 import { initAdminIntegrations, setAdminAuth } from './js/admin-integrations.js';
 import { initAdminPlatforms } from './js/admin-platforms.js';
+import { initAdminPlans } from './js/admin-plans.js';
+import { initBilling } from './js/billing.js';
 import './js/integration-setup.js';
 import { showToast } from './js/toast.js';
 import { confirmDialog, alertDialog, threeWayConfirmDialog } from './js/confirm.js';
@@ -963,6 +965,7 @@ onAuthStateChanged(auth, async (user) => {
       if (isSuperadmin) {
         initAdminIntegrations(db);
         initAdminPlatforms(db, auth);
+        initAdminPlans(db, auth);
         setAdminAuth(auth);
       }
     }
@@ -1085,6 +1088,11 @@ onAuthStateChanged(auth, async (user) => {
             // If workspace tab, populate the collaborator list
             if (tab.dataset.tab === 'workspace' && currentWorkspaceId) {
               loadCollaborators();
+            }
+
+            // If billing tab, load plan info
+            if (tab.dataset.tab === 'billing') {
+              initBilling(db, auth);
             }
           }
         });

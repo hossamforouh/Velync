@@ -14,6 +14,31 @@ const INSTANCE_ID = `${os.hostname()}-${process.pid}`;
 /** Duration of a sync lease in milliseconds (2 min — max expected execution time) */
 const LEASE_DURATION_MS = 120_000;
 
+/** Small in-memory cache for plan documents (plans change rarely) */
+const planCache = { data: new Map(), time: 0 };
+const PLAN_CACHE_TTL = 120_000; // 2 minutes
+
+/**
+ * Fetch a plan document with a short-lived in-memory cache.
+ * @param {string} planId
+ * @returns {Promise<object>}
+ */
+async function getPlan(planId) {
+  if (planCache.time > Date.now() - PLAN_CACHE_TTL) {
+    const cached = planCache.data.get(planId);
+    if (cached) return cached;
+  }
+  const doc = await db.collection('plans').doc(planId).get();
+  if (!doc.exists) return null;
+  const plan = { id: doc.id, ...doc.data() };
+  // Refresh entire cache on miss to avoid repeated individual lookups
+  const snap = await db.collection('plans').get();
+  planCache.data.clear();
+  snap.forEach(d => planCache.data.set(d.id, { id: d.id, ...d.data() }));
+  planCache.time = Date.now();
+  return planCache.data.get(planId) || plan;
+}
+
 /**
  * Try to acquire a distributed lease for a sync config.
  * Uses a Firestore transaction so only one instance succeeds.
@@ -119,19 +144,24 @@ async function runSync(config, configId) {
   }
   runningConfigs.add(configId);
 
+  // Resolve workspace's plan limits
+  let plan = null;
   try {
-    const settingsDoc = await db.collection('app_settings').doc('general').get();
-    const settings = settingsDoc.data() || {};
-    const maxConfigs = settings.maxConfigsPerUser;
-    if (maxConfigs && config.workspaceId) {
-      const activeSnap = await db.collection('workspaces').doc(config.workspaceId)
-        .collection('sync_configs')
-        .where('status', '==', 'active')
-        .get();
-      if (activeSnap.size > maxConfigs) {
-        logger.warn('sync', `Workspace "${config.workspaceId}" has ${activeSnap.size} active configs, limit is ${maxConfigs}. Skipping "${configId}".`);
-        runningConfigs.delete(configId);
-        return;
+    if (config.workspaceId) {
+      const wsDoc = await db.collection('workspaces').doc(config.workspaceId).get();
+      const ws = wsDoc.data() || {};
+      const planId = ws.planId || 'free';
+      plan = await getPlan(planId);
+      if (plan && plan.maxActiveConfigs) {
+        const activeSnap = await db.collection('workspaces').doc(config.workspaceId)
+          .collection('sync_configs')
+          .where('status', '==', 'active')
+          .get();
+        if (activeSnap.size > plan.maxActiveConfigs) {
+          logger.warn('sync', `Workspace "${config.workspaceId}" has ${activeSnap.size} active configs, plan "${planId}" limit is ${plan.maxActiveConfigs}. Skipping "${configId}".`);
+          runningConfigs.delete(configId);
+          return;
+        }
       }
     }
   } catch (err) {
@@ -175,7 +205,10 @@ async function runSync(config, configId) {
     const fetchOptions = lastSyncAt ? { modifiedSince: lastSyncAt } : {};
 
     // Hard cap on items processed per run to avoid timeout
-    const MAX_ITEMS_PER_RUN = config.maxItemsPerRun || 500;
+    let MAX_ITEMS_PER_RUN = config.maxItemsPerRun || 500;
+    if (plan && plan.maxItemsPerRun && MAX_ITEMS_PER_RUN > plan.maxItemsPerRun) {
+      MAX_ITEMS_PER_RUN = plan.maxItemsPerRun;
+    }
 
     const sourceCreds = sourceConnId ? { ...await resolveCredentials(null, sourceConnId), ...p1Settings } : { ...p1Settings };
     const destCreds = destConnId ? { ...await resolveCredentials(null, destConnId), databaseId: p2Settings.database, ...p2Settings } : { databaseId: p2Settings.database, ...p2Settings };
@@ -371,4 +404,4 @@ async function runSync(config, configId) {
   return { synced, deleted, failed };
 }
 
-module.exports = { runSync, retryWithBackoff };
+module.exports = { runSync, retryWithBackoff, getPlan };

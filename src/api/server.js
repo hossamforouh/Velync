@@ -13,6 +13,8 @@ const workspaceRoutes = require('./routes/workspace');
 const syncConfigsRoutes = require('./routes/sync-configs');
 const settingsRoutes = require('./routes/settings');
 const adminRoutes = require('./routes/admin');
+const adminPlansRoutes = require('./routes/admin-plans');
+const billingRoutes = require('./routes/billing');
 const { maintenanceMode } = require('./middleware/maintenance');
 
 const ALLOWED_ORIGINS = [
@@ -52,7 +54,8 @@ function createApp() {
     next();
   });
 
-  // Body parser with size limit
+  // Body parser with size limit — skip for Stripe webhook (needs raw body)
+  app.use('/api/billing/webhook', express.raw({ type: 'application/json', limit: config.maxRequestBodySize }));
   app.use(express.json({ limit: config.maxRequestBodySize }));
 
   // Rate limiting
@@ -88,6 +91,8 @@ function createApp() {
   app.use('/api', syncConfigsRoutes);
   app.use('/api/settings', settingsRoutes);
   app.use('/api', adminRoutes);
+  app.use('/api', adminPlansRoutes);
+  app.use('/api', billingRoutes);
   app.use(syncRoutes);
 
   app.use((req, res) => {

@@ -23,6 +23,9 @@ const config = {
   apiKeyAuthEnabled: process.env.API_KEY_AUTH_ENABLED !== 'false',
   externalApiTimeout: parseInt(process.env.EXTERNAL_API_TIMEOUT, 10) || 30000,
   maxRequestBodySize: process.env.MAX_REQUEST_BODY_SIZE || '1mb',
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+  appBaseUrl: process.env.APP_BASE_URL || 'https://velync.web.app',
 };
 
 module.exports = config;
