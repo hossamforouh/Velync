@@ -24,11 +24,13 @@ class TickTickConnector extends Connector {
     const svc = new TickTickService(this.credentials);
     await svc.authenticate();
     const listName = filter.listName || 'Inbox';
+    const since = options.modifiedSince;
 
     if (entityType === 'Habits') {
       const habits = await svc.getHabits();
       const results = [];
       for (const habit of habits) {
+        if (since && habit.modifiedTime && habit.modifiedTime <= since) continue;
         const checkins = await svc.getHabitCheckins(habit.id).catch(() => ({ checkins: [] }));
         results.push({ ...habit, title: habit.name, ...checkins });
       }
@@ -36,12 +38,17 @@ class TickTickConnector extends Connector {
     }
 
     const tasks = await svc.getTasksFromList(listName);
-    if (entityType === 'Notes') return filterByTag(tasks.filter(t => t.kind === 'NOTE'), filter);
-    const items = tasks.filter(t => t.kind !== 'NOTE');
-    try {
-      const completed = await svc.getCompletedTasksFromList(listName);
-      items.push(...completed.filter(t => t.kind !== 'NOTE'));
-    } catch {}
+    let items;
+    if (entityType === 'Notes') {
+      items = tasks.filter(t => t.kind === 'NOTE');
+    } else {
+      items = tasks.filter(t => t.kind !== 'NOTE');
+      try {
+        const completed = await svc.getCompletedTasksFromList(listName, since ? new Date(since) : null);
+        items.push(...completed.filter(t => t.kind !== 'NOTE'));
+      } catch {}
+    }
+    if (since) items = items.filter(t => !t.modifiedTime || t.modifiedTime > since);
     return filterByTag(items, filter);
   }
 

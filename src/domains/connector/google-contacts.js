@@ -19,6 +19,13 @@ class GoogleContactsConnector extends Connector {
     return svc.listContacts(group);
   }
 
+  async fetchIds(entityType, filter = {}) {
+    const svc = new GooglePeopleService(this.credentials.accessToken);
+    const group = filter.group || filter.resourceName || 'contactGroups/all';
+    const contacts = await svc.listContacts(group, 'names');
+    return contacts.map(c => ({ id: c.id }));
+  }
+
   async create(entityType, data) {
     const svc = new GooglePeopleService(this.credentials.accessToken);
     return svc.createContact(data);

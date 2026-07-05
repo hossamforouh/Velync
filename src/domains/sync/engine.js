@@ -194,8 +194,14 @@ async function runSync(config, configId) {
     const source = new SourceConn(sourceCreds);
     const dest = new DestConn(destCreds);
 
+    // ModifiedSince-filtered fetch for create/update processing
     const sourceItems = (await source.fetch(entityType, filter, fetchOptions)).slice(0, MAX_ITEMS_PER_RUN);
     const destItems = (await dest.fetch(entityType, filter, fetchOptions)).slice(0, MAX_ITEMS_PER_RUN);
+
+    // Unfiltered ID-only fetch for deletion detection — must not use modifiedSince
+    // or MAX_ITEMS_PER_RUN, since an incomplete ID set would cause false-positive deletions.
+    const allSourceIds = (await source.fetchIds(entityType, filter)).map(i => i.id);
+    const allDestIds = (await dest.fetchIds(entityType, filter)).map(i => i.id);
 
     const mappingsSnapshot = await db.collection('workspaces').doc(workspaceId)
       .collection('sync_configs').doc(configId).collection('sync_mappings').get();
@@ -334,7 +340,7 @@ async function runSync(config, configId) {
     }
 
     for (const [sourceId, mapping] of sourceToMapping.entries()) {
-      if (!activeSourceIds.has(sourceId) && activeDestIds.has(mapping.destEntityId)) {
+      if (!allSourceIds.includes(sourceId) && allDestIds.includes(mapping.destEntityId)) {
         try {
           await retryWithBackoff(() => dest.delete(entityType, mapping.destEntityId));
           queueRemoveMapping(mapping);

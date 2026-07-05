@@ -34,9 +34,9 @@ class GooglePeopleService {
     }));
   }
 
-  async listContacts(resourceName = 'contactGroups/all') {
+  async listContacts(resourceName = 'contactGroups/all', personFields = 'names,emailAddresses,phoneNumbers,organizations,addresses') {
     const baseParams = {
-      personFields: 'names,emailAddresses,phoneNumbers,organizations,addresses',
+      personFields,
       pageSize: 200,
     };
     if (resourceName && resourceName !== 'contactGroups/all') {

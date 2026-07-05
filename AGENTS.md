@@ -50,16 +50,55 @@
 
 **Issue 9 — Acknowledged, no action this round**
 
-### Files modified
-- `src/domains/connection/resolver.js` — consolidated credential resolution + token refresh
-- `src/api/routes/auth.js` — store `expiresAt` on OAuth exchange
-- `src/domains/sync/engine.js` — retry helper, lease lock, getDisplayTitle, incremental sync, stale mapping cleanup
-- `src/domains/connector/interface.js` — added `getDisplayTitle()`, updated `fetch()` signature
-- `src/domains/connector/notion.js` — `getDisplayTitle()`, `modifiedSince` in fetch
-- `src/domains/connector/ticktick.js` — `getDisplayTitle()`, options param in fetch
-- `src/domains/connector/google-contacts.js` — `getDisplayTitle()`, options param in fetch
-- `services/google-contacts.js` — pagination loops in listContacts/listContactGroups
-- `services/notion.js` — `modifiedSince` filter in getDatabasePages
-- `test/unit.test.js` — 10 new tests for retry + getDisplayTitle
+## Follow-up (same session): Deletion-detection correctness + TickTick incremental fetch
+
+### Priority fix — deletion-detection correctness
+
+**Bug**: `modifiedSince`-filtered fetches were used both for create/update *and* for
+deletion detection. If a source item hadn't been modified since the last sync (absent
+from the filtered fetch), but its paired dest item had been touched directly by a user
+(present in the filtered dest fetch), the old logic incorrectly deleted the still-valid
+dest item.
+
+**Fix**:
+- Added `fetchIds(entityType, filter)` to the `Connector` interface (`interface.js:55`)
+  — returns just `[{id}]` arrays for deletion-detection, defaulting to `fetch()`
+  without `modifiedSince`.
+- GoogleContactsConnector overrides `fetchIds` with a minimal `personFields: 'names'`
+  query for efficiency (`google-contacts.js:21`).
+- Engine now uses two separate fetches:
+  - `source.fetch()` / `dest.fetch()` with `modifiedSince` + `MAX_ITEMS_PER_RUN` cap
+    for create/update processing (`engine.js:197-199`).
+  - `source.fetchIds()` / `dest.fetchIds()` without any filter for building the full
+    current ID sets used in the deletion-propagation loop (`engine.js:203-204`).
+- `MAX_ITEMS_PER_RUN` is NOT applied to the ID-only fetch — an incomplete ID set
+  would reintroduce the same false-positive deletion bug (`engine.js:203-204`).
+
+### Optional — TickTick incremental fetch
+
+- `TickTickConnector.fetch()` now honors `options.modifiedSince` by filtering results
+  client-side on `modifiedTime` (TickTick's API doesn't support server-side date
+  filtering for incomplete tasks).
+- Also passes `modifiedSince` through to `getCompletedTasksFromList()` as the
+  `sinceDate` parameter, which already supported server-side filtering.
+- Habits are also filtered client-side by `modifiedTime`.
+
+### Google Contacts syncToken-based incremental sync
+
+- Flagged as future work. The People API uses an opaque `syncToken` mechanism rather
+  than a simple timestamp filter, requiring state storage and a different API path.
+  Not implemented this round.
+
+### Test results
+
+- All 32 existing tests pass (unchanged).
+- Syntax check clean on all 5 modified files.
+
+### Files modified (this follow-up)
+- `src/domains/connector/interface.js` — added `fetchIds()` default implementation
+- `src/domains/connector/google-contacts.js` — `fetchIds()` override with minimal fields
+- `src/domains/connector/ticktick.js` — client-side `modifiedSince` filtering
+- `src/domains/sync/engine.js` — separated deletion-detection IDs from create/update items
+- `services/google-contacts.js` — `listContacts()` accepts optional `personFields` param
 
 </div>

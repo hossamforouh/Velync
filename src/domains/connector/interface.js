@@ -44,6 +44,19 @@ class Connector {
   }
 
   /**
+   * Fetch only the IDs of current items for deletion-detection purposes.
+   * The default calls fetch() without modifiedSince — override with a
+   * cheaper API call when the platform supports it.
+   * @param {string} entityType
+   * @param {object} filter
+   * @returns {Promise<Array<{id: string}>>}
+   */
+  async fetchIds(entityType, filter = {}) {
+    const items = await this.fetch(entityType, filter);
+    return items.map(i => ({ id: i.id }));
+  }
+
+  /**
    * Extract a human-readable display title from a native item object.
    * Each connector overrides this to read the appropriate field from its
    * own data shape (e.g. Notion reads properties.Name.title[0].plain_text,
