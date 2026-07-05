@@ -5,7 +5,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import { getFirestore, collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app-check.js";
 import { initLogs } from "./js/logs.js";
 import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
@@ -561,6 +561,27 @@ function firestoreTimeout(ms = 15000) {
     setTimeout(() => reject(new Error(navigator.onLine ? 'Request timed out' : 'No internet available')), ms);
   });
 }
+
+async function processPendingInvites(user) {
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch('/api/workspace/invites', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.invites?.length) return;
+    for (const ws of data.invites) {
+      fetch('/api/workspace/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ workspaceId: ws.id })
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('Could not process invites:', e);
+  }
+}
 // -----------------------------------
 
 
@@ -635,7 +656,7 @@ let isZebraStriped = true;
 let isCompact = true;
 let isHeaderFrozen = false;
 let isConfigDirty = false;
-let currentUserRole = 'user';
+let isSuperadmin = false;
 let currentWorkspaceId = null;
 let workspaceSelectTom = null;
 
@@ -880,7 +901,7 @@ onAuthStateChanged(auth, async (user) => {
     if (collabDisplay) collabDisplay.textContent = user.email;
 
     // Handle User Profile & RBAC
-    currentWorkspaceId = user.uid;
+    currentWorkspaceId = localStorage.getItem('velync_last_workspace_' + user.uid) || user.uid;
     const userRef = doc(db, 'users', user.uid);
     let workspaceName = "Personal Workspace";
     if (user.displayName) workspaceName = user.displayName.split(' ')[0] + "'s Workspace";
@@ -891,19 +912,15 @@ onAuthStateChanged(auth, async (user) => {
         await setDoc(userRef, {
           id: user.uid,
           email: user.email,
-          role: 'user',
           workspaceName: workspaceName,
           name: user.displayName || '',
           workspaceId: user.uid,
           createdAt: serverTimestamp()
         });
-        currentUserRole = 'user';
         const settingsName = document.getElementById('settings-name');
         if (settingsName && user.displayName) settingsName.value = user.displayName;
       } else {
         const uData = userSnap.data();
-        currentUserRole = uData.role || 'user';
-        
         // Populate UI with loaded data
         const settingsName = document.getElementById('settings-name');
         if (settingsName && uData.name) {
@@ -913,6 +930,16 @@ onAuthStateChanged(auth, async (user) => {
           const avatarDropName = document.getElementById('dropdown-user-name');
           if (avatarDropName) avatarDropName.textContent = uData.name;
         }
+      }
+
+      // Determine superadmin status via backend (single source of truth)
+      const adminToken = await user.getIdToken();
+      const adminRes = await fetch('/api/admin/status', {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (adminRes.ok) {
+        const adminData = await adminRes.json();
+        isSuperadmin = adminData.isSuperadmin;
       }
 
       // Ensure default workspace exists
@@ -928,31 +955,19 @@ onAuthStateChanged(auth, async (user) => {
         });
       }
 
-      // Process pending invites
-      try {
-        const invitesQuery = query(collection(db, 'workspaces'), where('invitedEmails', 'array-contains', user.email));
-        const invitesSnap = await getDocs(invitesQuery);
-        for (const wDoc of invitesSnap.docs) {
-          await updateDoc(doc(db, 'workspaces', wDoc.id), {
-            members: arrayUnion(user.uid),
-            invitedEmails: arrayRemove(user.email)
-          });
-        }
-      } catch (inviteErr) {
-        console.warn("Could not process invites:", inviteErr);
-      }
+      // Process pending invites via backend (bypasses Firestore rules)
+      await processPendingInvites(user);
     } catch (err) {
       console.error("Error fetching user profile:", err);
       if (navigator.onLine) showToast('Failed to load profile', 'error');
-      // Fallback in case rules reject or network fails
-      currentUserRole = 'user';
+      isSuperadmin = false;
     }
 
-    // Configure UI based on Role
+    // Configure UI based on superadmin status
     const adminSection = document.getElementById('admin-sidebar-section');
     if (adminSection) {
-      adminSection.style.display = currentUserRole === 'superadmin' ? 'block' : 'none';
-      if (currentUserRole === 'superadmin') {
+      adminSection.style.display = isSuperadmin ? 'block' : 'none';
+      if (isSuperadmin) {
         initAdminIntegrations(db);
         initAdminPlatforms(db, auth);
         setAdminAuth(auth);
@@ -1005,7 +1020,7 @@ onAuthStateChanged(auth, async (user) => {
     setupWorkspaceSwitcher(user);
 
     window.currentWorkspaceId = currentWorkspaceId;
-    window.currentUserRole = currentUserRole;
+    window.isSuperadmin = isSuperadmin;
 
     initLogs(db, currentWorkspaceId);
 
@@ -1149,22 +1164,22 @@ onAuthStateChanged(auth, async (user) => {
           if (!newName || !currentWorkspaceId) return;
           setButtonLoading(btnSaveWorkspace, true);
           try {
-            await updateDoc(doc(db, 'workspaces', currentWorkspaceId), {
-              name: newName
+            const token = await user.getIdToken();
+            const res = await fetch('/api/workspace/name', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ name: newName, workspaceId: currentWorkspaceId })
             });
-            // Update the user's profile as well to keep the redundant workspaceName field in sync
-            if (currentWorkspaceId === user.uid) {
-              await updateDoc(doc(db, 'users', user.uid), {
-                workspaceName: newName
-              });
+            if (!res.ok) {
+              const errData = await res.json();
+              throw new Error(errData.error || 'Failed to save');
             }
             if (workspaceMsg) {
-              workspaceMsg.textContent = `Workspace name updated!`;
+              workspaceMsg.textContent = 'Workspace name updated!';
               workspaceMsg.style.color = '#34d399';
             }
             if (workspaceSelectTom) {
                 workspaceSelectTom.updateOption(currentWorkspaceId, { value: currentWorkspaceId, text: newName });
-                // Force UI to refresh the selected item text
                 workspaceSelectTom.removeItem(currentWorkspaceId, true);
                 workspaceSelectTom.addItem(currentWorkspaceId, true);
             }
@@ -1223,23 +1238,25 @@ onAuthStateChanged(auth, async (user) => {
           btnSendInvite.disabled = true;
           btnSendInvite.textContent = 'Sending...';
           try {
-            const tSnap = await getDoc(doc(db, 'workspaces', currentWorkspaceId));
-            let tenant = null;
-            if (tSnap.exists()) {
-              tenant = tSnap.data();
-              if (tenant.invitedEmails && tenant.invitedEmails.includes(email)) {
+            const token = await user.getIdToken();
+            const inviteRes = await fetch('/api/workspace/invite', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ email, workspaceId: currentWorkspaceId })
+            });
+            if (!inviteRes.ok) {
+              const errData = await inviteRes.json();
+              if (inviteRes.status === 409) {
                 btnSendInvite.disabled = false;
                 btnSendInvite.textContent = 'Send Invite';
                 return showInviteMsg('User is already invited', true);
               }
+              throw new Error(errData.error || 'Failed to send invite');
             }
-          
-            await updateDoc(doc(db, 'workspaces', currentWorkspaceId), {
-              invitedEmails: arrayUnion(email)
-            });
+            const inviteData = await inviteRes.json();
+            const workspaceName = inviteData.workspaceName || 'a Workspace';
 
             // Trigger Email Extension
-            const workspaceName = tenant ? tenant.name : "a Workspace";
             await addDoc(collection(db, 'mail'), {
               to: [email],
               message: {
@@ -1261,7 +1278,7 @@ onAuthStateChanged(auth, async (user) => {
             <td style="padding:40px 40px;">
               <h2 style="color:#ffffff;font-size:22px;margin-top:0;margin-bottom:20px;">Hi there,</h2>
               <p style="color:#cbd5e1;font-size:16px;line-height:24px;margin-bottom:24px;">
-                You have been invited to collaborate on <strong>\${workspaceName}</strong> in Velync.
+                You have been invited to collaborate on <strong>${workspaceName}</strong> in Velync.
               </p>
               
               <p style="color:#cbd5e1;font-size:16px;line-height:24px;margin-bottom:16px;">
@@ -1361,9 +1378,14 @@ onAuthStateChanged(auth, async (user) => {
           </div>
         `;
         try {
-           const tSnap = await getDoc(doc(db, 'workspaces', currentWorkspaceId));
-           if (!tSnap.exists()) return;
-           const tenant = tSnap.data();
+           const token = await auth.currentUser.getIdToken();
+           const wsRes = await fetch(`/api/workspace/${currentWorkspaceId}`, {
+             headers: { 'Authorization': `Bearer ${token}` }
+           });
+           if (!wsRes.ok) throw new Error('Failed to load workspace');
+           const wsData = await wsRes.json();
+           if (!wsData.workspace) return;
+           const tenant = wsData.workspace;
            let html = '';
            
            const wsInput = document.getElementById('settings-workspace-name');
@@ -1422,17 +1444,24 @@ onAuthStateChanged(auth, async (user) => {
                
                deleteBtn.disabled = true;
                deleteBtn.style.opacity = '0.5';
-               try {
-                 await updateDoc(doc(db, 'workspaces', currentWorkspaceId), {
-                   invitedEmails: arrayRemove(targetEmail)
-                 });
-                 loadCollaborators();
-                } catch (err) {
-                  console.error('Error removing invite', err);
-                  showToast('Failed to remove invite: ' + err.message, 'error');
-                  deleteBtn.disabled = false;
-                  deleteBtn.style.opacity = '1';
-                }
+                try {
+                  const token = await auth.currentUser.getIdToken();
+                  const revokeRes = await fetch('/api/workspace/invite', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ email: targetEmail, workspaceId: currentWorkspaceId })
+                  });
+                  if (!revokeRes.ok) {
+                    const errData = await revokeRes.json();
+                    throw new Error(errData.error || 'Failed to remove invite');
+                  }
+                  loadCollaborators();
+                 } catch (err) {
+                   console.error('Error removing invite', err);
+                   showToast('Failed to remove invite: ' + err.message, 'error');
+                   deleteBtn.disabled = false;
+                   deleteBtn.style.opacity = '1';
+                 }
              });
            });
          } catch (err) {
@@ -1703,11 +1732,32 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
 
-    // Clear Avatar initials
+    // Clear all user-specific DOM to prevent stale data flash on next login
     const userAvatar = document.getElementById('user-avatar');
     if (userAvatar) userAvatar.textContent = '';
+    const wsNameInput = document.getElementById('settings-workspace-name');
+    if (wsNameInput) wsNameInput.value = '';
+    const sidebarName = document.getElementById('sidebar-workspace-name');
+    if (sidebarName) sidebarName.textContent = '';
+    const dropdownName = document.getElementById('dropdown-user-name');
+    if (dropdownName) dropdownName.textContent = '';
+    const dropdownEmail = document.getElementById('dropdown-user-email');
+    if (dropdownEmail) dropdownEmail.textContent = '';
+    const settingsName = document.getElementById('settings-name');
+    if (settingsName) settingsName.value = '';
+    const settingsEmail = document.getElementById('settings-email');
+    if (settingsEmail) settingsEmail.value = '';
+    if (userEmailSpan) userEmailSpan.textContent = '';
     currentWorkspaceId = null;
-    currentUserRole = 'user';
+    isSuperadmin = false;
+    if (workspaceSelectTom) {
+      workspaceSelectTom.clear(true);
+      workspaceSelectTom.clearOptions();
+      workspaceSelectTom.addOption({value: 'loading', text: 'Fetching Workspaces...'});
+      workspaceSelectTom.setValue('loading', true);
+      workspaceSelectTom.wrapper.classList.add('is-loading');
+      workspaceSelectTom.lock();
+    }
   }
 });
 
@@ -4512,6 +4562,13 @@ function initWorkspaceDropdownSkeleton() {
       if (this.control_input) {
         this.control_input.readOnly = true;
       }
+      this.addOption({value: 'loading', text: 'Fetching Workspaces...'});
+      this.setValue('loading', true);
+      if (this.wrapper) {
+        this.wrapper.offsetHeight;
+        this.wrapper.classList.add('is-loading');
+      }
+      this.lock();
     }
   });
 
@@ -4519,7 +4576,7 @@ function initWorkspaceDropdownSkeleton() {
     if (value && value !== currentWorkspaceId && value !== 'loading') {
       currentWorkspaceId = value;
       window.currentWorkspaceId = currentWorkspaceId;
-      initLogs(db, currentWorkspaceId);
+      if (auth.currentUser) localStorage.setItem('velync_last_workspace_' + auth.currentUser.uid, value);
       
       const tsWrapper = workspaceSelectTom.wrapper;
       tsWrapper.classList.add('is-loading');
@@ -4528,7 +4585,6 @@ function initWorkspaceDropdownSkeleton() {
       showToast(`Switched workspace`, 'info');
       await loadConfigs();
       
-      // Refresh connections if they are active
       if (typeof loadConnections === 'function') {
         renderConnectionsSkeleton();
         await loadConnections();
@@ -4539,12 +4595,6 @@ function initWorkspaceDropdownSkeleton() {
       workspaceSelectTom.unlock();
     }
   });
-
-  const tsWrapper = workspaceSelectTom.wrapper;
-  tsWrapper.classList.add('is-loading');
-  workspaceSelectTom.lock();
-  workspaceSelectTom.addOption({value: 'loading', text: 'Fetching Workspaces...'});
-  workspaceSelectTom.setValue('loading', true);
 }
 
 async function setupWorkspaceSwitcher(user) {
@@ -4562,20 +4612,17 @@ async function setupWorkspaceSwitcher(user) {
 
   try {
     let options = [];
-    if (currentUserRole === 'superadmin') {
-      const tenantsSnap = await getDocs(collection(db, 'workspaces'));
-      tenantsSnap.forEach(doc => {
-        const t = doc.data();
-        options.push({value: t.id, text: t.name || 'Organization'});
-      });
-    } else {
-      const tenantsQuery = query(collection(db, 'workspaces'), where('members', 'array-contains', user.uid));
-      const tenantsSnap = await getDocs(tenantsQuery);
-      
-      tenantsSnap.forEach(doc => {
-        const t = doc.data();
-        options.push({value: t.id, text: t.name || 'Organization'});
-      });
+    const token = await user.getIdToken();
+    const res = await fetch('/api/workspace/memberships', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.workspaces) {
+        data.workspaces.forEach(t => {
+          options.push({value: t.id, text: t.name || 'Organization'});
+        });
+      }
     }
 
     workspaceSelectTom.clear(true);
@@ -4592,18 +4639,14 @@ async function setupWorkspaceSwitcher(user) {
     workspaceSelectTom.addOption({value: user.uid, text: `Personal Workspace`});
   }
 
-  // Set default value
-  if (currentWorkspaceId) {
+  const wsIds = Object.keys(workspaceSelectTom.options);
+  if (currentWorkspaceId && wsIds.includes(currentWorkspaceId)) {
     workspaceSelectTom.setValue(currentWorkspaceId, true);
-  } else {
-    // Select first available option if no current ID
-    const opts = Object.keys(workspaceSelectTom.options);
-    if (opts.length > 0) {
-      currentWorkspaceId = opts[0];
-      window.currentWorkspaceId = currentWorkspaceId;
-      initLogs(db, currentWorkspaceId);
-      workspaceSelectTom.setValue(currentWorkspaceId, true);
-    }
+  } else if (wsIds.length > 0) {
+    currentWorkspaceId = wsIds[0];
+    window.currentWorkspaceId = currentWorkspaceId;
+    if (auth.currentUser) localStorage.setItem('velync_last_workspace_' + auth.currentUser.uid, currentWorkspaceId);
+    workspaceSelectTom.setValue(currentWorkspaceId, true);
   }
   
   tsWrapper.classList.remove('is-loading');

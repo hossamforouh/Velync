@@ -31,6 +31,13 @@
         "destination": "/google7d74775a46a2ed27.html"
       },
       {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "velync-backend",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

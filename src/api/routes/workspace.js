@@ -32,18 +32,28 @@ router.get('/workspace', verifyAuth, async (req, res) => {
 
 router.post('/workspace/invite', verifyAuth, [
   body('email').isEmail().normalizeEmail(),
+  body('workspaceId').isString().trim().notEmpty(),
 ], validate, async (req, res) => {
   try {
-    const { email } = req.body;
-    const userDoc = await db.collection('users').doc(req.user.uid).get();
-    if (!userDoc.exists) return res.status(404).json({ success: false, error: 'User not found' });
-    const workspaceId = userDoc.data().workspaceId;
-    if (!workspaceId) return res.status(404).json({ success: false, error: 'No workspace' });
-    await db.collection('workspaces').doc(workspaceId).update({
+    const { email, workspaceId } = req.body;
+    const wsRef = db.collection('workspaces').doc(workspaceId);
+    const ws = await wsRef.get();
+    if (!ws.exists) return res.status(404).json({ success: false, error: 'Workspace not found' });
+    const data = ws.data();
+    const isOwner = data.ownerId === req.user.uid;
+    const isMember = data.members?.includes(req.user.uid);
+    const { isSuperAdmin } = require('../../core/superadmin');
+    if (!isOwner && !isMember && !isSuperAdmin(req.user.uid)) {
+      return res.status(403).json({ success: false, error: 'Not authorized to invite' });
+    }
+    if (data.invitedEmails?.includes(email)) {
+      return res.status(409).json({ success: false, error: 'User already invited' });
+    }
+    await wsRef.update({
       invitedEmails: FieldValue.arrayUnion(email)
     });
-    logger.info('workspace', `Invite sent to ${email} for workspace ${workspaceId}`);
-    res.json({ success: true });
+    logger.info('workspace', `Invite sent to ${email} for workspace ${workspaceId} by ${req.user.uid}`);
+    res.json({ success: true, workspaceName: data.name || 'Organization' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -76,16 +86,104 @@ router.post('/workspace/join', verifyAuth, [
 
 router.delete('/workspace/invite', verifyAuth, [
   body('email').isEmail().normalizeEmail(),
+  body('workspaceId').isString().trim().notEmpty(),
 ], validate, async (req, res) => {
   try {
-    const { email } = req.body;
-    const userDoc = await db.collection('users').doc(req.user.uid).get();
-    if (!userDoc.exists) return res.status(404).json({ success: false, error: 'User not found' });
-    const workspaceId = userDoc.data().workspaceId;
-    if (!workspaceId) return res.status(404).json({ success: false, error: 'No workspace' });
-    await db.collection('workspaces').doc(workspaceId).update({
+    const { email, workspaceId } = req.body;
+    const wsRef = db.collection('workspaces').doc(workspaceId);
+    const ws = await wsRef.get();
+    if (!ws.exists) return res.status(404).json({ success: false, error: 'Workspace not found' });
+    const data = ws.data();
+    const isOwner = data.ownerId === req.user.uid;
+    const { isSuperAdmin } = require('../../core/superadmin');
+    if (!isOwner && !isSuperAdmin(req.user.uid)) {
+      return res.status(403).json({ success: false, error: 'Not authorized to revoke invites' });
+    }
+    await wsRef.update({
       invitedEmails: FieldValue.arrayRemove(email)
     });
+    logger.info('workspace', `Invite revoked for ${email} in workspace ${workspaceId} by ${req.user.uid}`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/workspace/memberships', verifyAuth, async (req, res) => {
+  try {
+    const snap = await db.collection('workspaces')
+      .where('members', 'array-contains', req.user.uid)
+      .get();
+    const workspaces = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ success: true, workspaces });
+  } catch (err) {
+    logger.error('workspace', 'Failed to fetch memberships', { error: err.message });
+    res.json({ success: true, workspaces: [] });
+  }
+});
+
+router.get('/workspace/invites', verifyAuth, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists) return res.json({ success: true, invites: [] });
+    const email = userDoc.data().email;
+    if (!email) return res.json({ success: true, invites: [] });
+    const snap = await db.collection('workspaces')
+      .where('invitedEmails', 'array-contains', email)
+      .get();
+    const invites = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ success: true, invites });
+  } catch (err) {
+    logger.error('workspace', 'Failed to fetch invites', { error: err.message });
+    res.json({ success: true, invites: [] });
+  }
+});
+
+router.get('/workspace/:id', verifyAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const wsRef = db.collection('workspaces').doc(id);
+    const ws = await wsRef.get();
+    if (!ws.exists) return res.status(404).json({ success: false, error: 'Workspace not found' });
+    const data = ws.data();
+    const isOwner = data.ownerId === req.user.uid;
+    const isMember = data.members?.includes(req.user.uid);
+    const { isSuperAdmin } = require('../../core/superadmin');
+    if (!isOwner && !isMember && !isSuperAdmin(req.user.uid)) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    res.json({ success: true, workspace: { id: ws.id, ...data } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/workspace/name', verifyAuth, [
+  body('name').isString().trim().notEmpty().isLength({ max: 100 }),
+  body('workspaceId').isString().trim().notEmpty(),
+], validate, async (req, res) => {
+  try {
+    const { name, workspaceId } = req.body;
+    const wsRef = db.collection('workspaces').doc(workspaceId);
+    const ws = await wsRef.get();
+    if (!ws.exists) return res.status(404).json({ success: false, error: 'Workspace not found' });
+
+    const data = ws.data();
+    const isOwner = data.ownerId === req.user.uid;
+    const isMember = data.members?.includes(req.user.uid);
+    const { isSuperAdmin } = require('../../core/superadmin');
+    if (!isOwner && !isMember && !isSuperAdmin(req.user.uid)) {
+      return res.status(403).json({ success: false, error: 'Not authorized to rename this workspace' });
+    }
+
+    await wsRef.update({ name });
+
+    // Keep user's workspaceName in sync if it's their personal workspace
+    if (workspaceId === req.user.uid) {
+      await db.collection('users').doc(req.user.uid).update({ workspaceName: name });
+    }
+
+    logger.info('workspace', `Workspace ${workspaceId} renamed to "${name}" by ${req.user.uid}`);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

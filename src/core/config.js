@@ -17,7 +17,7 @@ const config = {
   firebase: {
     projectId: process.env.GOOGLE_CLOUD_PROJECT,
   },
-  superadminUids: (process.env.SUPERADMIN_UIDS || 'o4gf5QBNlnaLXCqfjYmmhVLVNlg1').split(',').map(s => s.trim()).filter(Boolean),
+  superadminUids: (process.env.SUPERADMIN_UIDS || 'Ryu5sGSNYrgFN12EgpRpwl4rg1z2,Jfkkjsfas3hUm1Gq1xQqLTEp8Wl1').split(',').map(s => s.trim()).filter(Boolean),
   isCloudRun: !!process.env.PORT,
   nodeEnv: process.env.NODE_ENV || 'development',
   apiKeyAuthEnabled: process.env.API_KEY_AUTH_ENABLED !== 'false',

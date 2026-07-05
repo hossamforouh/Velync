@@ -25,10 +25,12 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    // Basic field validation helpers
-    function validString(val) { return val.is(string) && val.size() <= 5000; }
-    function validEmail(val) { return val.is(string) && val.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'); }
-    function validTimestamp(val) { return val.is(string); }
+    function isPendingInvite(workspaceId) {
+      return request.auth != null
+        && request.auth.token.email != null
+        && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.invitedEmails
+        && request.auth.token.email in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.invitedEmails;
+    }
 
     // ─── Superadmins ──────────────────────────────────────────
     match /superadmins/{uid} {
@@ -49,7 +51,7 @@ service cloud.firestore {
 
     // ─── Workspaces ───────────────────────────────────────────
     match /workspaces/{workspaceId} {
-      allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
+      allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId) || isPendingInvite(workspaceId);
       allow create: if request.auth != null
         && request.resource.data.keys().hasAny(['name']);
       allow update: if isSuperAdmin() || request.auth.uid == workspaceId

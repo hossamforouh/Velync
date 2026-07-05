@@ -12,6 +12,7 @@ const syncRoutes = require('./routes/sync');
 const workspaceRoutes = require('./routes/workspace');
 const syncConfigsRoutes = require('./routes/sync-configs');
 const settingsRoutes = require('./routes/settings');
+const adminRoutes = require('./routes/admin');
 const { maintenanceMode } = require('./middleware/maintenance');
 
 const ALLOWED_ORIGINS = [
@@ -86,6 +87,7 @@ function createApp() {
   app.use('/api', workspaceRoutes);
   app.use('/api', syncConfigsRoutes);
   app.use('/api/settings', settingsRoutes);
+  app.use('/api', adminRoutes);
   app.use(syncRoutes);
 
   app.use((req, res) => {
