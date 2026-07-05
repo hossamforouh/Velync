@@ -7,7 +7,15 @@ class Connector {
     throw new Error('connect() must be implemented');
   }
 
-  async fetch(entityType, filter = {}) {
+  /**
+   * Fetch items from the platform.
+   * @param {string} entityType - e.g. "Tasks", "Notes", "Contacts"
+   * @param {object} filter - optional filters (listName, group, etc.)
+   * @param {object} options
+   * @param {string} [options.modifiedSince] - ISO timestamp; if set, only return items modified after this time
+   * @returns {Promise<Array<{id: string, title?: string, modifiedTime?: string, ...}>>}
+   */
+  async fetch(entityType, filter = {}, options = {}) {
     throw new Error('fetch() must be implemented');
   }
 
@@ -33,6 +41,16 @@ class Connector {
 
   getEntityTypes() {
     return ['default'];
+  }
+
+  /**
+   * Extract a human-readable display title from a native item object.
+   * Each connector overrides this to read the appropriate field from its
+   * own data shape (e.g. Notion reads properties.Name.title[0].plain_text,
+   * TickTick reads item.title, Google Contacts reads names[0].displayName).
+   */
+  getDisplayTitle(item) {
+    return item.title || item.name || 'Untitled';
   }
 }
 

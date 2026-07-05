@@ -1,27 +1,115 @@
-const { decrypt } = require('../../../utils/encryption');
+const { resolveCredentials } = require('../connection/resolver');
 const { getConnector } = require('../connector');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 const { mapSourceToDest } = require('./mapper');
 const { resolveConflict } = require('./conflict');
+const os = require('os');
 
 const runningConfigs = new Set();
 
-async function resolveConnectorCreds(workspaceId, connectionId) {
-  const connDoc = await db.collection('connected_accounts').doc(connectionId).get();
-  if (!connDoc.exists) throw new Error('Connection not found: ' + connectionId);
-  const conn = connDoc.data();
-  const credsDoc = await db.collection('credentials').doc(workspaceId).get();
-  if (!credsDoc.exists) throw new Error('Credentials not found for workspace');
-  const platformCreds = credsDoc.data()[conn.provider];
-  if (!platformCreds) throw new Error(`No credentials for ${conn.provider}`);
-  return {
-    accessToken: decrypt(platformCreds.accessToken),
-    refreshToken: platformCreds.refreshToken ? decrypt(platformCreds.refreshToken) : null,
-    clientId: platformCreds.clientId,
-    clientSecret: platformCreds.clientSecret,
-    ...conn.attributes,
-  };
+/** Unique instance identifier for distributed lock ownership */
+const INSTANCE_ID = `${os.hostname()}-${process.pid}`;
+
+/** Duration of a sync lease in milliseconds (2 min — max expected execution time) */
+const LEASE_DURATION_MS = 120_000;
+
+/**
+ * Try to acquire a distributed lease for a sync config.
+ * Uses a Firestore transaction so only one instance succeeds.
+ *
+ * @param {string} configId
+ * @returns {Promise<boolean>} true if lease was acquired, false if held by another instance
+ */
+async function acquireLease(configId) {
+  const lockRef = db.collection('sync_locks').doc(configId);
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      const doc = await transaction.get(lockRef);
+      const now = Date.now();
+
+      if (doc.exists) {
+        const data = doc.data();
+        const expiresAt = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : new Date(data.expiresAt || 0).getTime();
+        // If the lease hasn't expired and is held by another instance, fail
+        if (expiresAt > now && data.heldBy !== INSTANCE_ID) {
+          return false;
+        }
+      }
+
+      // Acquire or extend the lease
+      transaction.set(lockRef, {
+        heldBy: INSTANCE_ID,
+        acquiredAt: new Date().toISOString(),
+        expiresAt: new Date(now + LEASE_DURATION_MS),
+      });
+      return true;
+    });
+    return result;
+  } catch (err) {
+    logger.error('sync', `Failed to acquire lease for "${configId}"`, { error: err.message });
+    return false; // Fail open: skip this run rather than risk duplicate execution
+  }
+}
+
+/**
+ * Release the lease for a sync config.
+ */
+async function releaseLease(configId) {
+  try {
+    const lockRef = db.collection('sync_locks').doc(configId);
+    // Only delete if we still hold the lease (don't clear another instance's lease)
+    const doc = await lockRef.get();
+    if (doc.exists && doc.data().heldBy === INSTANCE_ID) {
+      await lockRef.delete();
+    }
+  } catch (err) {
+    logger.warn('sync', `Failed to release lease for "${configId}"`, { error: err.message });
+  }
+}
+
+/**
+ * Retry an async operation with exponential backoff for transient errors.
+ * Retries on 429 (rate-limit), 5xx (server errors), and network errors.
+ * Does NOT retry on 4xx client errors (except 401/403 which may recover after token refresh).
+ * Returns early on 404s so the caller can handle them specially.
+ *
+ * @param {Function} fn - async function to retry
+ * @param {object} options
+ * @param {number} options.maxAttempts - max retry attempts (default 3)
+ * @param {number} options.baseDelayMs - base delay in ms (default 1000)
+ * @returns {Promise<{result: any, recovered: boolean}>}
+ */
+async function retryWithBackoff(fn, options = {}) {
+  const maxAttempts = options.maxAttempts || 3;
+  const baseDelayMs = options.baseDelayMs || 1000;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await fn();
+      return { result, recovered: attempt > 1 };
+    } catch (err) {
+      lastError = err;
+      const status = err.response?.status || err.statusCode || 0;
+
+      // 404 — don't retry, signal caller
+      if (status === 404) throw err;
+
+      // 4xx other than 401/403/429 — don't retry (bad request, etc.)
+      if (status >= 400 && status < 500 && status !== 401 && status !== 403 && status !== 429) throw err;
+
+      // Last attempt — don't sleep, just throw
+      if (attempt >= maxAttempts) throw err;
+
+      const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * 500;
+      logger.warn('sync', `Retrying after error (attempt ${attempt}/${maxAttempts})`, {
+        status, delay: Math.round(delay), error: err.message,
+      });
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
 }
 
 async function runSync(config, configId) {
@@ -50,6 +138,14 @@ async function runSync(config, configId) {
     logger.warn('sync', 'Failed to check plan limits, proceeding anyway', { error: err.message });
   }
 
+  // Acquire distributed lease so only one instance executes this config at a time
+  const hasLease = await acquireLease(configId);
+  if (!hasLease) {
+    logger.info('sync', `Skipping "${configId}" — lease held by another instance`);
+    runningConfigs.delete(configId);
+    return;
+  }
+
   const logRef = await db.collection('execution_logs').add({
     configId, configName: config.description || configId, workspaceId: config.workspaceId,
     startTime: new Date().toISOString(), status: 'running',
@@ -74,8 +170,15 @@ async function runSync(config, configId) {
 
     config.templateId = p2Settings.templateId || p2Settings.template || config.templateId;
 
-    const sourceCreds = sourceConnId ? { ...await resolveConnectorCreds(workspaceId, sourceConnId), ...p1Settings } : { ...p1Settings };
-    const destCreds = destConnId ? { ...await resolveConnectorCreds(workspaceId, destConnId), databaseId: p2Settings.database, ...p2Settings } : { databaseId: p2Settings.database, ...p2Settings };
+    // Incremental sync: only fetch items modified since the last successful run
+    const lastSyncAt = config.lastSuccessfulSyncAt || config.lastRunAt;
+    const fetchOptions = lastSyncAt ? { modifiedSince: lastSyncAt } : {};
+
+    // Hard cap on items processed per run to avoid timeout
+    const MAX_ITEMS_PER_RUN = config.maxItemsPerRun || 500;
+
+    const sourceCreds = sourceConnId ? { ...await resolveCredentials(null, sourceConnId), ...p1Settings } : { ...p1Settings };
+    const destCreds = destConnId ? { ...await resolveCredentials(null, destConnId), databaseId: p2Settings.database, ...p2Settings } : { databaseId: p2Settings.database, ...p2Settings };
 
     let resolvedSourcePlatform = sourcePlatformId;
     let resolvedDestPlatform = destPlatformId;
@@ -91,8 +194,8 @@ async function runSync(config, configId) {
     const source = new SourceConn(sourceCreds);
     const dest = new DestConn(destCreds);
 
-    const sourceItems = await source.fetch(entityType, filter);
-    const destItems = await dest.fetch(entityType, filter);
+    const sourceItems = (await source.fetch(entityType, filter, fetchOptions)).slice(0, MAX_ITEMS_PER_RUN);
+    const destItems = (await dest.fetch(entityType, filter, fetchOptions)).slice(0, MAX_ITEMS_PER_RUN);
 
     const mappingsSnapshot = await db.collection('workspaces').doc(workspaceId)
       .collection('sync_configs').doc(configId).collection('sync_mappings').get();
@@ -166,25 +269,41 @@ async function runSync(config, configId) {
         const { properties, content } = mapSourceToDest(item, fieldMappings, {}, destSchema, config.statusMappings);
 
         if (!mapping) {
-          const created = await dest.create(entityType, { properties, content, title: item.title || item.name || 'Untitled', children: item.items, templateId: config.templateId });
+          const { result: created } = await retryWithBackoff(() =>
+            dest.create(entityType, { properties, content, title: item.title || item.name || 'Untitled', children: item.items, templateId: config.templateId })
+          );
           const modTime = created?.last_edited_time || created?.modifiedTime || new Date().toISOString();
           queueSaveMapping(item.id, created.id, item.modifiedTime, modTime);
           synced++;
           if (config.deleteAfterSync) {
-            await source.delete(entityType, item.id, item.projectId);
+            await retryWithBackoff(() => source.delete(entityType, item.id, item.projectId));
             queueRemoveMapping(mapping);
             deleted++;
           }
         } else {
           const conflict = resolveConflict(item.modifiedTime, item.destModifiedTime, mapping);
           if (conflict !== 'no_change') {
-            await dest.update(entityType, mapping.destEntityId, { properties, content });
-            const updated = typeof dest.retrieve === 'function' ? await dest.retrieve(entityType, mapping.destEntityId) : {};
-            queueSaveMapping(item.id, mapping.destEntityId, item.modifiedTime, updated.last_edited_time || new Date().toISOString());
-            synced++;
+            try {
+              const { result: updated } = await retryWithBackoff(() =>
+                dest.update(entityType, mapping.destEntityId, { properties, content })
+              );
+              const retrieved = typeof dest.retrieve === 'function'
+                ? await retryWithBackoff(() => dest.retrieve(entityType, mapping.destEntityId))
+                : { result: {} };
+              queueSaveMapping(item.id, mapping.destEntityId, item.modifiedTime, retrieved.result.last_edited_time || new Date().toISOString());
+              synced++;
+            } catch (updateErr) {
+              // 404 on update means the dest item was deleted externally — remove stale mapping
+              if (updateErr.response?.status === 404 || updateErr.statusCode === 404) {
+                logger.warn('sync', `Destination item "${mapping.destEntityId}" not found (deleted externally) — removing stale mapping and recreating next cycle`, { error: updateErr.message });
+                queueRemoveMapping(mapping);
+              } else {
+                throw updateErr;
+              }
+            }
           }
           if (config.deleteAfterSync) {
-            await source.delete(entityType, item.id, item.projectId);
+            await retryWithBackoff(() => source.delete(entityType, item.id, item.projectId));
             queueRemoveMapping(mapping);
             deleted++;
           }
@@ -202,9 +321,8 @@ async function runSync(config, configId) {
       for (const page of destItems) {
         try {
           if (destToMapping.has(page.id)) continue;
-          const mapped = { title: page.properties?.Name?.title?.[0]?.plain_text || 'Untitled' };
-          mapped.projectId = filter.listName?.toLowerCase() === 'inbox' ? 'inbox' : undefined;
-          const created = await source.create(entityType, mapped);
+          const mapped = { title: dest.getDisplayTitle(page) };
+          const { result: created } = await retryWithBackoff(() => source.create(entityType, mapped));
           queueSaveMapping(null, page.id, new Date().toISOString(), created.modifiedTime || new Date().toISOString());
           synced++;
         } catch (err) {
@@ -218,7 +336,7 @@ async function runSync(config, configId) {
     for (const [sourceId, mapping] of sourceToMapping.entries()) {
       if (!activeSourceIds.has(sourceId) && activeDestIds.has(mapping.destEntityId)) {
         try {
-          await dest.delete(entityType, mapping.destEntityId);
+          await retryWithBackoff(() => dest.delete(entityType, mapping.destEntityId));
           queueRemoveMapping(mapping);
           deleted++;
         } catch (err) {
@@ -235,13 +353,14 @@ async function runSync(config, configId) {
     throw err;
   } finally {
     runningConfigs.delete(configId);
+    await releaseLease(configId);
   }
 
   const now = new Date().toISOString();
   if (logRef) await logRef.update({ status: 'success', endTime: now, syncedCount: synced, deletedCount: deleted, failedCount: failed }).catch(() => {});
-  await db.collection('workspaces').doc(config.workspaceId).collection('sync_configs').doc(configId).update({ lastRunAt: now }).catch(() => {});
+  await db.collection('workspaces').doc(config.workspaceId).collection('sync_configs').doc(configId).update({ lastRunAt: now, lastSuccessfulSyncAt: now }).catch(() => {});
   logger.info('sync', `Completed "${configId}" — synced:${synced} deleted:${deleted} failed:${failed}`);
   return { synced, deleted, failed };
 }
 
-module.exports = { runSync };
+module.exports = { runSync, retryWithBackoff };

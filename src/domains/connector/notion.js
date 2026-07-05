@@ -17,9 +17,9 @@ class NotionConnector extends Connector {
     }
   }
 
-  async fetch(entityType, filter = {}) {
+  async fetch(entityType, filter = {}, options = {}) {
     const svc = new NotionService(this.credentials.accessToken, this.databaseId);
-    const pages = await svc.getDatabasePages();
+    const pages = await svc.getDatabasePages({ modifiedSince: options.modifiedSince });
     return pages;
   }
 
@@ -71,6 +71,17 @@ class NotionConnector extends Connector {
       }
     }
     return { titleField: { type: 'title', label: 'Title' } };
+  }
+
+  getDisplayTitle(page) {
+    if (!page.properties) return page.title || page.name || 'Untitled';
+    for (const key of Object.keys(page.properties)) {
+      const prop = page.properties[key];
+      if (prop.type === 'title' && prop.title?.[0]?.plain_text) {
+        return prop.title[0].plain_text;
+      }
+    }
+    return page.title || page.name || 'Untitled';
   }
 
   async getDataSource(fieldId, context = {}) {

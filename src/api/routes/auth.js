@@ -59,11 +59,16 @@ router.post('/oauth/exchange', verifyAuth, [
     const encryptedToken = encrypt(accessToken);
     const encryptedRefreshToken = data.refresh_token ? encrypt(data.refresh_token) : null;
 
+    // Calculate expiry from the OAuth response
+    const expiresIn = data.expires_in || 3600;
+    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
     const credentialRef = db.collection('credentials').doc(uid);
     await credentialRef.set({
       [platformId]: {
         accessToken: encryptedToken,
         refreshToken: encryptedRefreshToken,
+        expiresAt,
         providerWorkspaceId: data.workspace_id || null,
         providerWorkspaceName: data.workspace_name || null,
         botId: data.bot_id || null,

@@ -13,7 +13,7 @@ class GoogleContactsConnector extends Connector {
     }
   }
 
-  async fetch(entityType, filter = {}) {
+  async fetch(entityType, filter = {}, options = {}) {
     const svc = new GooglePeopleService(this.credentials.accessToken);
     const group = filter.group || filter.resourceName || 'contactGroups/all';
     return svc.listContacts(group);
@@ -45,6 +45,11 @@ class GoogleContactsConnector extends Connector {
       title: { type: 'text', label: 'Job Title' },
       address: { type: 'text', label: 'Address' },
     };
+  }
+
+  getDisplayTitle(contact) {
+    const name = contact.names?.[0];
+    return name?.displayName || name?.givenName || contact.title || contact.name || 'Untitled';
   }
 
   async getDataSource(fieldId, context = {}) {

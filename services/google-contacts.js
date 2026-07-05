@@ -16,31 +16,45 @@ class GooglePeopleService {
   }
 
   async listContactGroups() {
-    const res = await http.get(`${this.baseUrl}/contactGroups`, {
-      headers: this._headers(),
-      params: { pageSize: 200 },
-    });
-    const groups = res.data?.contactGroups || [];
-    return groups.map(g => ({
+    let allGroups = [];
+    let pageToken;
+    do {
+      const params = { pageSize: 200 };
+      if (pageToken) params.pageToken = pageToken;
+      const res = await http.get(`${this.baseUrl}/contactGroups`, {
+        headers: this._headers(),
+        params,
+      });
+      allGroups = allGroups.concat(res.data?.contactGroups || []);
+      pageToken = res.data?.nextPageToken;
+    } while (pageToken);
+    return allGroups.map(g => ({
       id: g.resourceName,
       name: g.name || g.resourceName,
     }));
   }
 
   async listContacts(resourceName = 'contactGroups/all') {
-    const params = {
+    const baseParams = {
       personFields: 'names,emailAddresses,phoneNumbers,organizations,addresses',
       pageSize: 200,
     };
     if (resourceName && resourceName !== 'contactGroups/all') {
-      params.resourceName = resourceName;
+      baseParams.resourceName = resourceName;
     }
-    const res = await http.get(`${this.baseUrl}/people/me/connections`, {
-      headers: this._headers(),
-      params,
-    });
-    const connections = res.data?.connections || [];
-    return connections.map(p => ({
+    let allConnections = [];
+    let pageToken;
+    do {
+      const params = { ...baseParams };
+      if (pageToken) params.pageToken = pageToken;
+      const res = await http.get(`${this.baseUrl}/people/me/connections`, {
+        headers: this._headers(),
+        params,
+      });
+      allConnections = allConnections.concat(res.data?.connections || []);
+      pageToken = res.data?.nextPageToken;
+    } while (pageToken);
+    return allConnections.map(p => ({
       id: p.resourceName,
       ...p,
     }));

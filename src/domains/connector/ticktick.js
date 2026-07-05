@@ -20,7 +20,7 @@ class TickTickConnector extends Connector {
     }
   }
 
-  async fetch(entityType, filter = {}) {
+  async fetch(entityType, filter = {}, options = {}) {
     const svc = new TickTickService(this.credentials);
     await svc.authenticate();
     const listName = filter.listName || 'Inbox';
@@ -64,6 +64,10 @@ class TickTickConnector extends Connector {
     await svc.authenticate();
     if (entityType === 'Habits') return svc.deleteHabit(id);
     return svc.deleteTask(projectId || 'inbox', id);
+  }
+
+  getDisplayTitle(item) {
+    return item.title || item.name || 'Untitled';
   }
 
   getEntityTypes() {

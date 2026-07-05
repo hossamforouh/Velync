@@ -267,7 +267,7 @@ class NotionService {
    * Retrieves all non-archived pages from the target database.
    * @returns {Promise<Array>} List of pages
    */
-  async getDatabasePages() {
+  async getDatabasePages({ modifiedSince } = {}) {
     console.log(`[Notion Service] Querying database pages for database ${this.databaseId}...`);
     try {
       let results = [];
@@ -298,17 +298,26 @@ class NotionService {
 
       while (hasMore) {
         let response;
+        const queryOpts = {
+          start_cursor: cursor,
+          page_size: 100,
+        };
+        // Incremental sync filter — only fetch pages edited since the given timestamp
+        if (modifiedSince && !useDataSource) {
+          queryOpts.filter = {
+            timestamp: 'last_edited_time',
+            last_edited_time: { after: modifiedSince },
+          };
+        }
         if (useDataSource) {
           response = await this.client.dataSources.query({
             data_source_id: queryId,
-            start_cursor: cursor,
-            page_size: 100,
+            ...queryOpts,
           });
         } else {
           response = await this.client.databases.query({
             database_id: queryId,
-            start_cursor: cursor,
-            page_size: 100,
+            ...queryOpts,
           });
         }
 

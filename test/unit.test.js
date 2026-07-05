@@ -254,4 +254,91 @@ describe('connector/interface', () => {
     await assert.rejects(() => c.delete('x'), /must be implemented/);
     assert.throws(() => c.getSchema('x'), /must be implemented/);
   });
+
+  test('Connector base getDisplayTitle falls back to title/name', () => {
+    const { Connector } = require('../src/domains/connector/interface');
+    const c = new Connector({});
+    assert.strictEqual(c.getDisplayTitle({ title: 'Foo' }), 'Foo');
+    assert.strictEqual(c.getDisplayTitle({ name: 'Bar' }), 'Bar');
+    assert.strictEqual(c.getDisplayTitle({}), 'Untitled');
+  });
+
+  test('NotionConnector getDisplayTitle extracts title property', () => {
+    const NotionConnector = require('../src/domains/connector/notion');
+    const c = new NotionConnector({ accessToken: 'test' });
+    const page = {
+      properties: {
+        Name: { type: 'title', title: [{ plain_text: 'Hello' }] },
+        Status: { type: 'status', status: { name: 'Done' } },
+      },
+    };
+    assert.strictEqual(c.getDisplayTitle(page), 'Hello');
+    assert.strictEqual(c.getDisplayTitle({ name: 'Fallback' }), 'Fallback');
+    assert.strictEqual(c.getDisplayTitle({}), 'Untitled');
+  });
+
+  test('TickTickConnector getDisplayTitle returns title field', () => {
+    const TickTickConnector = require('../src/domains/connector/ticktick');
+    const c = new TickTickConnector({});
+    assert.strictEqual(c.getDisplayTitle({ title: 'Task' }), 'Task');
+    assert.strictEqual(c.getDisplayTitle({ name: 'Habit' }), 'Habit');
+  });
+
+  test('GoogleContactsConnector getDisplayTitle extracts names[0].displayName', () => {
+    const GoogleContactsConnector = require('../src/domains/connector/google-contacts');
+    const c = new GoogleContactsConnector({ accessToken: 'test' });
+    assert.strictEqual(c.getDisplayTitle({ names: [{ displayName: 'Alice' }] }), 'Alice');
+    assert.strictEqual(c.getDisplayTitle({ names: [{ givenName: 'Bob' }] }), 'Bob');
+    assert.strictEqual(c.getDisplayTitle({ title: 'Fallback' }), 'Fallback');
+  });
+});
+
+// ── 8. Sync Engine (retryWithBackoff) ──
+describe('sync/engine', () => {
+  test('retryWithBackoff succeeds on first try', async () => {
+    const { retryWithBackoff } = require('../src/domains/sync/engine');
+    const { result } = await retryWithBackoff(() => Promise.resolve('ok'));
+    assert.strictEqual(result, 'ok');
+  });
+
+  test('retryWithBackoff retries on transient 429 then succeeds', async () => {
+    const { retryWithBackoff } = require('../src/domains/sync/engine');
+    let calls = 0;
+    const { result, recovered } = await retryWithBackoff(() => {
+      calls++;
+      if (calls < 2) {
+        const err = new Error('rate limited');
+        err.response = { status: 429 };
+        throw err;
+      }
+      return 'ok';
+    }, { maxAttempts: 3, baseDelayMs: 10 });
+    assert.strictEqual(result, 'ok');
+    assert.strictEqual(recovered, true);
+    assert.strictEqual(calls, 2);
+  });
+
+  test('retryWithBackoff does NOT retry on 400', async () => {
+    const { retryWithBackoff } = require('../src/domains/sync/engine');
+    let calls = 0;
+    await assert.rejects(() => retryWithBackoff(() => {
+      calls++;
+      const err = new Error('bad request');
+      err.response = { status: 400 };
+      throw err;
+    }, { maxAttempts: 3, baseDelayMs: 10 }));
+    assert.strictEqual(calls, 1);
+  });
+
+  test('retryWithBackoff throws after exhausting attempts', async () => {
+    const { retryWithBackoff } = require('../src/domains/sync/engine');
+    let calls = 0;
+    await assert.rejects(() => retryWithBackoff(() => {
+      calls++;
+      const err = new Error('server error');
+      err.response = { status: 500 };
+      throw err;
+    }, { maxAttempts: 3, baseDelayMs: 10 }));
+    assert.strictEqual(calls, 3);
+  });
 });
