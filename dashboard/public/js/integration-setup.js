@@ -90,20 +90,23 @@ function populateSetupView(p1Id, p2Id) {
   document.getElementById('setup-integration-name').textContent = currentIntegration.name || 'Integration Setup';
   document.getElementById('setup-integration-desc').textContent = currentIntegration.description || 'Configure your sync integration';
 
-  const logo1 = document.getElementById('setup-platform1-logo');
-  logo1.innerHTML = p1Logo;
+  const logo1 = document.getElementById('setup-source-logo');
+  if (logo1) logo1.innerHTML = p1Logo;
 
-  const logo2 = document.getElementById('setup-platform2-logo');
-  logo2.innerHTML = p2Logo;
+  const logo2 = document.getElementById('setup-dest-logo');
+  if (logo2) logo2.innerHTML = p2Logo;
 
-  document.getElementById('setup-platform1-name').textContent = p1Name;
-  document.getElementById('setup-platform2-name').textContent = p2Name;
+  const name1 = document.getElementById('setup-source-name');
+  if (name1) name1.textContent = p1Name;
+
+  const name2 = document.getElementById('setup-dest-name');
+  if (name2) name2.textContent = p2Name;
 
   // Update the workflow canvas nodes
-  const n1Name = document.getElementById('node-p1-name');
-  const n2Name = document.getElementById('node-p2-name');
-  const n1Logo = document.getElementById('node-p1-logo');
-  const n2Logo = document.getElementById('node-p2-logo');
+  const n1Name = document.getElementById('node-source-name');
+  const n2Name = document.getElementById('node-dest-name');
+  const n1Logo = document.getElementById('node-source-logo');
+  const n2Logo = document.getElementById('node-dest-logo');
 
   if (n1Name) n1Name.textContent = p1Name;
   if (n2Name) n2Name.textContent = p2Name;
@@ -113,10 +116,10 @@ function populateSetupView(p1Id, p2Id) {
   const isP1Connected = connections.some(c => c.provider === p1Id);
   const isP2Connected = connections.some(c => c.provider === p2Id);
 
-  document.getElementById('setup-platform1-status').textContent = isP1Connected ? 'Connected' : 'Not Connected';
-  document.getElementById('setup-platform1-status').className = `setup-platform-status ${isP1Connected ? 'connected' : 'disconnected'}`;
-  document.getElementById('setup-platform2-status').textContent = isP2Connected ? 'Connected' : 'Not Connected';
-  document.getElementById('setup-platform2-status').className = `setup-platform-status ${isP2Connected ? 'connected' : 'disconnected'}`;
+  const status1 = document.getElementById('setup-source-status');
+  if (status1) { status1.textContent = isP1Connected ? 'Connected' : 'Not Connected'; status1.className = `setup-platform-status ${isP1Connected ? 'connected' : 'disconnected'}`; }
+  const status2 = document.getElementById('setup-dest-status');
+  if (status2) { status2.textContent = isP2Connected ? 'Connected' : 'Not Connected'; status2.className = `setup-platform-status ${isP2Connected ? 'connected' : 'disconnected'}`; }
 
   // Empty connection notice
   const connNotice = document.getElementById('setup-connection-notice');

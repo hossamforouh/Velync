@@ -2,8 +2,10 @@ const { Router } = require('express');
 const { body, query, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
+const { getConnector } = require('../../domains/connector/registry');
 const { NotionService } = require('../../../services/notion');
 const { TickTickService } = require('../../../services/ticktick');
+const db = require('../../core/db');
 const logger = require('../../core/logger');
 
 const router = Router();
@@ -16,15 +18,35 @@ const validate = (req, res, next) => {
   next();
 };
 
-router.get('/data-sources', verifyAuth, (req, res) => {
-  res.json([
-    { id: 'fetchTickTickLists', name: 'TickTick: Fetch Lists' },
-    { id: 'fetchTickTickTags', name: 'TickTick: Fetch Tags' },
-    { id: 'fetchNotionDBs', name: 'Notion: Fetch Databases' },
-    { id: 'fetchNotionTemplates', name: 'Notion: Fetch Templates' },
-    { id: 'google_contacts_fetch_groups', name: 'Google Contacts: Fetch Contact Groups' },
-  ]);
+router.get('/data-sources', verifyAuth, async (req, res) => {
+  try {
+    const platformsSnap = await db.collection('platforms').get();
+    const sources = [];
+    for (const doc of platformsSnap.docs) {
+      const plat = doc.data();
+      if (plat.configSchema) {
+        for (const field of plat.configSchema) {
+          if (field.dataSource) {
+            sources.push({ id: field.dataSource, name: `${plat.name}: ${field.label}` });
+          }
+        }
+      }
+    }
+    res.json(sources);
+  } catch (err) {
+    logger.error('platform', 'Failed to fetch data-sources', { error: err.message });
+    res.status(500).json([]);
+  }
 });
+
+const DATA_SOURCE_ALIASES = {
+  'fetchTickTickLists': 'lists',
+  'ticktick.getProjects': 'lists',
+  'fetchTickTickTags': 'tags',
+  'fetchNotionDBs': 'databases',
+  'fetchNotionTemplates': 'templates',
+  'google_contacts_fetch_groups': 'contactGroups',
+};
 
 router.post('/platform-entities', verifyAuth, [
   body('connectionId').isString().trim().notEmpty(),
@@ -33,51 +55,32 @@ router.post('/platform-entities', verifyAuth, [
   body('parentValue').optional().isString(),
 ], validate, async (req, res) => {
   try {
-    const { connectionId, providerName, dataSourceId, parentValue } = req.body;
+    const { connectionId, dataSourceId, parentValue } = req.body;
     logger.info('platform', 'platform-entities called', { connectionId, dataSourceId, parentValue, uid: req.user?.uid });
 
-    const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-    let entities = [];
-
-    switch (dataSourceId) {
-      case 'fetchTickTickLists':
-      case 'ticktick.getProjects': {
-        const ticktick = new TickTickService(creds);
-        const lists = await ticktick.getProjectsFiltered(parentValue);
-        entities = (lists || []).map(l => ({ id: l.id || l.name, name: l.name }));
-        break;
-      }
-      case 'fetchTickTickTags': {
-        const ticktick = new TickTickService(creds);
-        const tags = await ticktick.getAllTags();
-        entities = (tags || []).map(t => ({ id: t.id, name: t.name }));
-        break;
-      }
-      case 'google_contacts_fetch_groups':
-        entities = [
-          { id: 'contactGroups/all', name: 'All Contacts' },
-          { id: 'contactGroups/starred', name: 'Starred Contacts' },
-        ];
-        break;
-      case 'fetchNotionDBs': {
-        logger.info('platform', 'calling NotionService.listDatabases', { tokenPrefix: creds.accessToken?.substring(0, 10) });
-        const notion = new NotionService(creds.accessToken);
-        const databases = await notion.listDatabases();
-        entities = (databases || []).map(db => ({ id: db.id, name: db.title || db.id }));
-        break;
-      }
-      case 'fetchNotionTemplates': {
-        if (!parentValue) throw new Error('Database ID (parentValue) is required to fetch templates');
-        const notion = new NotionService(creds.accessToken, parentValue);
-        const templates = await notion.listTemplates();
-        entities = (templates || []).map(t => ({ id: t.id, name: t.name || t.id }));
-        break;
-      }
-      default:
-        throw new Error(`Unknown data source: ${dataSourceId}`);
+    if (!dataSourceId) {
+      return res.status(400).json({ success: false, error: 'dataSourceId is required' });
     }
 
-    logger.info('platform', 'returning entities', { count: entities.length });
+    // Resolve connection provider from the document
+    const connDoc = await db.collection('connected_accounts').doc(connectionId).get();
+    if (!connDoc.exists) throw new Error('Connection not found');
+    const provider = connDoc.data().provider;
+    if (!provider) throw new Error('Connection has no provider');
+
+    // Resolve credentials and instantiate the connector
+    const creds = await resolveConnectionTokens(req.user.uid, connectionId);
+    const ConnectorClass = getConnector(provider);
+    const connector = new ConnectorClass(creds);
+
+    // Map legacy dataSourceId names to canonical field IDs
+    const fieldId = DATA_SOURCE_ALIASES[dataSourceId] || dataSourceId;
+
+    // Pass parentValue as context so connectors can use it
+    const items = await connector.getDataSource(fieldId, { parentValue });
+    const entities = (items || []).map(i => ({ id: i.value, name: i.label }));
+
+    logger.info('platform', 'returning entities', { count: entities.length, provider, fieldId });
     res.json({ success: true, entities });
   } catch (err) {
     logger.error('platform', 'Failed to fetch entities', { error: err.message, stack: err.stack?.split('\n').slice(0,5).join(' | ') });

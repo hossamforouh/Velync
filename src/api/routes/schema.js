@@ -26,24 +26,24 @@ router.post('/schema', verifyAuth, [
     const { connectionId, platform, entityType, context = {} } = req.body;
 
     const creds = await resolveConnectionTokens(req.user.uid, connectionId);
+
     let ConnectorClass;
     try {
       ConnectorClass = getConnector(platform);
     } catch (e) {
+      // Platform ID may not match connector key — check platform doc for a connector mapping
       const platDoc = await db.collection('platforms').doc(platform).get();
       if (platDoc.exists) {
         const platData = platDoc.data();
-        let resolvedPlatform = platData.key || platData.name?.toLowerCase() || platData.title?.toLowerCase() || platform;
-
-        if (resolvedPlatform === platform) {
-           if (platData.authUrl?.includes('ticktick')) resolvedPlatform = 'ticktick';
-           if (platData.authUrl?.includes('notion')) resolvedPlatform = 'notion';
-        }
-
-        try {
-          ConnectorClass = getConnector(resolvedPlatform);
-        } catch(innerErr) {
-          return res.status(400).json({ success: false, error: `No connector registered for resolved platform: ${resolvedPlatform}` });
+        const resolvedPlatform = platData.connectorKey || platData.key || null;
+        if (resolvedPlatform) {
+          try {
+            ConnectorClass = getConnector(resolvedPlatform);
+          } catch (innerErr) {
+            return res.status(400).json({ success: false, error: `No connector registered for platform: ${resolvedPlatform}` });
+          }
+        } else {
+          return res.status(400).json({ success: false, error: `No connectorKey or key field on platform doc "${platform}"; cannot resolve connector` });
         }
       } else {
         return res.status(400).json({ success: false, error: `No connector registered for platform: ${platform}` });
@@ -51,7 +51,7 @@ router.post('/schema', verifyAuth, [
     }
 
     const instance = new ConnectorClass({ ...creds, ...context });
-    const schema = await instance.getSchema(entityType || 'Tasks', context);
+    const schema = await instance.getSchema(entityType || (instance.getEntityTypes?.() || ['default'])[0], context);
 
     res.json({ success: true, schema, platform, entityType: entityType || 'Tasks' });
   } catch (err) {

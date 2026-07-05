@@ -66,6 +66,10 @@ class TickTickConnector extends Connector {
     return svc.deleteTask(projectId || 'inbox', id);
   }
 
+  getEntityTypes() {
+    return ['Tasks', 'Notes', 'Habits'];
+  }
+
   getSchema(entityType, context = {}) {
     const base = { title: { type: 'title', label: 'Title' }, tags: { type: 'multi_select', label: 'Tags' } };
     if (entityType === 'Tasks') {
@@ -82,6 +86,10 @@ class TickTickConnector extends Connector {
     if (fieldId === 'lists') {
       const projects = await svc.getProjects();
       return (projects || []).map(p => ({ value: p.id || p.name, label: p.name }));
+    }
+    if (fieldId === 'tags') {
+      const tags = await svc.getAllTags();
+      return (tags || []).map(t => ({ value: t.id, label: t.name }));
     }
     return [];
   }

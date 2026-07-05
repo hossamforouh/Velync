@@ -74,7 +74,7 @@ class NotionConnector extends Connector {
   }
 
   async getDataSource(fieldId, context = {}) {
-    const databaseId = context.databaseId || context.database || this.credentials.databaseId;
+    const databaseId = context.databaseId || context.database || context.parentValue || this.credentials.databaseId;
     const svc = new NotionService(this.credentials.accessToken, databaseId);
     if (fieldId === 'databases') {
       const dbs = await svc.listDatabases();

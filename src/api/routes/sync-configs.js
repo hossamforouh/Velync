@@ -25,12 +25,7 @@ async function resolvePlatform(platformId) {
     const platDoc = await db.collection('platforms').doc(platformId).get();
     if (!platDoc.exists) return platformId;
     const platData = platDoc.data();
-    let resolved = platData.key || platData.name?.toLowerCase() || platData.title?.toLowerCase() || platformId;
-    if (resolved === platformId) {
-       if (platData.authUrl?.includes('ticktick')) resolved = 'ticktick';
-       if (platData.authUrl?.includes('notion')) resolved = 'notion';
-    }
-    return resolved;
+    return platData.connectorKey || platData.key || platformId;
   }
 }
 
@@ -39,14 +34,16 @@ router.post('/suggest-mappings', verifyAuth, [
   body('destConnectionId').isString().trim().notEmpty(),
   body('sourcePlatform').isString().trim().notEmpty(),
   body('destPlatform').isString().trim().notEmpty(),
-  body('entityType').optional().isString(),
+  body('sourceEntityType').optional().isString(),
+  body('destEntityType').optional().isString(),
   body('context').optional().isObject(),
 ], validate, async (req, res) => {
   try {
     const {
       sourceConnectionId, destConnectionId,
       sourcePlatform, destPlatform,
-      entityType, context = {}
+      sourceEntityType, destEntityType,
+      context = {}
     } = req.body;
 
     if (!sourceConnectionId || !destConnectionId || !sourcePlatform || !destPlatform) {
@@ -54,8 +51,8 @@ router.post('/suggest-mappings', verifyAuth, [
     }
 
     const [sourceCreds, destCreds] = await Promise.all([
-      resolveConnectionTokens(req.user.uid, sourceConnectionId).catch(() => ({})),
-      resolveConnectionTokens(req.user.uid, destConnectionId).catch(() => ({}))
+      resolveConnectionTokens(req.user.uid, sourceConnectionId),
+      resolveConnectionTokens(req.user.uid, destConnectionId)
     ]);
 
     const resolvedSourcePlatform = await resolvePlatform(sourcePlatform);
@@ -72,9 +69,13 @@ router.post('/suggest-mappings', verifyAuth, [
     const sourceInstance = new SourceConnectorClass({ ...sourceCreds, ...context.source });
     const destInstance = new DestConnectorClass({ ...destCreds, ...context.dest });
 
+    // Resolve entity types independently per connector
+    const resolvedSourceEntityType = sourceEntityType || (sourceInstance.getEntityTypes?.() || ['default'])[0];
+    const resolvedDestEntityType = destEntityType || (destInstance.getEntityTypes?.() || ['default'])[0];
+
     const [sourceSchema, destSchema] = await Promise.all([
-      sourceInstance.getSchema(entityType || 'Tasks', context.source || {}),
-      destInstance.getSchema(context.dest?.entityType || 'Database', context.dest || {})
+      sourceInstance.getSchema(resolvedSourceEntityType, context.source || {}),
+      destInstance.getSchema(resolvedDestEntityType, context.dest || {})
     ]);
 
     const data = await suggestMappings(sourceSchema, destSchema);

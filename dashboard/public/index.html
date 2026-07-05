@@ -482,10 +482,10 @@
               <h1 class="setup-hero-title" id="setup-integration-name">Integration Setup</h1>
               <p class="setup-hero-desc" id="setup-integration-desc">Configure your sync integration</p>
               <div class="setup-platforms-row" id="setup-platforms-row">
-                <div class="setup-platform-card" id="setup-platform1-card">
-                  <div class="setup-platform-logo" id="setup-platform1-logo"></div>
-                  <span class="setup-platform-name" id="setup-platform1-name">Platform 1</span>
-                  <span class="setup-platform-status" id="setup-platform1-status">Pending</span>
+                <div class="setup-platform-card" id="setup-source-card">
+                  <div class="setup-platform-logo" id="setup-source-logo"></div>
+                  <span class="setup-platform-name" id="setup-source-name">Source</span>
+                  <span class="setup-platform-status" id="setup-source-status">Pending</span>
                 </div>
                 <div class="setup-arrow">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -493,10 +493,10 @@
                     <polyline points="12 5 19 12 12 19"></polyline>
                   </svg>
                 </div>
-                <div class="setup-platform-card" id="setup-platform2-card">
-                  <div class="setup-platform-logo" id="setup-platform2-logo"></div>
-                  <span class="setup-platform-name" id="setup-platform2-name">Platform 2</span>
-                  <span class="setup-platform-status" id="setup-platform2-status">Pending</span>
+                <div class="setup-platform-card" id="setup-dest-card">
+                  <div class="setup-platform-logo" id="setup-dest-logo"></div>
+                  <span class="setup-platform-name" id="setup-dest-name">Destination</span>
+                  <span class="setup-platform-status" id="setup-dest-status">Pending</span>
                 </div>
               </div>
               <div class="setup-tags" id="setup-tags-container"></div>
@@ -1244,38 +1244,38 @@
 
         <!-- Hidden Original Platform Sections (Moved to Modal via JS) -->
         <div id="hidden-platform-sections" style="display: none;">
-          <div class="form-section" id="section-p1">
-            <div class="form-section-title" id="p1-settings-title">Platform 1 Settings</div>
+          <div class="form-section" id="section-source">
+            <div class="form-section-title" id="source-settings-title">Source Settings</div>
             <div class="form-row">
-              <label for="f-tt-connection">Connection <span class="required-mark">*</span></label>
+              <label for="f-source-connection">Source Connection <span class="required-mark">*</span></label>
               <div style="display:flex;gap:8px;width:100%;">
-                <select id="f-tt-connection" required style="flex:1;">
+                <select id="f-source-connection" required style="flex:1;">
                   <option value="">— Select Connection —</option>
                 </select>
-                <button type="button" class="btn btn-secondary" id="btn-connect-p1" style="white-space:nowrap;flex-shrink:0;padding:10px 16px;font-size:13.5px;line-height:1.2;border-radius:6px;">+ Connect</button>
+                <button type="button" class="btn btn-secondary" id="btn-connect-source" style="white-space:nowrap;flex-shrink:0;padding:10px 16px;font-size:13.5px;line-height:1.2;border-radius:6px;">+ Connect</button>
               </div>
             </div>
-            <div id="p1-dynamic-container"></div>
-            <p id="p1-connect-hint" style="display:none;font-size:0.8rem;color:var(--text-3);margin-top:8px;">
+            <div id="source-dynamic-container"></div>
+            <p id="source-connect-hint" style="display:none;font-size:0.8rem;color:var(--text-3);margin-top:8px;">
               No saved accounts yet.
-              <a href="#" id="p1-connect-link" style="color:var(--primary);">Connect a provider</a>
+              <a href="#" id="source-connect-link" style="color:var(--primary);">Connect a provider</a>
             </p>
           </div>
-          <div class="form-section" id="section-p2">
-            <div class="form-section-title" id="p2-settings-title">Platform 2 Settings</div>
+          <div class="form-section" id="section-dest">
+            <div class="form-section-title" id="dest-settings-title">Destination Settings</div>
             <div class="form-row">
-              <label for="f-notion-connection">Connection <span class="required-mark">*</span></label>
+              <label for="f-dest-connection">Destination Connection <span class="required-mark">*</span></label>
               <div style="display:flex;gap:8px;width:100%;">
-                <select id="f-notion-connection" required style="flex:1;">
+                <select id="f-dest-connection" required style="flex:1;">
                   <option value="">— Select Connection —</option>
                 </select>
-                <button type="button" class="btn btn-secondary" id="btn-connect-p2" style="white-space:nowrap;flex-shrink:0;padding:10px 16px;font-size:13.5px;line-height:1.2;border-radius:6px;">+ Connect</button>
+                <button type="button" class="btn btn-secondary" id="btn-connect-dest" style="white-space:nowrap;flex-shrink:0;padding:10px 16px;font-size:13.5px;line-height:1.2;border-radius:6px;">+ Connect</button>
               </div>
             </div>
-            <div id="p2-dynamic-container"></div>
-            <p id="p2-connect-hint" style="display:none;font-size:0.8rem;color:var(--text-3);margin-top:8px;">
+            <div id="dest-dynamic-container"></div>
+            <p id="dest-connect-hint" style="display:none;font-size:0.8rem;color:var(--text-3);margin-top:8px;">
               No saved accounts yet.
-              <a href="#" id="p2-connect-link" style="color:var(--primary);">Connect a provider</a>
+              <a href="#" id="dest-connect-link" style="color:var(--primary);">Connect a provider</a>
             </p>
           </div>
         </div>
@@ -1290,16 +1290,16 @@
 
           <!-- Visual Builder Canvas -->
           <div id="visual-builder-canvas" class="node-builder-container">
-            <div class="workflow-node" id="node-platform1">
+            <div class="workflow-node" id="node-source">
               <div class="node-header">
-                <span class="node-status-icon" id="node-p1-status"></span>
-                <div class="node-pill platform-pill" id="node-p1-pill">
-                  <span class="node-logo" id="node-p1-logo"></span>
-                  <span class="node-name" id="node-p1-name">Platform 1</span>
+                <span class="node-status-icon" id="node-source-status"></span>
+                <div class="node-pill platform-pill" id="node-source-pill">
+                  <span class="node-logo" id="node-source-logo"></span>
+                  <span class="node-name" id="node-source-name">Source</span>
                 </div>
                 <div class="node-actions"><i data-feather="more-vertical"></i></div>
               </div>
-              <div class="node-action-text" id="node-p1-action">Setup Trigger</div>
+              <div class="node-action-text" id="node-source-action">Setup Trigger</div>
             </div>
 
             <div class="node-connector">
@@ -1308,16 +1308,16 @@
               <div class="node-line"></div>
             </div>
 
-            <div class="workflow-node" id="node-platform2">
+            <div class="workflow-node" id="node-dest">
               <div class="node-header">
-                <span class="node-status-icon" id="node-p2-status"></span>
-                <div class="node-pill platform-pill" id="node-p2-pill">
-                  <span class="node-logo" id="node-p2-logo"></span>
-                  <span class="node-name" id="node-p2-name">Platform 2</span>
+                <span class="node-status-icon" id="node-dest-status"></span>
+                <div class="node-pill platform-pill" id="node-dest-pill">
+                  <span class="node-logo" id="node-dest-logo"></span>
+                  <span class="node-name" id="node-dest-name">Destination</span>
                 </div>
                 <div class="node-actions"><i data-feather="more-vertical"></i></div>
               </div>
-              <div class="node-action-text" id="node-p2-action">Setup Action</div>
+              <div class="node-action-text" id="node-dest-action">Setup Action</div>
             </div>
           </div>
 
@@ -1895,13 +1895,13 @@
         <div class="form-section">
           <div class="form-section-title">Platforms</div>
           <div class="form-row">
-            <label for="f-int-platform1">Platform 1 *</label>
+            <label for="f-int-platform1">Source *</label>
             <select id="f-int-platform1" required>
               <option value="" disabled selected>Select Platform...</option>
             </select>
           </div>
           <div class="form-row">
-            <label for="f-int-platform2">Platform 2 *</label>
+            <label for="f-int-platform2">Destination *</label>
             <select id="f-int-platform2" required>
               <option value="" disabled selected>Select Platform...</option>
             </select>

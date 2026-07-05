@@ -17,8 +17,8 @@ const platforms = [
     scopes: 'tasks:read tasks:write',
     attributes: [],
     configSchema: [
-      { id: 'listName', label: 'List / Project', type: 'dynamic_select', dataSource: 'fetchTickTickLists' },
-      { id: 'syncTag', label: 'Sync Tags (optional)', type: 'dynamic_multi_select', dataSource: 'fetchTickTickTags', description: 'Only sync items with selected tags' },
+      { id: 'listName', label: 'List / Project', type: 'dynamic_select', dataSource: 'lists' },
+      { id: 'syncTag', label: 'Sync Tags (optional)', type: 'dynamic_multi_select', dataSource: 'tags', description: 'Only sync items with selected tags' },
     ],
   },
   {
@@ -31,12 +31,13 @@ const platforms = [
     scopes: '',
     attributes: [],
     configSchema: [
-      { id: 'databaseId', label: 'Database', type: 'dynamic_select', dataSource: 'fetchNotionDBs' },
-      { id: 'templateId', label: 'Template (optional)', type: 'dynamic_select', dataSource: 'fetchNotionTemplates', dependsOn: 'databaseId' },
+      { id: 'databaseId', label: 'Database', type: 'dynamic_select', dataSource: 'databases' },
+      { id: 'templateId', label: 'Template (optional)', type: 'dynamic_select', dataSource: 'templates', dependsOn: 'databaseId' },
     ],
   },
   {
     id: 'google_contacts',
+    connectorKey: 'google_contacts',
     name: 'Google Contacts',
     logo: '<svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#4285F4"/><path d="M16 10a3 3 0 100 6 3 3 0 000-6zm-6 10c0-2 2.7-4 6-4s6 2 6 4" stroke="white" stroke-width="1.5" fill="none"/></svg>',
     authType: 'oauth',
@@ -45,7 +46,7 @@ const platforms = [
     scopes: 'https://www.googleapis.com/auth/contacts.readonly',
     attributes: [],
     configSchema: [
-      { id: 'group', label: 'Contact Group', type: 'dynamic_select', dataSource: 'google_contacts_fetch_groups' },
+      { id: 'group', label: 'Contact Group', type: 'dynamic_select', dataSource: 'contactGroups' },
     ],
   },
 ];
@@ -84,13 +85,17 @@ const integrations = [
   {
     id: 'ticktick-contact-sync',
     name: 'TickTick → Google Contacts',
-    description: 'Keep your TickTick contacts in sync with Google Contacts. Automatically push task contacts to your Google address book.',
+    description: 'Sync your TickTick contacts into Google Contacts. Automatically push task contacts to your Google address book with customizable field mapping.',
     platform1: 'ticktick',
     platform2: 'google_contacts',
-    status: 'Coming Soon',
-    syncTypes: ['Source_to_Dest'],
+    status: 'Active',
+    syncTypes: ['Source_to_Dest', 'Bidirectional'],
     tags: ['contacts', 'crm'],
-    defaultMappings: [],
+    defaultMappings: [
+      { sourceField: 'title', destField: 'name' },
+      { sourceField: 'desc', destField: 'organization' },
+      { sourceField: 'tags', destField: '__content__' },
+    ],
   },
 ];
 

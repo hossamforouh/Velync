@@ -74,9 +74,19 @@ async function fetchPlatformEntities(dataSourceId, connId, parentValue) {
   switch (dataSourceId) {
     case 'ticktick.getProjects':
     case 'fetchTickTickLists':
+    case 'lists':
       return clientTickTickProjects(conn, parentValue);
     case 'fetchTickTickTags':
+    case 'tags':
       return clientTickTickAllTags(conn);
+    case 'fetchNotionDBs':
+    case 'databases':
+    case 'fetchNotionTemplates':
+    case 'templates':
+    case 'contactGroups':
+    case 'google_contacts_fetch_groups':
+      // These are handled server-side; no client fallback available
+      return [];
     default:
       return [];
   }
@@ -257,7 +267,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
          if(window.feather) window.feather.replace();
          
          // Auto-load if a connection is already selected (always load, even with a saved value)
-         const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
+         const connId = document.getElementById(prefix === 'p1' ? 'f-source-connection' : 'f-dest-connection')?.value;
          let shouldAutoLoad = !!connId;
          if (shouldAutoLoad && field.dependsOn) {
             const parentEl = container.querySelector(`[data-schema-id="${field.dependsOn}"]`);
@@ -272,7 +282,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
           const loadData = async () => {
             if (!selectEl || selectEl.classList.contains('is-loading')) return;
             if (field.dataSource) {
-              const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
+              const connId = document.getElementById(prefix === 'p1' ? 'f-source-connection' : 'f-dest-connection')?.value;
               if (!connId) {
                 selectEl.innerHTML = '<option value="">— Select a connection first —</option>';
                 return;
@@ -343,7 +353,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
          const btnRef = row.querySelector('.btn-refresh-ds');
          if(window.feather) window.feather.replace();
          
-         const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
+         const connId = document.getElementById(prefix === 'p1' ? 'f-source-connection' : 'f-dest-connection')?.value;
          let shouldAutoLoad = !!connId;
          if (shouldAutoLoad && field.dependsOn) {
             const parentEl = container.querySelector(`[data-schema-id="${field.dependsOn}"]`);
@@ -358,7 +368,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
           const loadData = async () => {
             if (!msEl || msEl.classList.contains('is-loading')) return;
             if (field.dataSource) {
-              const connIdLocal = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
+              const connIdLocal = document.getElementById(prefix === 'p1' ? 'f-source-connection' : 'f-dest-connection')?.value;
               if (!connIdLocal) { msEl.className = 'ds-multi-select ms-empty'; msEl.innerHTML = '<div class="ms-placeholder">— Select a connection first —</div>'; return; }
               
               btnRef.style.display = 'none';
@@ -435,7 +445,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                childRow.style.display = isVisible ? 'block' : 'none';
                
                  if ((childField.type === 'dynamic_select' || childField.type === 'dynamic_multi_select') && isVisible) {
-                  const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
+                  const connId = document.getElementById(prefix === 'p1' ? 'f-source-connection' : 'f-dest-connection')?.value;
                   if (connId) {
                     const btnRef = childRow.querySelector('.btn-refresh-ds');
                     if (btnRef) btnRef.click();
@@ -741,8 +751,8 @@ const fDescription = document.getElementById('f-description');
 const fCron        = document.getElementById('f-cron');
 const fIntervalValue = document.getElementById('f-interval-value');
 const fIntervalUnit = document.getElementById('f-interval-unit');
-const fTtConnection = document.getElementById('f-tt-connection');
-const fNotionConnection = document.getElementById('f-notion-connection');
+const fSourceConnection = document.getElementById('f-source-connection');
+const fDestConnection = document.getElementById('f-dest-connection');
 const fNDbId       = document.getElementById('f-n-dbid');
 const fNToken      = document.getElementById('f-n-token');
 const lastRunRow   = document.getElementById('last-run-row');
@@ -755,7 +765,7 @@ const fDeleteAfter   = document.getElementById('f-delete-after');
 const deleteAfterRow = document.getElementById('delete-after-row');
 const btnAddMapping  = document.getElementById('btn-add-mapping');
 const mappingsContainer = document.getElementById('mappings-container');
-const fTtList        = document.getElementById('f-tt-list');
+const fSourceList        = document.getElementById('f-source-list');
 const fTtTag         = document.getElementById('f-tt-tag');
 
 const btnLoadTt    = document.getElementById('btn-load-tt');
@@ -832,7 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
     notionDbSelect.on('change', async (value) => {
       if (value) {
         try {
-          const connId = document.getElementById('f-notion-connection')?.value;
+          const connId = document.getElementById('f-dest-connection')?.value;
           await fetchNotionDbSchema(value, connId);
           await fetchNotionDbTemplates(value, connId);
           updateStatusMappingUI();
@@ -2829,14 +2839,14 @@ async function openPanel(id = null) {
       
       const p1Conn = _connectionsCache.find(c => c.id === cfg.platform1ConnectionId);
       if (p1Conn) {
-        window.renderSchemaForPlatform(p1Conn.provider, 'p1-dynamic-container', 'p1', cfg.p1Settings || {});
+        window.renderSchemaForPlatform(p1Conn.provider, 'source-dynamic-container', 'p1', cfg.p1Settings || {});
         const entity = cfg.p1Settings?.targetEntity || 'Tasks';
         await fetchSourceSchema(cfg.platform1ConnectionId, p1Conn.provider, entity);
       }
       
       const p2Conn = _connectionsCache.find(c => c.id === cfg.platform2ConnectionId);
       if (p2Conn) {
-        window.renderSchemaForPlatform(p2Conn.provider, 'p2-dynamic-container', 'p2', cfg.p2Settings || {});
+        window.renderSchemaForPlatform(p2Conn.provider, 'dest-dynamic-container', 'p2', cfg.p2Settings || {});
         if (cfg.p2Settings?.databaseId) {
           await fetchNotionDbSchema(cfg.p2Settings.databaseId, cfg.platform2ConnectionId, false);
         }
@@ -2859,18 +2869,18 @@ async function openPanel(id = null) {
 
   goToStep(1);
   if (!id) {
-    document.getElementById('f-tt-connection')?.dispatchEvent(new Event('change'));
-    document.getElementById('f-notion-connection')?.dispatchEvent(new Event('change'));
+    document.getElementById('f-source-connection')?.dispatchEvent(new Event('change'));
+    document.getElementById('f-dest-connection')?.dispatchEvent(new Event('change'));
   }
   sidePanel.classList.add('open');
   panelOverlay.classList.add('open');
 }
 window.openPanel = openPanel; // Expose globally for external scripts
 
-let _dropdownP1Provider = null;
-let _dropdownP2Provider = null;
-let _dropdownP1Name = null;
-let _dropdownP2Name = null;
+let _dropdownSourceProvider = null;
+let _dropdownDestProvider = null;
+let _dropdownSourceName = null;
+let _dropdownDestName = null;
 
 function getPlatformDisplayName(providerId) {
   if (!providerId) return null;
@@ -2879,20 +2889,20 @@ function getPlatformDisplayName(providerId) {
 }
 
 function setConnectButtonProviders(p1Provider, p2Provider) {
-  _dropdownP1Provider = p1Provider;
-  _dropdownP2Provider = p2Provider;
-  _dropdownP1Name = getPlatformDisplayName(p1Provider);
-  _dropdownP2Name = getPlatformDisplayName(p2Provider);
+  _dropdownSourceProvider = p1Provider;
+  _dropdownDestProvider = p2Provider;
+  _dropdownSourceName = getPlatformDisplayName(p1Provider);
+  _dropdownDestName = getPlatformDisplayName(p2Provider);
 
-  const p1Name = _dropdownP1Name || 'Platform 1';
-  const p2Name = _dropdownP2Name || 'Platform 2';
+  const p1Name = _dropdownSourceName || 'Source';
+  const p2Name = _dropdownDestName || 'Destination';
 
-  const btn1 = document.getElementById('btn-connect-p1');
-  const btn2 = document.getElementById('btn-connect-p2');
-  const link1 = document.getElementById('p1-connect-link');
-  const link2 = document.getElementById('p2-connect-link');
-  const hint1 = document.getElementById('p1-connect-hint');
-  const hint2 = document.getElementById('p2-connect-hint');
+  const btn1 = document.getElementById('btn-connect-source');
+  const btn2 = document.getElementById('btn-connect-dest');
+  const link1 = document.getElementById('source-connect-link');
+  const link2 = document.getElementById('dest-connect-link');
+  const hint1 = document.getElementById('source-connect-hint');
+  const hint2 = document.getElementById('dest-connect-hint');
   if (btn1) btn1.dataset.provider = p1Provider || '';
   if (btn2) btn2.dataset.provider = p2Provider || '';
   if (link1) link1.dataset.provider = p1Provider || '';
@@ -2901,19 +2911,19 @@ function setConnectButtonProviders(p1Provider, p2Provider) {
   if (hint2) hint2.dataset.provider = p2Provider || '';
 
   // Update section titles
-  const t1 = document.getElementById('p1-settings-title');
-  const t2 = document.getElementById('p2-settings-title');
+  const t1 = document.getElementById('source-settings-title');
+  const t2 = document.getElementById('dest-settings-title');
   if (t1) t1.textContent = p1Name + ' Settings';
   if (t2) t2.textContent = p2Name + ' Settings';
 
   // Update node labels and logos in the workflow canvas
-  const n1 = document.getElementById('node-p1-name');
-  const n2 = document.getElementById('node-p2-name');
+  const n1 = document.getElementById('node-source-name');
+  const n2 = document.getElementById('node-dest-name');
   if (n1) n1.textContent = p1Name;
   if (n2) n2.textContent = p2Name;
 
-  const n1Logo = document.getElementById('node-p1-logo');
-  const n2Logo = document.getElementById('node-p2-logo');
+  const n1Logo = document.getElementById('node-source-logo');
+  const n2Logo = document.getElementById('node-dest-logo');
   if (n1Logo) n1Logo.innerHTML = getPlatformLogoSvg(p1Provider);
   if (n2Logo) n2Logo.innerHTML = getPlatformLogoSvg(p2Provider);
 
@@ -2931,13 +2941,13 @@ function buildSelectHtml(connections) {
 }
 
 function populateConnectionDropdowns(connections, id = null, p1Provider = null, p2Provider = null) {
-  _dropdownP1Provider = p1Provider;
-  _dropdownP2Provider = p2Provider;
+  _dropdownSourceProvider = p1Provider;
+  _dropdownDestProvider = p2Provider;
 
   window._connectingProvider = null;
 
   // Remove any connecting indicators
-  document.querySelectorAll('#section-p1 .loader1, #section-p2 .loader2').forEach(el => el.remove());
+  document.querySelectorAll('#section-source .loader1, #section-dest .loader2').forEach(el => el.remove());
 
   const p1Conns = p1Provider ? connections.filter(c => c.provider === p1Provider) : connections;
   const p2Conns = p2Provider ? connections.filter(c => c.provider === p2Provider) : connections;
@@ -2945,17 +2955,17 @@ function populateConnectionDropdowns(connections, id = null, p1Provider = null, 
   const p1Result = buildSelectHtml(p1Conns);
   const p2Result = buildSelectHtml(p2Conns);
 
-  fTtConnection.innerHTML = p1Result.html;
-  fNotionConnection.innerHTML = p2Result.html;
-  fTtConnection.disabled = false;
-  fNotionConnection.disabled = false;
-  fTtConnection.classList.remove('is-loading');
-  fNotionConnection.classList.remove('is-loading');
+  fSourceConnection.innerHTML = p1Result.html;
+  fDestConnection.innerHTML = p2Result.html;
+  fSourceConnection.disabled = false;
+  fDestConnection.disabled = false;
+  fSourceConnection.classList.remove('is-loading');
+  fDestConnection.classList.remove('is-loading');
 
-  const hint1 = document.getElementById('p1-connect-hint');
-  const hint2 = document.getElementById('p2-connect-hint');
-  const btn1 = document.getElementById('btn-connect-p1');
-  const btn2 = document.getElementById('btn-connect-p2');
+  const hint1 = document.getElementById('source-connect-hint');
+  const hint2 = document.getElementById('dest-connect-hint');
+  const btn1 = document.getElementById('btn-connect-source');
+  const btn2 = document.getElementById('btn-connect-dest');
 
   if (!p1Result.hasConns) {
     if (hint1) hint1.style.display = '';
@@ -2975,15 +2985,15 @@ function populateConnectionDropdowns(connections, id = null, p1Provider = null, 
   if (id) {
     const cfg = configs.find(c => c.id === id);
     if (cfg) {
-      if (cfg.platform1ConnectionId) fTtConnection.value = cfg.platform1ConnectionId;
-      if (cfg.platform2ConnectionId) fNotionConnection.value = cfg.platform2ConnectionId;
+      if (cfg.platform1ConnectionId) fSourceConnection.value = cfg.platform1ConnectionId;
+      if (cfg.platform2ConnectionId) fDestConnection.value = cfg.platform2ConnectionId;
     }
   }
 }
 
 function handleConnectionChange(prefix) {
-  const connId = document.getElementById(prefix === 'p1' ? 'f-tt-connection' : 'f-notion-connection')?.value;
-  const containerId = prefix === 'p1' ? 'p1-dynamic-container' : 'p2-dynamic-container';
+  const connId = document.getElementById(prefix === 'p1' ? 'f-source-connection' : 'f-dest-connection')?.value;
+  const containerId = prefix === 'p1' ? 'source-dynamic-container' : 'dest-dynamic-container';
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -3001,7 +3011,7 @@ function handleConnectionChange(prefix) {
 
 async function closePanel() {
   window._connectingProvider = null;
-  document.querySelectorAll('#section-p1 .loader1, #section-p2 .loader2').forEach(el => el.remove());
+  document.querySelectorAll('#section-source .loader1, #section-dest .loader2').forEach(el => el.remove());
   const sidePanel = document.getElementById('side-panel');
   if (sidePanel && sidePanel.classList.contains('inline-mode')) {
     return;
@@ -3058,12 +3068,11 @@ function formatPropertyType(typeStr) {
 }
 
 function buildSourceFieldOptions(entity, selectedField) {
-  let fields = Object.entries(sourceSchema).map(([key, f]) => ({
+  const fields = Object.entries(sourceSchema).map(([key, f]) => ({
     value: key, label: `${f.label || key}${formatPropertyType(f.type)}`
   }));
   if (!fields.length) {
-    const legacy = { Tasks: 'title,desc,tags,status', Notes: 'title,content,tags', Habits: 'name,type,goal' };
-    fields = (legacy[entity] || 'title').split(',').map(k => ({ value: k, label: k }));
+    return `<option value="">— No schema loaded —</option>`;
   }
   return fields.map(f => `<option value="${f.value}" ${f.value === selectedField ? 'selected' : ''}>${f.label}</option>`).join('');
 }
@@ -3073,15 +3082,14 @@ function addMappingRow(sourceField = '', destField = '', confidence = null, reas
   row.className = 'mapping-row';
   row.style = 'display: flex; gap: 1rem; align-items: center; background: rgba(255, 255, 255, 0.02); padding: 0.75rem 1rem; border-radius: 12px; border: 1px solid var(--border); transition: all 0.2s ease;';
 
-  const entity = (window.harvestDynamicFields && window.harvestDynamicFields('p1-dynamic-container')['targetEntity']) || 'Tasks';
+  const entity = (window.harvestDynamicFields && window.harvestDynamicFields('source-dynamic-container')['targetEntity']) || 'Tasks';
 
   if (!sourceFieldList) {
     sourceFieldList = Object.entries(sourceSchema).map(([key, f]) => ({
       value: key, label: `${f.label || key}${formatPropertyType(f.type)}`
     }));
     if (!sourceFieldList.length) {
-      const legacy = { Tasks: 'title,desc,tags,status,priority,parentId', Notes: 'title,content,tags', Habits: 'name,type,goal' };
-      sourceFieldList = (legacy[entity] || 'title').split(',').map(k => ({ value: k, label: k }));
+      sourceFieldList = [{ value: '', label: '— No schema loaded —' }];
     }
   }
 
@@ -3289,14 +3297,14 @@ window.saveStatusModal = function() {
 }
 
 async function loadDefaultMappingsPreset() {
-  const entity = (window.harvestDynamicFields && window.harvestDynamicFields('p1-dynamic-container')['targetEntity']) || 'Tasks';
-  const sourceConnId = document.getElementById('f-tt-connection')?.value || document.querySelector('[data-source-connection]')?.value;
-  const destConnId = document.getElementById('f-notion-connection')?.value || document.querySelector('[data-dest-connection]')?.value;
+  const entity = (window.harvestDynamicFields && window.harvestDynamicFields('source-dynamic-container')['targetEntity']) || 'Tasks';
+  const sourceConnId = document.getElementById('f-source-connection')?.value || document.querySelector('[data-source-connection]')?.value;
+  const destConnId = document.getElementById('f-dest-connection')?.value || document.querySelector('[data-dest-connection]')?.value;
 
   if (!sourceConnId || !destConnId) return;
 
-  const destContext = window.harvestDynamicFields ? window.harvestDynamicFields('p2-dynamic-container') : {};
-  const sourceContext = window.harvestDynamicFields ? window.harvestDynamicFields('p1-dynamic-container') : {};
+  const destContext = window.harvestDynamicFields ? window.harvestDynamicFields('dest-dynamic-container') : {};
+  const sourceContext = window.harvestDynamicFields ? window.harvestDynamicFields('source-dynamic-container') : {};
   const destContextStr = JSON.stringify(destContext);
   const sourceContextStr = JSON.stringify(sourceContext);
 
@@ -3315,25 +3323,50 @@ async function loadDefaultMappingsPreset() {
     const sourceConn = typeof _connectionsCache !== 'undefined' ? _connectionsCache.find(c => c.id === sourceConnId) : null;
     const destConn = typeof _connectionsCache !== 'undefined' ? _connectionsCache.find(c => c.id === destConnId) : null;
 
+    const p1Provider = sourceConn?.provider || _dropdownSourceProvider || null;
+    const p2Provider = destConn?.provider || _dropdownDestProvider || null;
+
+    if (!p1Provider || !p2Provider) {
+      mappingsContainer.innerHTML = `<div style="padding: 16px; text-align: center; color: #ef4444; font-size: 0.9rem;">
+        Cannot determine platform for one or both connections.</div>`;
+      return;
+    }
+
     const res = await fetch(`${API_URL}/suggest-mappings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
       body: JSON.stringify({
         sourceConnectionId: sourceConnId,
         destConnectionId: destConnId,
-        sourcePlatform: sourceConn?.provider || (typeof _dropdownP1Provider !== 'undefined' ? _dropdownP1Provider : 'ticktick'),
-        destPlatform: destConn?.provider || (typeof _dropdownP2Provider !== 'undefined' ? _dropdownP2Provider : 'notion'),
-        entityType: entity,
+        sourcePlatform: p1Provider,
+        destPlatform: p2Provider,
+        sourceEntityType: entity,
         context: { source: sourceContext, dest: destContext }
       })
     });
+
+    if (!res.ok) {
+      mappingsContainer.innerHTML = `<div style="padding: 16px; text-align: center; color: #ef4444; font-size: 0.9rem;">
+        Failed to load schemas (HTTP ${res.status}). Check that both connections are valid.</div>`;
+      const errText = await res.text().catch(() => '');
+      console.warn('[loadDefaultMappingsPreset] HTTP error:', res.status, errText);
+      return;
+    }
+
     const data = await res.json();
     mappingsContainer.innerHTML = ''; // clear loading state
     
     if (data.sourceSchema && Object.keys(data.sourceSchema).length > 0) sourceSchema = data.sourceSchema;
     if (data.destSchema && Object.keys(data.destSchema).length > 0) notionDbProperties = data.destSchema;
     
-    if (data.success && data.suggestions && data.suggestions.length > 0) {
+    if (!data.success) {
+      mappingsContainer.innerHTML = `<div style="padding: 16px; text-align: center; color: #ef4444; font-size: 0.9rem;">
+        ${data.error ? `Error: ${escHtml(data.error)}` : 'Failed to generate mapping suggestions.'}</div>`;
+      console.warn('[loadDefaultMappingsPreset] API error:', data.error);
+      return;
+    }
+
+    if (data.suggestions && data.suggestions.length > 0) {
       window._lastMappedSourceId = sourceConnId;
       window._lastMappedDestId = destConnId;
       window._lastMappedSourceContext = sourceContextStr;
@@ -3344,35 +3377,23 @@ async function loadDefaultMappingsPreset() {
       window.markConfigDirty();
       return;
     }
-  } catch (e) {
-    console.warn('LLM Suggest API failed, falling back to presets:', e);
-  }
 
-  // Fallback presets
-  mappingsContainer.innerHTML = '';
-  window._lastMappedSourceId = sourceConnId;
-  window._lastMappedDestId = destConnId;
-  window._lastMappedSourceContext = sourceContextStr;
-  window._lastMappedDestContext = destContextStr;
-  if (entity === 'Tasks') {
-    addMappingRow('title', 'Name');
-    addMappingRow('tags', 'Topic');
-    addMappingRow('desc', '__content__');
-  } else if (entity === 'Notes') {
-    addMappingRow('title', 'Name');
-    addMappingRow('tags', 'Topic');
-    addMappingRow('content', '__content__');
-  } else if (entity === 'Habits') {
-    addMappingRow('name', 'Name');
+    // API succeeded but no suggestions returned
+    mappingsContainer.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-3); font-size: 0.9rem;">
+      No mapping suggestions available. Add mappings manually below.</div>`;
+    window.markConfigDirty();
+  } catch (e) {
+    console.warn('[loadDefaultMappingsPreset] Network error:', e);
+    mappingsContainer.innerHTML = `<div style="padding: 16px; text-align: center; color: #ef4444; font-size: 0.9rem;">
+      Network error loading schemas. Check your connection and try again.</div>`;
   }
-  window.markConfigDirty();
 }
 
 function filterAndPopulateTtLists() {
-  const entity = (window.harvestDynamicFields && window.harvestDynamicFields('p1-dynamic-container')['targetEntity']) || 'Tasks';
-  const currentVal = fTtList.value;
+  const entity = (window.harvestDynamicFields && window.harvestDynamicFields('source-dynamic-container')['targetEntity']) || 'Tasks';
+  const currentVal = fSourceList.value;
 
-  fTtList.innerHTML = '';
+  fSourceList.innerHTML = '';
 
   if (entity === 'Habits') {
     return;
@@ -3382,7 +3403,7 @@ function filterAndPopulateTtLists() {
     const opt = document.createElement('option');
     opt.value = "";
     opt.textContent = "-- Click Load Data --";
-    fTtList.appendChild(opt);
+    fSourceList.appendChild(opt);
     return;
   }
 
@@ -3390,7 +3411,7 @@ function filterAndPopulateTtLists() {
     const inboxOpt = document.createElement('option');
     inboxOpt.value = 'Inbox';
     inboxOpt.textContent = 'Inbox';
-    fTtList.appendChild(inboxOpt);
+    fSourceList.appendChild(inboxOpt);
   }
 
   const expectedKind = entity === 'Notes' ? 'NOTE' : 'TASK';
@@ -3400,13 +3421,13 @@ function filterAndPopulateTtLists() {
     const opt = document.createElement('option');
     opt.value = p.name;
     opt.textContent = p.name;
-    fTtList.appendChild(opt);
+    fSourceList.appendChild(opt);
   });
 
-  if (currentVal && Array.from(fTtList.options).some(o => o.value === currentVal)) {
-    fTtList.value = currentVal;
-  } else if (fTtList.options.length > 0) {
-    fTtList.value = fTtList.options[0].value;
+  if (currentVal && Array.from(fSourceList.options).some(o => o.value === currentVal)) {
+    fSourceList.value = currentVal;
+  } else if (fSourceList.options.length > 0) {
+    fSourceList.value = fSourceList.options[0].value;
   }
 }
 
@@ -3497,15 +3518,10 @@ async function fetchNotionDbTemplates(dbId, connectionId, selectedTemplateId = n
   }
 }
 
-async function fetchSourceSchema(connectionId, platform, entityType = 'Tasks') {
+async function fetchSourceSchema(connectionId, platform, entityType) {
   if (!connectionId || !platform) return;
-  // Resolve platform to key if an ID was incorrectly passed (e.g. custom platforms)
-  const plat = window.cachedPlatforms?.find(p => p.id === platform || p.key === platform);
-  let resolvedPlatform = plat ? (plat.key || plat.name?.toLowerCase() || plat.id) : platform;
-  if (plat && resolvedPlatform === plat.id) {
-     if (plat.authUrl?.includes('ticktick')) resolvedPlatform = 'ticktick';
-     if (plat.authUrl?.includes('notion')) resolvedPlatform = 'notion';
-  }
+  // Use the platform ID directly — backend route resolves connector via registry
+  const resolvedPlatform = platform;
   try {
     const user = auth.currentUser;
     const idToken = await user.getIdToken();
@@ -3567,10 +3583,10 @@ function clearForm() {
   fSyncType.value = 'Source_to_Dest';
   fDeleteAfter.checked = false;
 
-  fTtConnection.value = '';
-  fNotionConnection.value = '';
+  fSourceConnection.value = '';
+  fDestConnection.value = '';
   
-  if (fTtList) fTtList.innerHTML = '<option value="">-- Select Connection --</option>';
+  if (fSourceList) fSourceList.innerHTML = '<option value="">-- Select Connection --</option>';
   if (fTtTag) fTtTag.innerHTML = '';
   
   fCron.value        = '*/5 * * * *';
@@ -3597,9 +3613,9 @@ function clearForm() {
   }
 
   // Clear dynamic platform containers so legacy schema fields don't persist
-  const p1Container = document.getElementById('p1-dynamic-container');
+  const p1Container = document.getElementById('source-dynamic-container');
   if (p1Container) p1Container.innerHTML = '';
-  const p2Container = document.getElementById('p2-dynamic-container');
+  const p2Container = document.getElementById('dest-dynamic-container');
   if (p2Container) p2Container.innerHTML = '';
 
   notionDbProperties = {};
@@ -3654,16 +3670,16 @@ async function fillForm(cfg, opts = {}) {
   fDeleteAfter.checked = cfg.deleteAfterSync === true;
 
 
-  if (cfg.platform1ConnectionId) fTtConnection.value = cfg.platform1ConnectionId;
-  if (cfg.platform2ConnectionId) fNotionConnection.value = cfg.platform2ConnectionId;
+  if (cfg.platform1ConnectionId) fSourceConnection.value = cfg.platform1ConnectionId;
+  if (cfg.platform2ConnectionId) fDestConnection.value = cfg.platform2ConnectionId;
   
   const listName = cfg.ticktick?.listName || '';
-  if (listName && fTtList) {
+  if (listName && fSourceList) {
     const opt = document.createElement('option');
     opt.value = listName;
     opt.textContent = listName;
-    fTtList.appendChild(opt);
-    fTtList.value = listName;
+    fSourceList.appendChild(opt);
+    fSourceList.value = listName;
   }
   
   const syncTag = cfg.ticktick?.syncTag || '';
@@ -3719,8 +3735,8 @@ async function fillForm(cfg, opts = {}) {
     const mappings = cfg.fieldMappings || [];
     if (mappings.length > 0) {
       mappings.forEach(m => addMappingRow(m.sourceField || m.ticktickField, m.destField || m.notionProperty));
-      window._lastMappedSourceId = cfg.platform1ConnectionId || document.getElementById('f-tt-connection')?.value;
-      window._lastMappedDestId = cfg.platform2ConnectionId || document.getElementById('f-notion-connection')?.value;
+      window._lastMappedSourceId = cfg.platform1ConnectionId || document.getElementById('f-source-connection')?.value;
+      window._lastMappedDestId = cfg.platform2ConnectionId || document.getElementById('f-dest-connection')?.value;
     } else {
       loadDefaultMappingsPreset();
     }
@@ -3746,8 +3762,8 @@ function restoreFieldMappings(cfg) {
   const mappings = cfg.fieldMappings || [];
   if (mappings.length > 0) {
     mappings.forEach(m => addMappingRow(m.sourceField || m.ticktickField, m.destField || m.notionProperty));
-    window._lastMappedSourceId = cfg.platform1ConnectionId || document.getElementById('f-tt-connection')?.value;
-    window._lastMappedDestId = cfg.platform2ConnectionId || document.getElementById('f-notion-connection')?.value;
+    window._lastMappedSourceId = cfg.platform1ConnectionId || document.getElementById('f-source-connection')?.value;
+    window._lastMappedDestId = cfg.platform2ConnectionId || document.getElementById('f-dest-connection')?.value;
   } else {
     loadDefaultMappingsPreset();
   }
@@ -3774,8 +3790,8 @@ function buildFormPayload(payloadStatus) {
   const resolvedFormId = editingId || document.getElementById('form-id')?.value?.trim() || null;
   const existingCfg = resolvedFormId ? configs.find(c => c.id === resolvedFormId) : null;
 
-  let p1ConnId = fTtConnection.value || existingCfg?.platform1ConnectionId || '';
-  let p2ConnId = fNotionConnection.value || existingCfg?.platform2ConnectionId || '';
+  let p1ConnId = fSourceConnection.value || existingCfg?.platform1ConnectionId || '';
+  let p2ConnId = fDestConnection.value || existingCfg?.platform2ConnectionId || '';
 
   // If this config came from the marketplace flow, the connections are locked in step 1.
   // Ignore the form dropdowns and strictly preserve what was saved in the draft.
@@ -3794,12 +3810,12 @@ function buildFormPayload(payloadStatus) {
     syncType:    fSyncType.value,
     deleteAfterSync: fDeleteAfter.checked,
     cronSchedule: buildCron(fIntervalValue?.value, fIntervalUnit?.value, fCron?.value),
-    platform1: (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === p1ConnId)?.provider) || _dropdownP1Provider || null,
-    platform2: (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === p2ConnId)?.provider) || _dropdownP2Provider || null,
+    platform1: (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === p1ConnId)?.provider) || _dropdownSourceProvider || null,
+    platform2: (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === p2ConnId)?.provider) || _dropdownDestProvider || null,
     platform1ConnectionId: p1ConnId,
     platform2ConnectionId: p2ConnId,
-    p1Settings: window.harvestDynamicFields ? window.harvestDynamicFields('p1-dynamic-container') : {},
-    p2Settings: window.harvestDynamicFields ? window.harvestDynamicFields('p2-dynamic-container') : {},
+    p1Settings: window.harvestDynamicFields ? window.harvestDynamicFields('source-dynamic-container') : {},
+    p2Settings: window.harvestDynamicFields ? window.harvestDynamicFields('dest-dynamic-container') : {},
     fieldMappings,
     statusMappings: (Array.from(mappingsContainer.querySelectorAll('.mapping-row'))
       .some(row => (row.querySelector('.map-source') || row.querySelector('.map-ticktick')).value === 'status')) ? {
@@ -4075,8 +4091,8 @@ function goToStep(n) {
 }
 
 document.getElementById('btn-step1-next')?.addEventListener('click', () => {
-  const p1 = document.getElementById('f-tt-connection')?.value;
-  const p2 = document.getElementById('f-notion-connection')?.value;
+  const p1 = document.getElementById('f-source-connection')?.value;
+  const p2 = document.getElementById('f-dest-connection')?.value;
   if (!p1) { showToast('Please complete the setup for Platform 1.', 'error'); return; }
   if (!p2) { showToast('Please complete the setup for Platform 2.', 'error'); return; }
   if (p1 === p2) { showToast('The source and destination accounts cannot be the same.', 'error'); return; }
@@ -4094,15 +4110,15 @@ document.getElementById('btn-step2-next')?.addEventListener('click', () => {
 document.getElementById('btn-step3-back')?.addEventListener('click', () => goToStep(2));
 
 document.getElementById('btn-step1-save')?.addEventListener('click', (e) => {
-  const p1 = document.getElementById('f-tt-connection')?.value;
-  const p2 = document.getElementById('f-notion-connection')?.value;
+  const p1 = document.getElementById('f-source-connection')?.value;
+  const p2 = document.getElementById('f-dest-connection')?.value;
   if (!p1) { showToast('Please complete the setup for Platform 1.', 'error'); return; }
   if (!p2) { showToast('Please complete the setup for Platform 2.', 'error'); return; }
   saveConfig(e, false);
 });
 document.getElementById('btn-step2-save')?.addEventListener('click', (e) => {
-  const p1 = document.getElementById('f-tt-connection')?.value;
-  const p2 = document.getElementById('f-notion-connection')?.value;
+  const p1 = document.getElementById('f-source-connection')?.value;
+  const p2 = document.getElementById('f-dest-connection')?.value;
   if (!p1) { showToast('Please complete the setup for Platform 1.', 'error'); return; }
   if (!p2) { showToast('Please complete the setup for Platform 2.', 'error'); return; }
   const mappings = document.querySelectorAll('.mapping-row');
@@ -4111,17 +4127,17 @@ document.getElementById('btn-step2-save')?.addEventListener('click', (e) => {
 });
 
 // Update node status indicators and load schema when connection changes
-document.getElementById('f-tt-connection')?.addEventListener('change', () => {
+document.getElementById('f-source-connection')?.addEventListener('change', () => {
   updateNodeStatuses();
   handleConnectionChange('p1');
-  if (document.getElementById('f-tt-connection')?.value && document.getElementById('f-notion-connection')?.value) {
+  if (document.getElementById('f-source-connection')?.value && document.getElementById('f-dest-connection')?.value) {
     autoPopulateSyncName();
   }
 });
-document.getElementById('f-notion-connection')?.addEventListener('change', () => {
+document.getElementById('f-dest-connection')?.addEventListener('change', () => {
   updateNodeStatuses();
   handleConnectionChange('p2');
-  if (document.getElementById('f-tt-connection')?.value && document.getElementById('f-notion-connection')?.value) {
+  if (document.getElementById('f-source-connection')?.value && document.getElementById('f-dest-connection')?.value) {
     autoPopulateSyncName();
   }
 });
@@ -4148,10 +4164,10 @@ async function fireOpenAddConnection(provider) {
       }
 
       // Show inline loading state in the dropdown
-      const isP1 = provider === _dropdownP1Provider;
-      const select = isP1 ? fTtConnection : fNotionConnection;
-      const btn = isP1 ? document.getElementById('btn-connect-p1') : document.getElementById('btn-connect-p2');
-      const hint = isP1 ? document.getElementById('p1-connect-hint') : document.getElementById('p2-connect-hint');
+      const isP1 = provider === _dropdownSourceProvider;
+      const select = isP1 ? fSourceConnection : fDestConnection;
+      const btn = isP1 ? document.getElementById('btn-connect-source') : document.getElementById('btn-connect-dest');
+      const hint = isP1 ? document.getElementById('source-connect-hint') : document.getElementById('dest-connect-hint');
       
       let originalSelectHtml = '';
       if (select) {
@@ -4181,41 +4197,41 @@ async function fireOpenAddConnection(provider) {
   // Fallback to dialog
   window.dispatchEvent(new CustomEvent('open-add-connection', { detail: { provider } }));
 }
-document.getElementById('btn-connect-p1')?.addEventListener('click', () => {
-  fireOpenAddConnection(document.getElementById('btn-connect-p1')?.dataset.provider || null);
+document.getElementById('btn-connect-source')?.addEventListener('click', () => {
+  fireOpenAddConnection(document.getElementById('btn-connect-source')?.dataset.provider || null);
 });
-document.getElementById('btn-connect-p2')?.addEventListener('click', () => {
-  fireOpenAddConnection(document.getElementById('btn-connect-p2')?.dataset.provider || null);
+document.getElementById('btn-connect-dest')?.addEventListener('click', () => {
+  fireOpenAddConnection(document.getElementById('btn-connect-dest')?.dataset.provider || null);
 });
-document.getElementById('p1-connect-link')?.addEventListener('click', (e) => {
+document.getElementById('source-connect-link')?.addEventListener('click', (e) => {
   e.preventDefault();
-  fireOpenAddConnection(document.getElementById('p1-connect-link')?.dataset.provider || null);
+  fireOpenAddConnection(document.getElementById('source-connect-link')?.dataset.provider || null);
 });
-document.getElementById('p2-connect-link')?.addEventListener('click', (e) => {
+document.getElementById('dest-connect-link')?.addEventListener('click', (e) => {
   e.preventDefault();
-  fireOpenAddConnection(document.getElementById('p2-connect-link')?.dataset.provider || null);
+  fireOpenAddConnection(document.getElementById('dest-connect-link')?.dataset.provider || null);
 });
 
 // Refresh dropdowns when connections are saved/deleted elsewhere
 window.addEventListener('connections-refreshed', async (e) => {
-  const currentP1 = fTtConnection.value;
-  const currentP2 = fNotionConnection.value;
+  const currentP1 = fSourceConnection.value;
+  const currentP2 = fDestConnection.value;
 
   _connectionsCache = await loadConnections(true);
   const cfgId = document.getElementById('form-id')?.value?.trim() || null;
-  populateConnectionDropdowns(_connectionsCache, cfgId, _dropdownP1Provider, _dropdownP2Provider);
+  populateConnectionDropdowns(_connectionsCache, cfgId, _dropdownSourceProvider, _dropdownDestProvider);
 
-  if (currentP1) fTtConnection.value = currentP1;
-  if (currentP2) fNotionConnection.value = currentP2;
+  if (currentP1) fSourceConnection.value = currentP1;
+  if (currentP2) fDestConnection.value = currentP2;
 
   const { newConnectionId, platformId } = e.detail || {};
   if (newConnectionId && platformId) {
-    if (platformId === _dropdownP1Provider) {
-      fTtConnection.value = newConnectionId;
-      fTtConnection.dispatchEvent(new Event('change'));
-    } else if (platformId === _dropdownP2Provider) {
-      fNotionConnection.value = newConnectionId;
-      fNotionConnection.dispatchEvent(new Event('change'));
+    if (platformId === _dropdownSourceProvider) {
+      fSourceConnection.value = newConnectionId;
+      fSourceConnection.dispatchEvent(new Event('change'));
+    } else if (platformId === _dropdownDestProvider) {
+      fDestConnection.value = newConnectionId;
+      fDestConnection.dispatchEvent(new Event('change'));
     }
   }
 });
@@ -4439,7 +4455,7 @@ btnAddMapping.addEventListener('click', () => addMappingRow('', ''));
 // TickTick Data Loading
 if (btnLoadTt) {
   btnLoadTt.addEventListener('click', async () => {
-    const connId = fTtConnection?.value;
+    const connId = fSourceConnection?.value;
     if (!connId) {
       showToast('Please select a TickTick connection first', 'error');
       return;
@@ -4463,7 +4479,7 @@ if (btnLoadTt) {
       filterAndPopulateTtLists();
       
       // Auto-trigger tag fetching for the current list
-      fTtList.dispatchEvent(new Event('change'));
+      fSourceList.dispatchEvent(new Event('change'));
       
       showToast(`Loaded ${projects.length} projects successfully!`, 'success');
     } catch (err) {
@@ -4531,10 +4547,10 @@ if (btnLoadNotion) {
   });
 }
 
-if (fTtList) {
-  fTtList.addEventListener('change', async () => {
+if (fSourceList) {
+  fSourceList.addEventListener('change', async () => {
     const token = fTtToken.value.trim();
-    const listName = fTtList.value;
+    const listName = fSourceList.value;
     if (!token || listName === 'Inbox') {
       const currentTag = fTtTag.value;
       fTtTag.innerHTML = '';
@@ -4630,18 +4646,18 @@ let currentNodeId = null;
 function openNodeModal(nodeId) {
   window.cachedPlatforms = null;
   currentNodeId = nodeId;
-  const p1Name = window._p1DisplayName || 'Platform 1';
-  const p2Name = window._p2DisplayName || 'Platform 2';
+  const p1Name = window._p1DisplayName || 'Source';
+  const p2Name = window._p2DisplayName || 'Destination';
   if (nodeId === 'p1') {
     if (nodeModalTitle) nodeModalTitle.innerHTML = 'Setup Trigger <span style="color:var(--text-3); font-weight:normal;">(' + escHtml(p1Name) + ')</span>';
-    const sectionP1 = document.getElementById('section-p1');
+    const sectionP1 = document.getElementById('section-source');
     if (sectionP1 && nodeModalBody) {
       sectionP1.style.display = 'block';
       nodeModalBody.appendChild(sectionP1);
     }
   } else if (nodeId === 'p2') {
     if (nodeModalTitle) nodeModalTitle.innerHTML = 'Setup Action <span style="color:var(--text-3); font-weight:normal;">(' + escHtml(p2Name) + ')</span>';
-    const sectionP2 = document.getElementById('section-p2');
+    const sectionP2 = document.getElementById('section-dest');
     if (sectionP2 && nodeModalBody) {
       sectionP2.style.display = 'block';
       nodeModalBody.appendChild(sectionP2);
@@ -4656,8 +4672,8 @@ function closeNodeModal() {
   
   // Move contents back to hidden area
   const hiddenSections = document.getElementById('hidden-platform-sections');
-  const sectionP1 = document.getElementById('section-p1');
-  const sectionP2 = document.getElementById('section-p2');
+  const sectionP1 = document.getElementById('section-source');
+  const sectionP2 = document.getElementById('section-dest');
   if (hiddenSections && sectionP1) {
     // sectionP1.style.display = 'none'; // We keep it visible so harvesting works, the parent is hidden
     hiddenSections.appendChild(sectionP1);
@@ -4687,9 +4703,9 @@ function isSectionValid(sectionId) {
 }
 
 function updateNodeStatuses() {
-  const nodeP1Status = document.getElementById('node-p1-status');
+  const nodeP1Status = document.getElementById('node-source-status');
   if (nodeP1Status) {
-    if (isSectionValid('section-p1')) {
+    if (isSectionValid('section-source')) {
       nodeP1Status.innerHTML = '<i data-feather="check-circle" style="width: 16px; height: 16px;"></i>';
       nodeP1Status.className = 'node-status-icon success';
     } else {
@@ -4698,9 +4714,9 @@ function updateNodeStatuses() {
     }
   }
 
-  const nodeP2Status = document.getElementById('node-p2-status');
+  const nodeP2Status = document.getElementById('node-dest-status');
   if (nodeP2Status) {
-    if (isSectionValid('section-p2')) {
+    if (isSectionValid('section-dest')) {
       nodeP2Status.innerHTML = '<i data-feather="check-circle" style="width: 16px; height: 16px;"></i>';
       nodeP2Status.className = 'node-status-icon success';
     } else {
@@ -4760,8 +4776,8 @@ function autoPopulateSyncName() {
   const fDesc = document.getElementById('f-description');
   if (!fDesc || fDesc.value.trim()) return;
 
-  const p1Name = _dropdownP1Name || 'Platform 1';
-  const p2Name = _dropdownP2Name || 'Platform 2';
+  const p1Name = _dropdownSourceName || 'Source';
+  const p2Name = _dropdownDestName || 'Destination';
 
   let name = p1Name + ' → ' + p2Name;
   let counter = 1;
@@ -4773,8 +4789,8 @@ function autoPopulateSyncName() {
 }
 
 // Bind Node Modal clicks
-document.getElementById('node-platform1')?.addEventListener('click', () => openNodeModal('p1'));
-document.getElementById('node-platform2')?.addEventListener('click', () => openNodeModal('p2'));
+document.getElementById('node-source')?.addEventListener('click', () => openNodeModal('p1'));
+document.getElementById('node-dest')?.addEventListener('click', () => openNodeModal('p2'));
 nodeModalClose?.addEventListener('click', closeNodeModal);
 nodeModalSave?.addEventListener('click', saveNodeModal);
 

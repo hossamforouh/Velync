@@ -30,6 +30,10 @@ class Connector {
   async getDataSource(fieldId, context = {}) {
     throw new Error('getDataSource() must be implemented');
   }
+
+  getEntityTypes() {
+    return ['default'];
+  }
 }
 
 module.exports = { Connector };
