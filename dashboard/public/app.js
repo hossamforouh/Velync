@@ -453,9 +453,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 }
             }
           });
-          if (prefix === 'p2') {
-            setTimeout(() => loadDefaultMappingsPreset(), 0);
-          }
+          setTimeout(() => loadDefaultMappingsPreset(), 0);
         });
         
         inputEl.addEventListener('input', () => {
