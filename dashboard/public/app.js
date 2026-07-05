@@ -3840,11 +3840,30 @@ async function saveConfig(e, isSubmit = false) {
       }
       payload.ownerName = fullName || auth.currentUser?.email || 'Unknown';
       payload.ownerId = auth.currentUser?.uid || null;
-      const docRef = await addDoc(collection(db, 'workspaces', currentWorkspaceId, 'sync_configs'), payload);
-      editingId = docRef.id;
-      window.currentConfigId = docRef.id;
-      document.getElementById('form-id').value = docRef.id;
-      showToast(isSubmit ? 'Config activated' : 'Config created', 'success');
+      // Use server-side endpoint so plan limits are enforced
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch('/api/sync-configs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          throw new Error(result.error || 'Failed to create config');
+        }
+        editingId = result.id;
+        window.currentConfigId = result.id;
+        document.getElementById('form-id').value = result.id;
+        showToast(isSubmit ? 'Config activated' : 'Config created', 'success');
+      } catch (apiErr) {
+        showToast(apiErr.message, 'error');
+        isSavingConfig = false;
+        if (btnSave) btnSave.disabled = false;
+        if (btnSubmit) btnSubmit.disabled = false;
+        if (targetBtn) targetBtn.innerHTML = originalText;
+        return;
+      }
     }
     window.resetConfigDirty();
     await loadConfigs(true);

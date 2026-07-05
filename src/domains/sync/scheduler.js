@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { runSync } = require('./engine');
+const { cleanupLogs } = require('./log-cleanup');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -9,6 +10,16 @@ let retryCount = 0;
 function startScheduler() {
   cron.schedule('*/1 * * * *', () => {
     logger.debug('scheduler', `Heartbeat — active jobs: ${Object.keys(activeJobs).length}`);
+  }).start();
+
+  // Daily log retention cleanup at 02:00
+  cron.schedule('0 2 * * *', async () => {
+    logger.info('scheduler', 'Starting daily log retention cleanup');
+    try {
+      await cleanupLogs();
+    } catch (err) {
+      logger.error('scheduler', 'Log cleanup failed', { error: err.message });
+    }
   }).start();
 
   function listenToConfigs() {

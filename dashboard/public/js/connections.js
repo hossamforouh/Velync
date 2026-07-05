@@ -558,6 +558,31 @@ async function fetchPlatformSchemas() {
     data.id = docSnap.id;
     platforms.push(data);
   });
+
+  // Filter by workspace plan's connector tiers
+  if (window.currentWorkspaceId) {
+    try {
+      const wsSnap = await getDoc(doc(db, 'workspaces', window.currentWorkspaceId));
+      if (wsSnap.exists()) {
+        const wsData = wsSnap.data();
+        const planId = wsData.planId || 'free';
+        const planSnap = await getDoc(doc(db, 'plans', planId));
+        if (planSnap.exists()) {
+          const planData = planSnap.data();
+          const allowedTiers = planData.connectorTiers || ['basic'];
+          for (let i = platforms.length - 1; i >= 0; i--) {
+            const pTier = platforms[i].tier || 'basic';
+            if (!allowedTiers.includes(pTier)) {
+              platforms.splice(i, 1);
+            }
+          }
+        }
+      }
+    } catch (pfErr) {
+      console.warn('Failed to filter platforms by plan tier', pfErr);
+    }
+  }
+
   return platforms;
 }
 

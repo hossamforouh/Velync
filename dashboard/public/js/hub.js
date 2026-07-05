@@ -4,7 +4,7 @@
    refresh, and re-render on navigation.
    ============================================================= */
 
-import { collection, getDocs, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { getSkeletonCardGridHTML } from './loading-components.js';
 
 // ─── State ──────────────────────────────────────────────────
@@ -51,6 +51,30 @@ export async function renderHubView(db, onNavigate) {
 
     platformsMap = {};
     pSnap.forEach(doc => { platformsMap[doc.id] = doc.data(); });
+
+    // Filter platforms by workspace plan's connectorTiers
+    if (window.currentWorkspaceId) {
+      try {
+        const wsSnap = await getDoc(doc(db, 'workspaces', window.currentWorkspaceId));
+        if (wsSnap.exists()) {
+          const wsData = wsSnap.data();
+          const planId = wsData.planId || 'free';
+          const planSnap = await getDoc(doc(db, 'plans', planId));
+          if (planSnap.exists()) {
+            const planData = planSnap.data();
+            const allowedTiers = planData.connectorTiers || ['basic'];
+            for (const [pid, pData] of Object.entries(platformsMap)) {
+              const pTier = pData.tier || 'basic';
+              if (!allowedTiers.includes(pTier)) {
+                delete platformsMap[pid];
+              }
+            }
+          }
+        }
+      } catch (pfErr) {
+        console.warn('Failed to filter platforms by plan tier', pfErr);
+      }
+    }
 
     allIntegrations = [];
     iSnap.forEach(doc => {

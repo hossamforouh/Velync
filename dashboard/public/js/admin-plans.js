@@ -47,7 +47,7 @@ function renderPlans() {
     tr.innerHTML = `
       <td data-label="ID"><code style="font-size:0.85rem;">${escHtml(p.id)}</code></td>
       <td data-label="Name"><strong>${escHtml(p.name)}</strong></td>
-      <td data-label="Price">${p.priceMonthly === 0 ? 'Free' : '$${p.priceMonthly}/mo · $' + p.priceAnnual + '/yr'}</td>
+      <td data-label="Price">${p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}/mo · $${p.priceAnnual}/yr`}</td>
       <td data-label="Configs">${p.maxActiveConfigs}</td>
       <td data-label="Interval">${p.minSyncIntervalMinutes} min</td>
       <td data-label="Items">${p.maxItemsPerRun}</td>

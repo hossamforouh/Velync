@@ -3,6 +3,7 @@ const axios = require('axios');
 const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { encrypt } = require('../../../utils/encryption');
+const { getPlan } = require('../../core/plan');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 const config = require('../../core/config');
@@ -31,6 +32,19 @@ router.post('/oauth/exchange', verifyAuth, [
     const platformDoc = await db.collection('platforms').doc(platformId).get();
     if (!platformDoc.exists) return res.status(404).json({ error: 'Platform not found' });
     const platform = platformDoc.data();
+
+    // Connector tier gating: check workspace plan before allowing connection
+    const resolvedWsId = workspaceId || uid;
+    const wsDoc = await db.collection('workspaces').doc(resolvedWsId).get();
+    const wsData = wsDoc.data() || {};
+    const planId = wsData.planId || 'free';
+    const plan = await getPlan(planId);
+    const allowedTiers = (plan && plan.connectorTiers) || ['basic'];
+    const platformTier = platform.tier || 'basic';
+    if (!allowedTiers.includes(platformTier)) {
+      const planName = (plan && plan.name) || planId;
+      return res.status(403).json({ error: `Your ${planName} plan does not support "${platformTier}" tier connectors. Upgrade to connect ${platform.name || platformId}.` });
+    }
 
     const clientId = platform.clientId;
     const clientSecret = platform.clientSecret;
