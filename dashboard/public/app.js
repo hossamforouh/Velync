@@ -3806,22 +3806,39 @@ async function saveConfig(e, isSubmit = false) {
     if (resolvedId) {
       editingId = resolvedId; // keep in-memory state in sync
       document.getElementById('form-id').value = resolvedId;
-      const docRef = doc(db, 'workspaces', currentWorkspaceId, 'sync_configs', resolvedId);
-      
+
       // Enforce marketplace protection immediately before saving
-      const existingDoc = await getDoc(docRef);
-      if (existingDoc.exists()) {
-        const existingData = existingDoc.data();
+      const existingSnap = await getDoc(doc(db, 'workspaces', currentWorkspaceId, 'sync_configs', resolvedId));
+      if (existingSnap.exists()) {
+        const existingData = existingSnap.data();
         if (existingData.creationSource === 'marketplace') {
            payload.platform1ConnectionId = existingData.platform1ConnectionId || payload.platform1ConnectionId;
            payload.platform2ConnectionId = existingData.platform2ConnectionId || payload.platform2ConnectionId;
            payload.creationSource = 'marketplace';
         }
       }
-      
-      payload.updatedAt = new Date().toISOString();
-      await updateDoc(docRef, payload);
-      showToast(isSubmit ? 'Config activated' : 'Config updated', 'success');
+
+      // Route through server endpoint so plan limits are enforced
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch('/api/sync-configs/' + resolvedId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          throw new Error(result.error || 'Failed to update config');
+        }
+        showToast(isSubmit ? 'Config activated' : 'Config updated', 'success');
+      } catch (apiErr) {
+        showToast(apiErr.message, 'error');
+        isSavingConfig = false;
+        if (btnSave) btnSave.disabled = false;
+        if (btnSubmit) btnSubmit.disabled = false;
+        if (targetBtn) targetBtn.innerHTML = originalText;
+        return;
+      }
     } else {
       payload.createdAt = serverTimestamp();
       let fullName = auth.currentUser?.displayName;
