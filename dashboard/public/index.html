@@ -807,8 +807,38 @@
               <button class="admin-tab" data-target="admin-pane-global">Global Settings</button>
               <button class="admin-tab" data-target="admin-pane-platforms">Platforms</button>
               <button class="admin-tab" data-target="admin-pane-plans">Plans</button>
+              <button class="admin-tab" data-target="admin-pane-workspaces">Workspaces</button>
               <button class="admin-tab" data-target="admin-pane-marketplace">Marketplace</button>
               <button class="admin-tab" data-target="admin-pane-activity">Activity Log</button>
+            </div>
+          </div>
+
+          <!-- Workspaces Management Pane -->
+          <div class="admin-pane" id="admin-pane-workspaces" style="display:none;">
+            <div class="stats-bar" id="admin-ws-stats" style="margin-bottom:24px;">
+              <div class="stat-pill"><span class="dot violet"></span><span>Workspaces: <strong id="admin-ws-total">—</strong></span></div>
+              <div class="stat-pill"><span class="dot cyan"></span><span>Users: <strong id="admin-ws-users">—</strong></span></div>
+              <div class="stat-pill"><span class="dot green"></span><span>Connected Accounts: <strong id="admin-ws-conns">—</strong></span></div>
+              <div class="stat-pill"><span class="dot orange"></span><span>Active Configs: <strong id="admin-ws-active">—</strong></span></div>
+              <div class="stat-pill"><span class="dot yellow"></span><span>Paid: <strong id="admin-ws-paid">—</strong></span></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
+              <h3 style="margin:0;font-size:1rem;">Workspaces</h3>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span id="admin-ws-count" style="color:var(--text-3);font-size:0.82rem;"></span>
+                <button id="admin-ws-refresh" class="btn btn-secondary btn-sm" type="button">⟳ Refresh</button>
+              </div>
+            </div>
+            <table class="connections-table" id="admin-ws-table">
+              <thead>
+                <tr><th>Name</th><th>Owner</th><th>Plan</th><th>Members</th><th>ID</th></tr>
+              </thead>
+              <tbody id="admin-ws-tbody">
+                <tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
+              </tbody>
+            </table>
+            <div style="text-align:center;margin-top:16px;">
+              <button id="admin-ws-load-more" class="btn btn-secondary btn-sm" type="button" style="display:none;">Load more</button>
             </div>
           </div>
 

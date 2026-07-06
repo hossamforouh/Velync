@@ -15,6 +15,7 @@ import { connections, loadConnections, renderConnectionsView, renderConnectionsS
 import { initAdminIntegrations, setAdminAuth } from './js/admin-integrations.js';
 import { initAdminPlatforms } from './js/admin-platforms.js';
 import { initAdminPlans } from './js/admin-plans.js';
+import { initAdminWorkspaces } from './js/admin-workspaces.js';
 import { initBilling } from './js/billing.js';
 import { initOnboarding } from './js/onboarding.js';
 import './js/integration-setup.js';
@@ -983,6 +984,7 @@ onAuthStateChanged(auth, async (user) => {
         initAdminIntegrations(db);
         initAdminPlatforms(db, auth);
         initAdminPlans(db, auth);
+        initAdminWorkspaces(auth);
         setAdminAuth(auth);
       }
     }
