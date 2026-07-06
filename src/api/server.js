@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../core/config');
 const logger = require('../core/logger');
+const db = require('../core/db');
 
 const authRoutes = require('./routes/auth');
 const platformRoutes = require('./routes/platform');
