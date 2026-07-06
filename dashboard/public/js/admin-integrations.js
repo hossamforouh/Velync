@@ -282,149 +282,23 @@ async function loadAdminOverview() {
   setOverviewLoading(true);
 
   try {
-    const now = Date.now();
-    const last24h = new Date(now - 86400000);
-    const last7d = new Date(now - 604800000);
-
-    // Tagged queries for debugging
-    async function taggedQuery(label, promise) {
-      try { return await promise; }
-      catch (e) { throw new Error(`${label}: ${e.message}`); }
+    // Server-side aggregation (cached, shared across admins) — replaces the old
+    // client-side reads of the whole users/connected_accounts/sync_configs collections.
+    const token = await authInstance.currentUser.getIdToken();
+    const res = await fetch('/api/admin/overview', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || `Request failed (${res.status})`);
     }
+    const data = await res.json();
+    // Stale-config timestamps arrive as ISO strings — timeAgo() needs Date objects.
+    data.staleConfigs = (data.staleConfigs || []).map(s => ({
+      ...s, lastRun: s.lastRun ? new Date(s.lastRun) : null,
+    }));
 
-    // Step 1: Fetch users + execution logs + connected accounts in parallel
-    const [usersSnap, logs24hSnap, logs7dSnap, connSnap] = await Promise.all([
-      taggedQuery('users', getDocs(collection(firestoreDb, 'users'))),
-      taggedQuery('execution_logs_24h', getDocs(query(
-        collection(firestoreDb, 'execution_logs'),
-        where('startTime', '>=', last24h),
-        orderBy('startTime', 'desc'),
-        limit(200)
-      ))),
-      taggedQuery('execution_logs_7d', getDocs(query(
-        collection(firestoreDb, 'execution_logs'),
-        where('startTime', '>=', last7d),
-        orderBy('startTime', 'desc'),
-        limit(1000)
-      ))),
-      taggedQuery('connected_accounts', getDocs(collection(firestoreDb, 'connected_accounts')))
-    ]);
-
-    // Step 2: Query sync_configs per workspace (avoids collection-group index requirement)
-    const workspaceIds = [...new Set(usersSnap.docs.map(d => d.data().workspaceId || d.id).filter(Boolean))];
-    const configPromises = workspaceIds.map(wsId =>
-      getDocs(collection(firestoreDb, 'workspaces', wsId, 'sync_configs'))
-    );
-    const configSnaps = await Promise.all(configPromises);
-    const allConfigDocs = configSnaps.flatMap(s => s.docs);
-    // Build a single snapshot-like object
-    const configsSnap = { size: allConfigDocs.length, forEach(cb) { allConfigDocs.forEach(cb); }, docs: allConfigDocs };
-
-    // ── Compute stats ──
-
-    // Users
-    const totalUsers = usersSnap.size;
-
-    // Configs by status
-    let activeCount = 0, pausedCount = 0, draftCount = 0;
-    const platCounts = {}; // platformId -> count
-    const staleConfigs = [];
-    const staleThreshold = new Date(now - 7 * 86400000);
-    configsSnap.forEach(doc => {
-      const d = doc.data();
-      const st = d.status || 'draft';
-      if (st === 'active') activeCount++;
-      else if (st === 'paused') pausedCount++;
-      else draftCount++;
-
-      // Platform popularity
-      [d.platform1, d.platform2].forEach(p => {
-        if (p) {
-          const key = typeof p === 'string' ? p : (p.id || p.key);
-          if (key) platCounts[key] = (platCounts[key] || 0) + 1;
-        }
-      });
-
-      // Stale configs (active but lastRunAt > 7d ago or never)
-      if (st === 'active') {
-        const lastRun = d.lastRunAt ? (d.lastRunAt.toDate ? d.lastRunAt.toDate() : new Date(d.lastRunAt)) : null;
-        if (!lastRun || lastRun < staleThreshold) {
-          staleConfigs.push({ id: doc.id, name: d.description || d.id, lastRun, ownerName: d.ownerName || '—' });
-        }
-      }
-    });
-    staleConfigs.sort((a, b) => {
-      if (!a.lastRun) return -1;
-      if (!b.lastRun) return 1;
-      return a.lastRun - b.lastRun;
-    });
-
-    const totalConfigs = configsSnap.size;
-
-    // 24h sync stats
-    let success24h = 0, failed24h = 0;
-    const errorCounts = {};
-    logs24hSnap.forEach(doc => {
-      const d = doc.data();
-      if (d.status === 'success') success24h++;
-      else if (d.status === 'failed') {
-        failed24h++;
-        const errMsg = (d.error || 'Unknown error').substring(0, 120);
-        errorCounts[errMsg] = (errorCounts[errMsg] || 0) + 1;
-      }
-    });
-    const total24h = success24h + failed24h;
-    const successRate = total24h > 0 ? ((success24h / total24h) * 100).toFixed(1) : '—';
-
-    // Top errors sorted by count
-    const topErrors = Object.entries(errorCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-
-    // 7d volume
-    let total7dVolume = 0;
-    const dailyVolume = {};
-    logs7dSnap.forEach(doc => {
-      const d = doc.data();
-      const vol = (d.syncedCount || 0) + (d.deletedCount || 0);
-      total7dVolume += vol;
-      const day = d.startTime?.toDate ? d.startTime.toDate().toISOString().slice(0, 10) : 'unknown';
-      dailyVolume[day] = (dailyVolume[day] || 0) + vol;
-    });
-
-    // Connections per user
-    const connPerUser = {};
-    connSnap.forEach(doc => {
-      const uid = doc.data().userId || 'unknown';
-      connPerUser[uid] = (connPerUser[uid] || 0) + 1;
-    });
-    const connDist = Object.values(connPerUser).reduce((acc, c) => {
-      const bucket = c >= 10 ? '10+' : String(c);
-      acc[bucket] = (acc[bucket] || 0) + 1;
-      return acc;
-    }, {});
-
-    // Fetch platform names for popularity chart
-    let platNames = {};
-    try {
-      const pSnap = await getDocs(collection(firestoreDb, 'platforms'));
-      pSnap.forEach(d => { platNames[d.id] = d.data().name || d.id; });
-    } catch (_) {}
-
-    // Build sorted platform array
-    const platEntries = Object.entries(platCounts)
-      .map(([id, count]) => ({ id, name: platNames[id] || id, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-    const maxPlatCount = platEntries.length > 0 ? platEntries[0].count : 1;
-
-    // Cache
-    _overviewCache = {
-      totalUsers, totalConfigs, activeCount, pausedCount, draftCount,
-      total24h, success24h, failed24h, successRate, total7dVolume,
-      platEntries, maxPlatCount, topErrors, staleConfigs, dailyVolume,
-      connDist
-    };
+    _overviewCache = data;
     _overviewCacheTime = Date.now();
     _setCached('overview', _overviewCache);
 

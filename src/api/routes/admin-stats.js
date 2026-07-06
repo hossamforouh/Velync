@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
 const logger = require('../../core/logger');
-const { getAdminStats, listWorkspaces, getRecentSyncHealth } = require('../../domains/admin/stats');
+const { getAdminStats, listWorkspaces, getRecentSyncHealth, getAdminOverview } = require('../../domains/admin/stats');
 
 const router = Router();
 
@@ -33,6 +33,16 @@ router.get('/admin/workspaces', verifyAuth, requireSuperAdmin, async (req, res) 
     return res.json(await listWorkspaces({ limit, startAfter }));
   } catch (err) {
     logger.error('admin-stats', 'Failed to list workspaces', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Full dashboard overview (server-side aggregation, cached)
+router.get('/admin/overview', verifyAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    return res.json(await getAdminOverview());
+  } catch (err) {
+    logger.error('admin-stats', 'Failed to build overview', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });

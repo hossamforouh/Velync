@@ -12,7 +12,7 @@ const { describe, it, before } = require('node:test');
 const assert = require('node:assert');
 
 const db = require('../src/core/db');
-const { getAdminStats, listWorkspaces, getRecentSyncHealth } = require('../src/domains/admin/stats');
+const { getAdminStats, listWorkspaces, getRecentSyncHealth, getAdminOverview } = require('../src/domains/admin/stats');
 
 // Deterministic seed — the emulator starts empty each run, so exact counts hold.
 before(async () => {
@@ -86,5 +86,30 @@ describe('admin stats — getRecentSyncHealth', () => {
     assert.strictEqual(summary.byStatus.success, 2);
     assert.strictEqual(summary.byStatus.error, 1);
     assert.strictEqual(recent[0].id, 'l3', 'ordered by startTime desc');
+  });
+});
+
+describe('admin stats — getAdminOverview', () => {
+  before(async () => {
+    // Recent logs so the 24h/7d windows catch them (l1–l3 are dated in the past).
+    const recent = new Date(Date.now() - 3600_000).toISOString();
+    await db.collection('execution_logs').doc('r1').set({ startTime: recent, status: 'success', syncedCount: 5, deletedCount: 0, workspaceId: 'ws1' });
+    await db.collection('execution_logs').doc('r2').set({ startTime: recent, status: 'failed', error: 'boom', syncedCount: 0, workspaceId: 'ws1' });
+  });
+
+  it('aggregates entities, configs, connections and 24h health server-side', async () => {
+    const o = await getAdminOverview();
+    assert.strictEqual(o.totalUsers, 3);
+    assert.strictEqual(o.activeCount, 2);
+    assert.strictEqual(o.draftCount, 1);
+    assert.strictEqual(o.totalConfigs, 3);
+    assert.strictEqual(o.staleConfigs.length, 2, 'two active configs never ran');
+    assert.deepStrictEqual(o.connDist, { '1': 2 });
+    assert.strictEqual(o.total24h, 2);
+    assert.strictEqual(o.success24h, 1);
+    assert.strictEqual(o.failed24h, 1);
+    assert.strictEqual(o.successRate, '50.0');
+    assert.strictEqual(o.topErrors.length, 1);
+    assert.strictEqual(o.total7dVolume, 5);
   });
 });
