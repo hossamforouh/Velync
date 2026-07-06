@@ -246,3 +246,23 @@ describe('sync engine — periodic reconciliation optimisation', () => {
     assert.ok(doc && doc.lastReconcileAt, 'lastReconcileAt persisted to the config doc');
   });
 });
+
+// Placed last: this seeds a `plans/free` doc that persists in the shared emulator.
+describe('sync engine — plan-limit guard', () => {
+  it('skips the run when the workspace exceeds its plan active-config limit', async () => {
+    const { workspaceId, configId } = ids();
+    await db.collection('plans').doc('free').set({ name: 'Free', maxActiveConfigs: 1 });
+    await db.collection('workspaces').doc(workspaceId).set({ planId: 'free' });
+    // Two active configs in the workspace → over the limit of 1 (uses the count() guard).
+    await configDoc(workspaceId, configId).set({ status: 'active' });
+    await db.collection('workspaces').doc(workspaceId).collection('sync_configs').doc('extra').set({ status: 'active' });
+
+    const dst = makeStore(`${configId}_dst`, []);
+    makeStore(`${configId}_src`, [{ id: 's1', title: 'A', modifiedTime: new Date().toISOString() }]);
+
+    const res = await runSync(baseConfig(workspaceId, configId), configId);
+
+    assert.strictEqual(dst.created.length, 0, 'no sync performed when over plan limit');
+    assert.strictEqual(res, undefined, 'run short-circuits before syncing');
+  });
+});

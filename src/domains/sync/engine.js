@@ -6,69 +6,12 @@ const { mapSourceToDest } = require('./mapper');
 const { resolveConflict } = require('./conflict');
 const { getPlan } = require('../../core/plan');
 const { getPlatform } = require('../../core/platform');
-const os = require('os');
+const { acquireLease, releaseLease } = require('../../core/lock');
 
 const runningConfigs = new Set();
 
-/** Unique instance identifier for distributed lock ownership */
-const INSTANCE_ID = `${os.hostname()}-${process.pid}`;
-
 /** Duration of a sync lease in milliseconds (2 min — max expected execution time) */
 const LEASE_DURATION_MS = 120_000;
-
-/**
- * Try to acquire a distributed lease for a sync config.
- * Uses a Firestore transaction so only one instance succeeds.
- *
- * @param {string} configId
- * @returns {Promise<boolean>} true if lease was acquired, false if held by another instance
- */
-async function acquireLease(configId) {
-  const lockRef = db.collection('sync_locks').doc(configId);
-  try {
-    const result = await db.runTransaction(async (transaction) => {
-      const doc = await transaction.get(lockRef);
-      const now = Date.now();
-
-      if (doc.exists) {
-        const data = doc.data();
-        const expiresAt = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : new Date(data.expiresAt || 0).getTime();
-        // If the lease hasn't expired and is held by another instance, fail
-        if (expiresAt > now && data.heldBy !== INSTANCE_ID) {
-          return false;
-        }
-      }
-
-      // Acquire or extend the lease
-      transaction.set(lockRef, {
-        heldBy: INSTANCE_ID,
-        acquiredAt: new Date().toISOString(),
-        expiresAt: new Date(now + LEASE_DURATION_MS),
-      });
-      return true;
-    });
-    return result;
-  } catch (err) {
-    logger.error('sync', `Failed to acquire lease for "${configId}"`, { error: err.message });
-    return false; // Fail open: skip this run rather than risk duplicate execution
-  }
-}
-
-/**
- * Release the lease for a sync config.
- */
-async function releaseLease(configId) {
-  try {
-    const lockRef = db.collection('sync_locks').doc(configId);
-    // Only delete if we still hold the lease (don't clear another instance's lease)
-    const doc = await lockRef.get();
-    if (doc.exists && doc.data().heldBy === INSTANCE_ID) {
-      await lockRef.delete();
-    }
-  } catch (err) {
-    logger.warn('sync', `Failed to release lease for "${configId}"`, { error: err.message });
-  }
-}
 
 /**
  * Retry an async operation with exponential backoff for transient errors.
@@ -151,12 +94,13 @@ async function runSync(config, configId) {
       const planId = ws.planId || 'free';
       plan = await getPlan(planId);
       if (plan && plan.maxActiveConfigs) {
-        const activeSnap = await db.collection('workspaces').doc(config.workspaceId)
+        // count() aggregation instead of reading every active config doc each run.
+        const activeCount = (await db.collection('workspaces').doc(config.workspaceId)
           .collection('sync_configs')
           .where('status', '==', 'active')
-          .get();
-        if (activeSnap.size > plan.maxActiveConfigs) {
-          logger.warn('sync', `Workspace "${config.workspaceId}" has ${activeSnap.size} active configs, plan "${planId}" limit is ${plan.maxActiveConfigs}. Skipping "${configId}".`);
+          .count().get()).data().count;
+        if (activeCount > plan.maxActiveConfigs) {
+          logger.warn('sync', `Workspace "${config.workspaceId}" has ${activeCount} active configs, plan "${planId}" limit is ${plan.maxActiveConfigs}. Skipping "${configId}".`);
           runningConfigs.delete(configId);
           return;
         }
@@ -167,7 +111,7 @@ async function runSync(config, configId) {
   }
 
   // Acquire distributed lease so only one instance executes this config at a time
-  const hasLease = await acquireLease(configId);
+  const hasLease = await acquireLease(configId, LEASE_DURATION_MS);
   if (!hasLease) {
     logger.info('sync', `Skipping "${configId}" — lease held by another instance`);
     runningConfigs.delete(configId);
