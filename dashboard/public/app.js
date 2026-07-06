@@ -1203,8 +1203,9 @@ onAuthStateChanged(auth, async (user) => {
             if (pwMsg) { pwMsg.textContent = 'New password and confirmation are required.'; pwMsg.style.color = '#f43f5e'; }
             return;
           }
-          if (newPw.length < 6) {
-            if (pwMsg) { pwMsg.textContent = 'New password must be at least 6 characters.'; pwMsg.style.color = '#f43f5e'; }
+          const missingPwReqs = getPasswordPolicyErrors(newPw);
+          if (missingPwReqs.length) {
+            if (pwMsg) { pwMsg.textContent = 'Password must contain ' + missingPwReqs.join(', ') + '.'; pwMsg.style.color = '#f43f5e'; }
             return;
           }
           if (newPw !== confirmPw) {
@@ -1231,8 +1232,8 @@ onAuthStateChanged(auth, async (user) => {
             if (pwMsg) {
               if (err.code === 'auth/wrong-password') {
                 pwMsg.textContent = 'Current password is incorrect.';
-              } else if (err.code === 'auth/weak-password') {
-                pwMsg.textContent = 'New password is too weak. Use at least 6 characters.';
+              } else if (err.code === 'auth/weak-password' || err.code === 'auth/password-does-not-meet-requirements') {
+                pwMsg.textContent = 'Password must be at least 8 characters and include a lowercase letter, an uppercase letter, a number, and a special character.';
               } else if (err.code === 'auth/requires-recent-login') {
                 pwMsg.textContent = 'Please sign out and sign in again before changing your password.';
               } else {
@@ -2089,7 +2090,8 @@ function getAuthErrorMessage(error) {
     case 'auth/wrong-password':
       return 'Invalid email or password. Please try again.';
     case 'auth/weak-password':
-      return 'Your password is too weak. Please use at least 6 characters.';
+    case 'auth/password-does-not-meet-requirements':
+      return 'Password must be at least 8 characters and include a lowercase letter, an uppercase letter, a number, and a special character.';
     case 'auth/network-request-failed':
       return 'Network error. Please check your internet connection and try again.';
     case 'auth/too-many-requests':
@@ -2136,6 +2138,24 @@ function evaluatePasswordStrength(password) {
     { label:'Very Strong', color:'#16a34a' },
   ];
   return { score, checks, ...levels[score], pct };
+}
+
+/**
+ * Human-readable list of policy requirements NOT met by `password`, derived from
+ * the same checks the strength checklist UI uses. Matches the Firebase Auth
+ * project password policy (min 8 chars, lower+upper+number+special) — keep this
+ * in sync with that policy so the UI never accepts something Firebase rejects.
+ * Empty array = compliant.
+ */
+function getPasswordPolicyErrors(password) {
+  const { checks } = evaluatePasswordStrength(password || '');
+  const messages = [];
+  if (!checks.length) messages.push('at least 8 characters');
+  if (!checks.lowercase) messages.push('a lowercase letter');
+  if (!checks.uppercase) messages.push('an uppercase letter');
+  if (!checks.number) messages.push('a number');
+  if (!checks.special) messages.push('a special character');
+  return messages;
 }
 
 function updatePasswordStrengthUI(fillEl, labelEl, reqsEl, password) {
@@ -2284,6 +2304,10 @@ authForm.addEventListener('submit', async (e) => {
         throw resetErr;
       }
     } else if (isSignUpMode) {
+      const missingReqs = getPasswordPolicyErrors(password);
+      if (missingReqs.length) {
+        throw new Error('Password must contain ' + missingReqs.join(', ') + '.');
+      }
       if (isCommonPassword(password)) {
         throw new Error('This password is too common and easily guessed. Please choose a stronger password.');
       }
