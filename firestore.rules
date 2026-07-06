@@ -8,21 +8,36 @@ service cloud.firestore {
     }
 
     function isWorkspaceMember(workspaceId) {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/workspaces/$(workspaceId))
-        && (
-          request.auth.uid == get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId ||
-          request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.get('members', [])
-        );
+      return request.auth != null && (
+        // Default solo workspace: the app uses the owner's own uid AS the workspaceId
+        // and never creates a separate `workspaces/{id}` document for solo users
+        // (see auth.js `resolvedWsId = workspaceId || uid`, and app.js's
+        // read-then-create-if-missing default-workspace flow on login). This branch
+        // must stay allowed even when the document doesn't exist yet — do NOT wrap
+        // it in exists(...), or first-login/solo-user access breaks entirely.
+        request.auth.uid == workspaceId ||
+        // Real shared/multi-member workspace: an explicit doc exists with owner/members.
+        (
+          exists(/databases/$(database)/documents/workspaces/$(workspaceId)) &&
+          (
+            request.auth.uid == get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId ||
+            request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.get('members', [])
+          )
+        )
+      );
     }
 
     function isWorkspaceMemberFromField() {
-      return request.auth != null && resource != null && resource.data.workspaceId != null
-        && exists(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId))
-        && (
-          request.auth.uid == get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.ownerId ||
-          request.auth.uid in get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.get('members', [])
-        );
+      return request.auth != null && resource != null && resource.data.workspaceId != null && (
+        request.auth.uid == resource.data.workspaceId ||
+        (
+          exists(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)) &&
+          (
+            request.auth.uid == get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.ownerId ||
+            request.auth.uid in get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.get('members', [])
+          )
+        )
+      );
     }
 
     function isOwner(uid) {

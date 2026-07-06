@@ -292,6 +292,31 @@ describe('/workspaces/{workspaceId}', () => {
 });
 
 // ─────────────────────────────────────────────
+// 4b. /workspaces/{workspaceId} — solo-user convention (workspaceId === own uid,
+// no workspace document ever created). This is the app's actual default: see
+// auth.js `resolvedWsId = workspaceId || uid` and app.js's login-time
+// getDoc-then-create-if-missing flow for the default workspace. isWorkspaceMember()
+// regressed on this exact case once before (required exists() unconditionally) —
+// these guard against that recurring.
+// ─────────────────────────────────────────────
+describe('/workspaces/{workspaceId} — solo user, workspaceId is own uid, no document', () => {
+  it('owner can read their own not-yet-created default workspace (returns not-found, not denied)', async () => {
+    const snap = await ctx.owner().firestore().collection('workspaces').doc('owner-uid').get();
+    assert.strictEqual(snap.exists, false);
+  });
+
+  it('a different user cannot read someone else\'s not-yet-created workspace', async () => {
+    await assertFails(ctx.stranger().firestore().collection('workspaces').doc('owner-uid').get());
+  });
+
+  it('owner can create their own default workspace at their own uid', async () => {
+    await assertSucceeds(ctx.owner().firestore().collection('workspaces').doc('owner-uid').set({
+      id: 'owner-uid', name: 'My Workspace', ownerId: 'owner-uid', members: ['owner-uid'], invitedEmails: [],
+    }));
+  });
+});
+
+// ─────────────────────────────────────────────
 // 5. /workspaces/{wsId}/sync_configs/{configId}
 // ─────────────────────────────────────────────
 describe('/workspaces/{wsId}/sync_configs/{configId}', () => {
@@ -315,6 +340,15 @@ describe('/workspaces/{wsId}/sync_configs/{configId}', () => {
 
   it('workspace member can update', async () => {
     await assertSucceeds(ctx.member().firestore().collection('workspaces').doc('owner-wsid').collection('sync_configs').doc('test-config').update({ description: 'updated' }));
+  });
+
+  it('solo user can read/create sync_configs under their own uid, with no parent workspace doc', async () => {
+    await assertSucceeds(ctx.owner().firestore().collection('workspaces').doc('owner-uid').collection('sync_configs').add({
+      description: 'solo config', platform1: 'notion', platform2: 'ticktick',
+    }));
+    await assertFails(ctx.stranger().firestore().collection('workspaces').doc('owner-uid').collection('sync_configs').add({
+      description: 'hack', platform1: 'notion', platform2: 'ticktick',
+    }));
   });
 
   it('delete denied client-side — server-only (cascades sync_mappings)', async () => {
@@ -396,6 +430,14 @@ describe('/execution_logs/{logId}', () => {
   it('write always denied', async () => {
     await assertFails(ctx.superAdmin().firestore().collection('execution_logs').add({ workspaceId: 'owner-wsid', status: 'success' }));
   });
+
+  it('solo user can read a log whose workspaceId is their own uid (no workspace doc)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().collection('execution_logs').doc('solo-log').set({ workspaceId: 'owner-uid', status: 'success' });
+    });
+    await assertSucceeds(ctx.owner().firestore().collection('execution_logs').doc('solo-log').get());
+    await assertFails(ctx.stranger().firestore().collection('execution_logs').doc('solo-log').get());
+  });
 });
 
 // ─────────────────────────────────────────────
@@ -436,6 +478,16 @@ describe('/connected_accounts/{accountId}', () => {
 
   it('can delete own connected account', async () => {
     await assertSucceeds(ctx.owner().firestore().collection('connected_accounts').doc('owner-acct').delete());
+  });
+
+  it('solo user can read an account whose workspaceId is their own uid (no workspace doc)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().collection('connected_accounts').doc('solo-acct').set({
+        provider: 'notion', userId: 'owner-uid', workspaceId: 'owner-uid',
+      });
+    });
+    await assertSucceeds(ctx.owner().firestore().collection('connected_accounts').doc('solo-acct').get());
+    await assertFails(ctx.stranger().firestore().collection('connected_accounts').doc('solo-acct').get());
   });
 
   it('cannot delete another user connected account', async () => {
