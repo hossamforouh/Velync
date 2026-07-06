@@ -1,10 +1,11 @@
 {
   "indexes": [
     {
-      "collectionGroup": "sync_configs",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "plans",
+      "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "cronSchedule", "order": "ASCENDING" }
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "sortOrder", "order": "ASCENDING" }
       ]
     },
     {
