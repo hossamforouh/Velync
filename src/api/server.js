@@ -14,6 +14,7 @@ const syncConfigsRoutes = require('./routes/sync-configs');
 const settingsRoutes = require('./routes/settings');
 const adminRoutes = require('./routes/admin');
 const adminPlansRoutes = require('./routes/admin-plans');
+const adminStatsRoutes = require('./routes/admin-stats');
 const billingRoutes = require('./routes/billing');
 const publicPlansRoutes = require('./routes/public-plans');
 const { maintenanceMode } = require('./middleware/maintenance');
@@ -109,6 +110,7 @@ function createApp() {
   app.use('/api/settings', settingsRoutes);
   app.use('/api', adminRoutes);
   app.use('/api', adminPlansRoutes);
+  app.use('/api', adminStatsRoutes);
   app.use('/api', billingRoutes);
   app.use(syncRoutes);
   app.use('/api', publicPlansRoutes);

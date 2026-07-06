@@ -9,7 +9,8 @@
     "test": "node --test test/unit.test.js",
     "test:rules": "npx firebase emulators:exec --only firestore \"node --test test/firestore-rules.test.js\"",
     "test:engine": "npx firebase emulators:exec --only firestore \"node --test test/engine.test.js\"",
-    "test:all": "npm test && npm run test:rules && npm run test:engine"
+    "test:admin": "npx firebase emulators:exec --only firestore \"node --test test/admin-stats.test.js\"",
+    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",
