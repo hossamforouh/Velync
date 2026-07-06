@@ -1759,95 +1759,6 @@ onAuthStateChanged(auth, async (user) => {
         }
       });
 
-      // ─── API Keys Tab ─────────────────────────────────────────
-      const apiKeyMsg = document.getElementById('api-key-msg');
-      const newKeyDisplay = document.getElementById('new-key-display');
-      const newKeyValue = document.getElementById('new-key-value');
-      const btnCreateKey = document.getElementById('btn-create-api-key');
-      const apiKeyLabelInput = document.getElementById('api-key-label-input');
-      const apiKeysList = document.getElementById('api-keys-list');
-
-      async function loadApiKeys() {
-        try {
-          const token = await auth.currentUser.getIdToken();
-          const res = await fetch('/api/settings/api-keys', { headers: { 'Authorization': `Bearer ${token}` } });
-          if (!res.ok) throw new Error(await res.text());
-          const keys = await res.json();
-          if (keys.length === 0) {
-            apiKeysList.innerHTML = '<div style="color:var(--text-3);font-size:0.9rem;">No API keys created yet.</div>';
-            return;
-          }
-          apiKeysList.innerHTML = keys.map(k => `
-            <div class="collaborator-item" style="padding:12px 16px;">
-              <div class="collab-info" style="flex:1;">
-                <div class="collab-name">${escHtml(k.label)}</div>
-                <div class="collab-email" style="font-family:monospace;">${escHtml(k.prefix)}… · Created ${new Date(k.createdAt).toLocaleDateString()}</div>
-              </div>
-              <button class="btn btn-icon delete-invite-btn" data-key-id="${k.id}" title="Revoke" style="color:#f43f5e;background:rgba(244,63,94,0.1);padding:6px;border:none;cursor:pointer;border-radius:6px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              </button>
-            </div>
-          `).join('');
-          apiKeysList.querySelectorAll('.delete-invite-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-              const keyId = e.currentTarget.dataset.keyId;
-              if (!keyId) return;
-              try {
-                const token = await auth.currentUser.getIdToken();
-                const r = await fetch(`/api/settings/api-keys/${keyId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-                if (!r.ok) throw new Error(await r.text());
-                loadApiKeys();
-              } catch (err) {
-                showToast('Failed to revoke key: ' + err.message, 'error');
-              }
-            });
-          });
-        } catch (err) {
-          apiKeysList.innerHTML = '<div style="color:var(--rose);font-size:0.9rem;">Failed to load API keys.</div>';
-        }
-      }
-
-      if (btnCreateKey && apiKeyLabelInput) {
-        btnCreateKey.addEventListener('click', async () => {
-          const label = apiKeyLabelInput.value.trim();
-          if (!label) { showToast('Enter a label for the key', 'warning'); return; }
-          btnCreateKey.disabled = true;
-          btnCreateKey.textContent = 'Generating...';
-          try {
-            const token = await auth.currentUser.getIdToken();
-            const res = await fetch('/api/settings/api-keys', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ label })
-            });
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
-            newKeyValue.textContent = data.key;
-            newKeyDisplay.style.display = 'block';
-            apiKeyLabelInput.value = '';
-            loadApiKeys();
-          } catch (err) {
-            showToast('Failed to create key: ' + err.message, 'error');
-          } finally {
-            btnCreateKey.disabled = false;
-            btnCreateKey.textContent = 'Generate Key';
-          }
-        });
-      }
-
-      const btnCopyKey = document.getElementById('btn-copy-key');
-      if (btnCopyKey && newKeyValue) {
-        btnCopyKey.addEventListener('click', () => {
-          navigator.clipboard.writeText(newKeyValue.textContent).then(() => {
-            btnCopyKey.textContent = 'Copied!';
-            setTimeout(() => { btnCopyKey.textContent = 'Copy'; }, 2000);
-          }).catch(() => {
-            newKeyValue.select();
-            document.execCommand('copy');
-          });
-        });
-      }
-
       // ─── Sessions Tab ─────────────────────────────────────────
       const btnRevokeSessions = document.getElementById('btn-revoke-sessions');
       const sessionsMsg = document.getElementById('sessions-msg');
@@ -1958,7 +1869,6 @@ onAuthStateChanged(auth, async (user) => {
         tab.addEventListener('click', () => {
           const t = tab.dataset.tab;
           if (t === 'notifications' && user) loadNotifPrefs();
-          if (t === 'api-keys') loadApiKeys();
         });
       });
     }

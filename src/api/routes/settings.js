@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const crypto = require('crypto');
 const { FieldValue } = require('@google-cloud/firestore');
 const { body, param, validationResult } = require('express-validator');
 const { getAuth } = require('firebase-admin/auth');
@@ -104,75 +103,6 @@ router.put('/workspace/:workspaceId', verifyAuth, [
     return res.json({ success: true });
   } catch (err) {
     logger.error('settings', 'Failed to save workspace settings', { error: err.message });
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// ─── API Keys ────────────────────────────────────────────────
-
-router.get('/api-keys', verifyAuth, async (req, res) => {
-  try {
-    const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 200);
-    let query = db.collection('api_keys')
-      .where('userId', '==', req.user.uid)
-      .orderBy('createdAt', 'desc');
-    const totalSnap = await db.collection('api_keys')
-      .where('userId', '==', req.user.uid)
-      .count().get();
-    const total = totalSnap.data().count;
-    const snap = await query.offset((page - 1) * limit).limit(limit).get();
-    const keys = [];
-    snap.forEach(doc => {
-      const data = doc.data();
-      keys.push({ id: doc.id, label: data.label, prefix: data.prefix, createdAt: data.createdAt, lastUsedAt: data.lastUsedAt });
-    });
-    return res.json({ keys, total, page, limit, totalPages: Math.ceil(total / limit) });
-  } catch (err) {
-    logger.error('settings', 'Failed to list API keys', { error: err.message });
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/api-keys', verifyAuth, [
-  body('label').isString().trim().isLength({ min: 1, max: 200 }),
-], validate, async (req, res) => {
-  try {
-    const { label } = req.body;
-    const rawKey = `velync_${crypto.randomBytes(32).toString('hex')}`;
-    const hashedKey = crypto.createHash('sha256').update(rawKey).digest('hex');
-    const prefix = rawKey.slice(0, 12);
-
-    await db.collection('api_keys').add({
-      userId: req.user.uid,
-      label: label.trim(),
-      prefix,
-      hashedKey,
-      createdAt: new Date().toISOString(),
-      lastUsedAt: null
-    });
-
-    logger.info('settings', 'API key created', { user: req.user.uid, label: label.trim() });
-    return res.json({ key: rawKey, prefix });
-  } catch (err) {
-    logger.error('settings', 'Failed to create API key', { error: err.message });
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-router.delete('/api-keys/:keyId', verifyAuth, [
-  param('keyId').isString().trim(),
-], validate, async (req, res) => {
-  try {
-    const docRef = db.collection('api_keys').doc(req.params.keyId);
-    const snap = await docRef.get();
-    if (!snap.exists) return res.status(404).json({ error: 'Key not found' });
-    if (snap.data().userId !== req.user.uid) return res.status(403).json({ error: 'Forbidden' });
-    await docRef.delete();
-    logger.info('settings', 'API key deleted', { user: req.user.uid, keyId: req.params.keyId });
-    return res.json({ success: true });
-  } catch (err) {
-    logger.error('settings', 'Failed to delete API key', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });
