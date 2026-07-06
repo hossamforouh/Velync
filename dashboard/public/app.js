@@ -12,7 +12,7 @@ import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.
 import { bindNavEvents, navigateTo } from './js/navigation.js';
 import { renderHubView } from './js/hub.js';
 import { connections, loadConnections, renderConnectionsView, renderConnectionsSkeleton, initiateDirectOAuthFlow } from './js/connections.js';
-import { initAdminIntegrations, setAdminAuth } from './js/admin-integrations.js';
+import { initAdminIntegrations } from './js/admin-integrations.js';
 import { initAdminPlatforms } from './js/admin-platforms.js';
 import { initAdminPlans } from './js/admin-plans.js';
 import { initAdminWorkspaces } from './js/admin-workspaces.js';
@@ -984,12 +984,11 @@ onAuthStateChanged(auth, async (user) => {
     if (adminSection) {
       adminSection.style.display = isSuperadmin ? 'block' : 'none';
       if (isSuperadmin) {
-        initAdminIntegrations(db);
+        initAdminIntegrations(db, auth);
         initAdminPlatforms(db, auth);
         initAdminPlans(db, auth);
         initAdminWorkspaces(auth);
         initAdminSyncHealth(auth);
-        setAdminAuth(auth);
       }
     }
 

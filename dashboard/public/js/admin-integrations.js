@@ -49,8 +49,9 @@ let _closeModal = null;
 
 let _platformsUnsub = null;
 
-export function initAdminIntegrations(db) {
+export function initAdminIntegrations(db, auth) {
   firestoreDb = db;
+  authInstance = auth;
 
   // Unsubscribe any previous listener (cleanup on re-init)
   if (_platformsUnsub) { _platformsUnsub(); _platformsUnsub = null; }
@@ -982,11 +983,6 @@ async function logActivity(action, targetType, targetId, targetName) {
     });
   }
 })();
-
-// Set auth instance for activity logging (called by app.js)
-export function setAdminAuth(auth) {
-  authInstance = auth;
-}
 
 // Expose logActivity for other modules (admin-platforms.js)
 export { logActivity };
