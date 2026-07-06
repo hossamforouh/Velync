@@ -342,3 +342,41 @@ describe('sync/engine', () => {
     assert.strictEqual(calls, 3);
   });
 });
+
+// ── Scheduler dispatcher: isConfigDue (external scheduler mode) ──
+describe('domains/sync/dispatcher — isConfigDue', () => {
+  const { isConfigDue } = require('../src/domains/sync/dispatcher');
+  const now = new Date('2026-07-06T12:00:30.000Z');
+
+  it('is due when it has never run', () => {
+    assert.strictEqual(isConfigDue({ cronSchedule: '*/5 * * * *' }, now), true);
+  });
+
+  it('is due when a scheduled fire elapsed since the last run', () => {
+    // */5 → last boundary at 12:00:00; last run was at 11:58 (before it) → due
+    assert.strictEqual(isConfigDue({ cronSchedule: '*/5 * * * *', lastRunAt: '2026-07-06T11:58:00.000Z' }, now), true);
+  });
+
+  it('is NOT due when it already ran after the last scheduled fire', () => {
+    // last boundary 12:00:00; last run 12:00:10 (after it) → not due
+    assert.strictEqual(isConfigDue({ cronSchedule: '*/5 * * * *', lastRunAt: '2026-07-06T12:00:10.000Z' }, now), false);
+  });
+
+  it('accepts a Firestore Timestamp-like lastRunAt', () => {
+    const ts = { toDate: () => new Date('2026-07-06T11:58:00.000Z') };
+    assert.strictEqual(isConfigDue({ cronSchedule: '*/5 * * * *', lastRunAt: ts }, now), true);
+  });
+
+  it('falls back to the default cadence for an unparseable cron', () => {
+    // garbage schedule → default */5, never run → due
+    assert.strictEqual(isConfigDue({ cronSchedule: 'not-a-cron' }, now), true);
+  });
+
+  it('respects an hourly schedule', () => {
+    const hourly = { cronSchedule: '0 * * * *', lastRunAt: '2026-07-06T11:30:00.000Z' };
+    // last boundary 12:00:00 > lastRun 11:30 → due
+    assert.strictEqual(isConfigDue(hourly, now), true);
+    // already ran at 12:00:05 → not due until 13:00
+    assert.strictEqual(isConfigDue({ cronSchedule: '0 * * * *', lastRunAt: '2026-07-06T12:00:05.000Z' }, now), false);
+  });
+});

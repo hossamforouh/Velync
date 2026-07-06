@@ -17,6 +17,7 @@ const adminPlansRoutes = require('./routes/admin-plans');
 const adminStatsRoutes = require('./routes/admin-stats');
 const billingRoutes = require('./routes/billing');
 const publicPlansRoutes = require('./routes/public-plans');
+const internalRoutes = require('./routes/internal');
 const { maintenanceMode } = require('./middleware/maintenance');
 
 const ALLOWED_ORIGINS = [
@@ -114,6 +115,7 @@ function createApp() {
   app.use('/api', billingRoutes);
   app.use(syncRoutes);
   app.use('/api', publicPlansRoutes);
+  app.use('/api', internalRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not Found', requestId: req.requestId });

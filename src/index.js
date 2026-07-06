@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const { startServer } = require('./api/server');
 const { startScheduler } = require('./domains/sync/scheduler');
+const config = require('./core/config');
 const logger = require('./core/logger');
 const { testConfigConnections } = require('./cli/test');
 const db = require('./core/db');
@@ -61,5 +62,11 @@ if (process.argv.includes('--test-connections')) {
   })();
 } else {
   const server = startServer();
-  startScheduler();
+  // In 'external' mode, Cloud Scheduler drives syncs via POST /api/internal/scheduler/tick,
+  // so the in-process cron/listener is disabled and the service can scale to zero.
+  if (config.schedulerMode === 'external') {
+    logger.info('scheduler', 'External scheduler mode — in-process cron disabled; expecting Cloud Scheduler ticks');
+  } else {
+    startScheduler();
+  }
 }

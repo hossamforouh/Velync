@@ -26,6 +26,10 @@ const config = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
   appBaseUrl: process.env.APP_BASE_URL || 'https://velync.web.app',
+  // Scheduler: 'internal' = in-process node-cron (default, needs an always-on instance);
+  // 'external' = driven by Cloud Scheduler hitting POST /api/internal/scheduler/tick.
+  schedulerMode: (process.env.SCHEDULER_MODE || 'internal').toLowerCase(),
+  schedulerSecret: process.env.SCHEDULER_SECRET || '',
 };
 
 module.exports = config;
