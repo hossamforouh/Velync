@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing — Velync</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
+  <style>
+    :root {
+      --bg: #f8f9fc;
+      --surface: #ffffff;
+      --primary: #6e56cf;
+      --primary-hover: #5a3fba;
+      --text: #1a1a2e;
+      --text-2: #4a4a5a;
+      --text-3: #7a7a8a;
+      --border: #e2e4e9;
+      --radius: 16px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    nav {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+    }
+    nav .container { display: flex; align-items: center; justify-content: space-between; }
+    nav .logo { font-size: 1.3rem; font-weight: 700; color: var(--primary); text-decoration: none; }
+    nav .nav-links { display: flex; gap: 20px; align-items: center; }
+    nav .nav-links a { color: var(--text-2); text-decoration: none; font-size: 0.9rem; }
+    nav .nav-links a:hover { color: var(--text); }
+    .btn-ghost { padding: 8px 18px; border-radius: 8px; font-size: 0.875rem; font-weight: 500; color: var(--primary); border: 1px solid var(--primary); text-decoration: none; }
+    .btn-primary { padding: 8px 18px; border-radius: 8px; font-size: 0.875rem; font-weight: 500; color: #fff; background: var(--primary); border: none; text-decoration: none; }
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    /* Hero */
+    .hero { text-align: center; padding: 80px 0 48px; }
+    .hero h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 12px; }
+    .hero p { font-size: 1.1rem; color: var(--text-2); max-width: 560px; margin: 0 auto; }
+
+    /* Plans grid */
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; padding-bottom: 80px; }
+    .plan-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 32px 24px; display: flex; flex-direction: column;
+      transition: box-shadow 0.2s, transform 0.2s; position: relative;
+    }
+    .plan-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.08); transform: translateY(-2px); }
+    .plan-card.highlighted { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), 0 8px 30px rgba(110,86,207,0.12); }
+    .plan-card .badge {
+      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+      background: var(--primary); color: #fff; font-size: 0.75rem; font-weight: 600;
+      padding: 4px 14px; border-radius: 20px;
+    }
+    .plan-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+    .plan-card .desc { font-size: 0.875rem; color: var(--text-3); margin-bottom: 16px; }
+    .plan-card .price { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; }
+    .plan-card .price span { font-size: 1rem; font-weight: 400; color: var(--text-3); }
+    .plan-card .interval { font-size: 0.8rem; color: var(--text-3); margin-bottom: 20px; }
+    .plan-card ul { list-style: none; padding: 0; margin: 0 0 24px; flex: 1; }
+    .plan-card ul li { padding: 5px 0; font-size: 0.875rem; color: var(--text-2); }
+    .plan-card ul li::before { content: '✓ '; color: var(--primary); font-weight: 600; }
+    .plan-card .btn-primary { display: block; text-align: center; width: 100%; padding: 12px; font-size: 1rem; }
+    .plan-card .btn-ghost { display: block; text-align: center; width: 100%; padding: 12px; font-size: 1rem; }
+    .plan-card .price-note { font-size: 0.75rem; color: var(--text-3); margin-top: 8px; text-align: center; }
+
+    /* Footer */
+    footer { text-align: center; padding: 32px 0; color: var(--text-3); font-size: 0.8rem; border-top: 1px solid var(--border); }
+
+    /* Loading/error */
+    .loading { text-align: center; padding: 60px 0; color: var(--text-3); }
+    .error { text-align: center; padding: 60px 0; color: #e53e3e; }
+
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 1.8rem; }
+      .plans { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="container">
+      <a href="/" class="logo">Velync</a>
+      <div class="nav-links">
+        <a href="/pricing.html">Pricing</a>
+        <a href="/" class="btn-ghost">Sign In</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <div class="container">
+      <h1>Simple, transparent pricing</h1>
+      <p>Sync your tools across platforms. Start free, upgrade as you grow.</p>
+    </div>
+  </div>
+
+  <div class="container" id="plans-container">
+    <div class="loading">Loading plans…</div>
+  </div>
+
+  <footer>
+    <div class="container">© 2026 Velync. <a href="/terms.html" style="color:var(--text-3);">Terms</a> · <a href="/privacy.html" style="color:var(--text-3);">Privacy</a></div>
+  </footer>
+
+  <script>
+    (async () => {
+      const container = document.getElementById('plans-container');
+      try {
+        const res = await fetch('/api/plans');
+        const data = await res.json();
+        if (!data.success || !data.plans.length) {
+          container.innerHTML = '<div class="error">No plans available.</div>';
+          return;
+        }
+
+        container.innerHTML = '<div class="plans">' + data.plans.map(p => {
+          const monthly = p.priceMonthly > 0 ? '$' + p.priceMonthly : 'Free';
+          const annualNote = p.priceAnnual > 0 ? '$' + p.priceAnnual + '/yr' : '';
+          const features = [
+            p.maxActiveConfigs + ' active config' + (p.maxActiveConfigs !== 1 ? 's' : ''),
+            p.minSyncIntervalMinutes + '-min sync interval',
+            p.maxItemsPerRun + ' items per run',
+            p.logRetentionDays + '-day log retention',
+            'Connectors: ' + (p.connectorTiers || ['basic']).join(', '),
+            ...(p.features || []),
+          ];
+          const btn = p.priceMonthly > 0
+            ? '<a href="/?signup=true" class="btn-primary">Get Started</a>'
+            : '<a href="/?signup=true" class="btn-ghost">Start Free</a>';
+
+          return `<div class="plan-card${p.highlighted ? ' highlighted' : ''}">` +
+            (p.highlighted ? '<div class="badge">Popular</div>' : '') +
+            `<h3>${escHtml(p.name)}</h3>` +
+            (p.description ? `<p class="desc">${escHtml(p.description)}</p>` : '') +
+            `<div class="price">${monthly}<span>${p.priceMonthly > 0 ? '/mo' : ''}</span></div>` +
+            (annualNote ? `<div class="interval">or ${annualNote} (save ${Math.round((1 - p.priceAnnual / (p.priceMonthly * 12)) * 100)}%)</div>` : '') +
+            '<ul>' + features.map(f => `<li>${escHtml(f)}</li>`).join('') + '</ul>' +
+            btn +
+            '</div>';
+        }).join('') + '</div>';
+      } catch (err) {
+        container.innerHTML = '<div class="error">Failed to load pricing. Please try again later.</div>';
+      }
+
+      function escHtml(s) {
+        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+    })();
+  </script>
+</body>
+</html>

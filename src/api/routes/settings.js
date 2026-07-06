@@ -5,6 +5,7 @@ const { body, param, validationResult } = require('express-validator');
 const { getAuth } = require('firebase-admin/auth');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
+const { deleteWorkspace } = require('../../domains/workspace/deletion');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -39,19 +40,15 @@ router.get('/global', async (req, res) => {
 router.put('/global', verifyAuth, [
   body('whatsappNumber').optional().isString().trim(),
   body('maintenanceMode').optional().isBoolean(),
-  body('maxConfigsPerUser').optional().isInt({ min: 1 }),
-  body('defaultSyncIntervalMinutes').optional().isInt({ min: 1 }),
 ], validate, async (req, res) => {
   try {
     if (!req.user || !isSuperAdmin(req.user.uid)) {
       return res.status(403).json({ error: 'Forbidden: superadmin only' });
     }
-    const { whatsappNumber, maintenanceMode, maxConfigsPerUser, defaultSyncIntervalMinutes } = req.body;
+    const { whatsappNumber, maintenanceMode } = req.body;
     const updateData = {};
     if (whatsappNumber !== undefined) updateData.whatsappNumber = whatsappNumber;
     if (maintenanceMode !== undefined) updateData.maintenanceMode = !!maintenanceMode;
-    if (maxConfigsPerUser !== undefined) updateData.maxConfigsPerUser = parseInt(maxConfigsPerUser, 10);
-    if (defaultSyncIntervalMinutes !== undefined) updateData.defaultSyncIntervalMinutes = parseInt(defaultSyncIntervalMinutes, 10);
     updateData.updatedAt = new Date().toISOString();
 
     await db.collection('app_settings').doc('general').set(updateData, { merge: true });
@@ -250,35 +247,45 @@ router.post('/delete-account', verifyAuth, async (req, res) => {
   try {
     const uid = req.user.uid;
 
+    // Find all workspaces where this user is the owner
+    const ownedWsSnap = await db.collection('workspaces')
+      .where('ownerId', '==', uid)
+      .get();
+
+    // Cascade-delete each owned workspace
+    let totalErrors = [];
+    for (const wsDoc of ownedWsSnap.docs) {
+      const result = await deleteWorkspace(wsDoc.id, { initiatedBy: uid });
+      totalErrors.push(...result.errors);
+    }
+
+    // Remove user from workspaces where they are a member (not owner)
+    const memberWsSnap = await db.collection('workspaces')
+      .where('members', 'array-contains', uid)
+      .get();
+    const memberRemovals = memberWsSnap.docs.map(d => d.ref.update({
+      members: FieldValue.arrayRemove(uid),
+    }));
+    await Promise.all(memberRemovals);
+
+    // Delete API keys
     const keySnap = await db.collection('api_keys').where('userId', '==', uid).get();
-    const keyDeletions = [];
-    keySnap.forEach(d => keyDeletions.push(d.ref.delete()));
+    const keyDeletions = keySnap.docs.map(d => d.ref.delete());
     await Promise.all(keyDeletions);
 
-    const connSnap = await db.collection('connected_accounts').where('userId', '==', uid).get();
-    const connDeletions = [];
-    connSnap.forEach(d => connDeletions.push(d.ref.delete()));
-    await Promise.all(connDeletions);
-
-    const wsSnap = await db.collection('workspaces').where('members', 'array-contains', uid).get();
-    const wsPromises = wsSnap.docs.map(async (wsDoc) => {
-      const cfgSnap = await db.collection('workspaces').doc(wsDoc.id).collection('sync_configs').get();
-      const cfgDeletions = [];
-      cfgSnap.forEach(c => cfgDeletions.push(c.ref.delete()));
-      await Promise.all(cfgDeletions);
-
-      await wsDoc.ref.update({
-        members: FieldValue.arrayRemove(uid)
-      }).catch(() => {});
-    });
-    await Promise.all(wsPromises);
-
+    // Delete user document
     await db.collection('users').doc(uid).delete();
 
+    // Delete Firebase Auth account
     await getAuth().deleteUser(uid);
 
-    logger.info('settings', 'Account deleted', { user: uid });
-    return res.json({ success: true, message: 'Account and all associated data have been permanently deleted.' });
+    logger.info('settings', 'Account deleted', { user: uid, workspaceCount: ownedWsSnap.size, errors: totalErrors.length });
+    return res.json({
+      success: true,
+      message: 'Account and all associated data have been permanently deleted.',
+      workspaceDeletions: ownedWsSnap.size,
+      errors: totalErrors.length > 0 ? totalErrors : undefined,
+    });
   } catch (err) {
     logger.error('settings', 'Failed to delete account', { error: err.message });
     return res.status(500).json({ error: err.message });

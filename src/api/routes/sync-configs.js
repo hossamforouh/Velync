@@ -1,5 +1,7 @@
 const { Router } = require('express');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
+const { defaultKeyGenerator } = rateLimit;
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
 const { getConnector } = require('../../domains/connector/registry');
@@ -7,6 +9,16 @@ const { suggestMappings } = require('../../domains/sync/mapping-suggester');
 const { getPlan, enforcePlanLimits } = require('../../core/plan');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
+
+/** Per-user rate limiter for suggest-mappings (Gemini-backed, costly) */
+const suggestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => req.user?.uid ?? defaultKeyGenerator(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many mapping suggestions requested. Please wait before trying again.' },
+});
 
 const router = Router();
 
@@ -51,7 +63,7 @@ async function resolveWorkspacePlan(uid) {
   return { workspaceId, wsData, planId, plan };
 }
 
-router.post('/suggest-mappings', verifyAuth, [
+router.post('/suggest-mappings', verifyAuth, suggestLimiter, [
   body('sourceConnectionId').isString().trim().notEmpty(),
   body('destConnectionId').isString().trim().notEmpty(),
   body('sourcePlatform').isString().trim().notEmpty(),

@@ -65,10 +65,11 @@ async function refreshToken(uid, providerCreds, provider, connectionId) {
     const encryptedToken = encrypt(newAccessToken);
     const encryptedRefreshToken = newRefreshToken !== providerCreds.refreshToken ? encrypt(newRefreshToken) : undefined;
 
-    // Persist new tokens and expiry
+    // Persist new tokens and expiry — keyed by connectionId, not provider
     const updateData = {
       accessToken: encryptedToken,
       expiresAt,
+      provider,
       updatedAt: new Date().toISOString(),
     };
     if (encryptedRefreshToken) {
@@ -76,11 +77,11 @@ async function refreshToken(uid, providerCreds, provider, connectionId) {
     }
 
     await db.collection('credentials').doc(uid).set(
-      { [provider]: updateData },
+      { [connectionId]: updateData },
       { merge: true }
     );
 
-    logger.info('auth', `Token refreshed for ${provider}`, { expiresAt });
+    logger.info('auth', `Token refreshed for connection "${connectionId}" (${provider})`, { expiresAt });
 
     return {
       accessToken: newAccessToken,
@@ -163,8 +164,8 @@ async function resolveCredentials(uid, connectionId) {
 
   if (credsDoc.exists) {
     const credsData = credsDoc.data();
-    if (credsData[provider]) {
-      const providerCreds = credsData[provider];
+    if (credsData[connectionId]) {
+      const providerCreds = credsData[connectionId];
       rawCreds = {
         accessToken: decrypt(providerCreds.accessToken),
         refreshToken: providerCreds.refreshToken ? decrypt(providerCreds.refreshToken) : null,
@@ -202,7 +203,7 @@ async function resolveCredentials(uid, connectionId) {
   }
 
   if (!rawCreds) {
-    throw new ConnectionError(`Credentials not found for ${provider}`);
+    throw new ConnectionError(`Credentials not found for connection "${connectionId}" (${provider})`);
   }
 
   // Auto-refresh expired tokens

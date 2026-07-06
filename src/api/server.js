@@ -15,6 +15,7 @@ const settingsRoutes = require('./routes/settings');
 const adminRoutes = require('./routes/admin');
 const adminPlansRoutes = require('./routes/admin-plans');
 const billingRoutes = require('./routes/billing');
+const publicPlansRoutes = require('./routes/public-plans');
 const { maintenanceMode } = require('./middleware/maintenance');
 
 const ALLOWED_ORIGINS = [
@@ -85,6 +86,17 @@ function createApp() {
     res.send('Velync Integration Platform is running.');
   });
 
+  // Health check endpoint (bypasses maintenance mode via middleware)
+  app.get('/health', async (req, res) => {
+    // Quick Firestore probe to verify DB connectivity
+    try {
+      await db.collection('app_settings').doc('general').get();
+      res.json({ status: 'ok', uptime: process.uptime() });
+    } catch (dbErr) {
+      res.status(503).json({ status: 'error', error: 'database unreachable' });
+    }
+  });
+
   // Maintenance mode middleware
   app.use('/api', maintenanceMode);
 
@@ -99,6 +111,7 @@ function createApp() {
   app.use('/api', adminPlansRoutes);
   app.use('/api', billingRoutes);
   app.use(syncRoutes);
+  app.use('/api', publicPlansRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not Found', requestId: req.requestId });

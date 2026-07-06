@@ -16,11 +16,28 @@ import { initAdminIntegrations, setAdminAuth } from './js/admin-integrations.js'
 import { initAdminPlatforms } from './js/admin-platforms.js';
 import { initAdminPlans } from './js/admin-plans.js';
 import { initBilling } from './js/billing.js';
+import { initOnboarding } from './js/onboarding.js';
 import './js/integration-setup.js';
 import { showToast } from './js/toast.js';
 import { confirmDialog, alertDialog, threeWayConfirmDialog } from './js/confirm.js';
 import { startLoad, endLoad, isLoading } from './js/loading.js';
 import { getSkeletonFormHTML, setButtonLoading } from './js/loading-components.js';
+
+/** Show a plan-limit toast with an Upgrade button that opens billing settings */
+function showPlanError(msg) {
+  const isPlanError = /upgrade|plan.*limit|max.*config/i.test(msg);
+  showToast(msg, 'error', isPlanError ? {
+    actionLabel: 'Upgrade',
+    onAction() {
+      const modal = document.getElementById('settings-modal');
+      const billingTab = modal?.querySelector('.settings-tab[data-tab="billing"]');
+      if (modal && billingTab) {
+        modal.classList.add('show');
+        billingTab.click();
+      }
+    },
+  } : undefined);
+}
 
 // ─── View Cache (Tab Switching) ────────────────────────────────
 const viewCache = new Map();
@@ -2422,17 +2439,10 @@ function renderCards() {
 
   // If no configs
   if (configs.length === 0) {
-    tableBody.innerHTML = `
-      <tr class="table-empty-row">
-        <td colspan="8">
-          <div style="padding: 32px 16px; text-align: center;">
-            <div style="font-size: 2.5rem; margin-bottom: 12px;">📭</div>
-            <h3 style="margin-bottom: 6px; color: var(--text-1);">No Flows Found</h3>
-            <p style="color: var(--text-3); font-size: 0.88rem; margin-bottom: 16px;">Create your first configuration to start syncing data.</p>
-          </div>
-        </td>
-      </tr>`;
-      
+    initOnboarding(db, auth, () => {
+      window.currentOnboardingStep = null;
+      loadConfigs();
+    });
     updateToolbarButtonStates();
     updateMultiSelectBar();
     return;
@@ -3832,7 +3842,7 @@ async function saveConfig(e, isSubmit = false) {
         }
         showToast(isSubmit ? 'Config activated' : 'Config updated', 'success');
       } catch (apiErr) {
-        showToast(apiErr.message, 'error');
+        showPlanError(apiErr.message);
         isSavingConfig = false;
         if (btnSave) btnSave.disabled = false;
         if (btnSubmit) btnSubmit.disabled = false;
@@ -3874,7 +3884,7 @@ async function saveConfig(e, isSubmit = false) {
         document.getElementById('form-id').value = result.id;
         showToast(isSubmit ? 'Config activated' : 'Config created', 'success');
       } catch (apiErr) {
-        showToast(apiErr.message, 'error');
+        showPlanError(apiErr.message);
         isSavingConfig = false;
         if (btnSave) btnSave.disabled = false;
         if (btnSubmit) btnSubmit.disabled = false;

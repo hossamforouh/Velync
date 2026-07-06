@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { FieldValue } = require('@google-cloud/firestore');
 const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
+const { deleteWorkspace } = require('../../domains/workspace/deletion');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -205,6 +206,36 @@ router.delete('/workspace/member', verifyAuth, [
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Delete workspace — cascading deletion ─────────────────────
+router.delete('/workspace/:workspaceId', verifyAuth, async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const wsDoc = await db.collection('workspaces').doc(workspaceId).get();
+    if (!wsDoc.exists) return res.status(404).json({ error: 'Workspace not found' });
+
+    const wsData = wsDoc.data();
+    const isOwner = wsData.ownerId === req.user.uid;
+    const { isSuperAdmin } = require('../../core/superadmin');
+    if (!isOwner && !isSuperAdmin(req.user.uid)) {
+      return res.status(403).json({ error: 'Only the workspace owner or a superadmin can delete a workspace' });
+    }
+
+    const result = await deleteWorkspace(workspaceId, { initiatedBy: req.user.uid });
+    if (result.success) {
+      return res.json({ success: true, message: 'Workspace and all associated data deleted.', summary: result.summary });
+    }
+    return res.status(500).json({
+      success: false,
+      error: 'Workspace partially deleted — see errors for details.',
+      errors: result.errors,
+      summary: result.summary,
+    });
+  } catch (err) {
+    logger.error('workspace', 'Failed to delete workspace', { error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 

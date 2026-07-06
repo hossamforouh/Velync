@@ -77,20 +77,8 @@ router.post('/oauth/exchange', verifyAuth, [
     const expiresIn = data.expires_in || 3600;
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
-    const credentialRef = db.collection('credentials').doc(uid);
-    await credentialRef.set({
-      [platformId]: {
-        accessToken: encryptedToken,
-        refreshToken: encryptedRefreshToken,
-        expiresAt,
-        providerWorkspaceId: data.workspace_id || null,
-        providerWorkspaceName: data.workspace_name || null,
-        botId: data.bot_id || null,
-        updatedAt: new Date().toISOString(),
-      },
-    }, { merge: true });
-
-    await db.collection('connected_accounts').add({
+    // Create connected_accounts doc FIRST so we have its ID to key credentials
+    const connRef = await db.collection('connected_accounts').add({
       provider: platformId,
       label: label || platform?.name || 'OAuth Connection',
       userId: uid,
@@ -101,7 +89,24 @@ router.post('/oauth/exchange', verifyAuth, [
       attributes: {},
     });
 
-    res.json({ success: true, message: 'OAuth successful. Credentials securely stored.' });
+    // Write credentials keyed by connectionId (not provider) — supports multi-account-per-platform
+    const credentialRef = db.collection('credentials').doc(uid);
+    await credentialRef.set({
+      [connRef.id]: {
+        accessToken: encryptedToken,
+        refreshToken: encryptedRefreshToken,
+        expiresAt,
+        provider: platformId,
+        providerWorkspaceId: data.workspace_id || null,
+        providerWorkspaceName: data.workspace_name || null,
+        botId: data.bot_id || null,
+        updatedAt: new Date().toISOString(),
+      },
+    }, { merge: true });
+
+    logger.info('oauth', `Connection "${connRef.id}" created for ${platformId}`, { workspaceId: workspaceId || uid });
+
+    res.json({ success: true, message: 'OAuth successful. Credentials securely stored.', connectionId: connRef.id });
   } catch (err) {
     logger.error('oauth', 'Exchange failed', { error: err.response?.data || err.message });
     res.status(500).json({ success: false, error: err.response?.data?.message || err.message });

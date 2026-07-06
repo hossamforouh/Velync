@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Service | Velync</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-body: #0a0819;
+      --bg-surface: #1e1b4b;
+      --primary: #06b6d4;
+      --violet: #8b5cf6;
+      --text-1: #f8fafc;
+      --text-2: #cbd5e1;
+      --text-3: #94a3b8;
+      --border: rgba(255, 255, 255, 0.1);
+      --glass: rgba(30, 27, 75, 0.6);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', -apple-system, sans-serif;
+      background: var(--bg-body); color: var(--text-2); line-height: 1.7;
+      -webkit-font-smoothing: antialiased; overflow-x: hidden;
+    }
+    .orb { position: fixed; border-radius: 50%; z-index: -1; animation: float 20s infinite ease-in-out; }
+    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(139,92,246,0.25) 0%, transparent 70%); top: -150px; left: -150px; }
+    .orb-2 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(79,70,229,0.25) 0%, transparent 70%); bottom: -250px; right: -150px; animation-delay: -5s; }
+    .orb-3 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 70%); top: 40%; left: 60%; animation-delay: -10s; }
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0); }
+      33% { transform: translate(30px, -50px); }
+      66% { transform: translate(-20px, 40px); }
+    }
+    .navbar {
+      position: fixed; top: 0; left: 0; width: 100%; height: 72px;
+      display: flex; align-items: center; padding: 0 5%;
+      background: rgba(10, 8, 25, 0.8); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border); z-index: 100;
+    }
+    .logo {
+      display: inline-flex; align-items: center; gap: 12px;
+      color: var(--text-1); text-decoration: none; font-weight: 800;
+      font-size: 1.4rem; letter-spacing: 0.5px;
+    }
+    .nav-links { margin-left: auto; }
+    .nav-links a { color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 0.95rem; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--text-1); }
+    .container { max-width: 1200px; margin: 120px auto 80px; padding: 0 24px; display: grid; grid-template-columns: 280px 1fr; gap: 60px; position: relative; }
+    .hero { grid-column: 1 / -1; text-align: center; margin-bottom: 20px; }
+    h1 { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 800; background: linear-gradient(135deg, #a78bfa, #22d3ee); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 16px; line-height: 1.1; }
+    .effective-date { font-size: 1.1rem; color: var(--text-3); font-weight: 500; }
+    .toc-container { position: sticky; top: 100px; height: max-content; background: var(--glass); backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: 16px; padding: 32px 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+    .toc h2 { font-size: 0.85rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-3); margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .toc ol { list-style: none; counter-reset: toc; display: flex; flex-direction: column; gap: 12px; }
+    .toc li { counter-increment: toc; }
+    .toc a { color: var(--text-2); text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: all 0.2s; display: flex; align-items: flex-start; gap: 10px; }
+    .toc a::before { content: counter(toc) "."; color: var(--primary); font-weight: 700; min-width: 18px; }
+    .toc a:hover { color: var(--text-1); transform: translateX(4px); }
+    .content { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: 20px; padding: 48px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+    section { margin-bottom: 48px; scroll-margin-top: 100px; }
+    section:last-child { margin-bottom: 0; }
+    h2 { font-size: 1.6rem; font-weight: 700; color: var(--text-1); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+    h2::before { content: ""; display: block; width: 12px; height: 12px; border-radius: 50%; background: linear-gradient(135deg, var(--violet), var(--primary)); }
+    h3 { font-size: 1.15rem; font-weight: 600; color: #e2e8f0; margin-top: 32px; margin-bottom: 12px; }
+    p { margin-bottom: 16px; font-size: 1.05rem; }
+    ul, ol { margin-bottom: 24px; padding-left: 20px; font-size: 1.05rem; }
+    li { margin-bottom: 8px; }
+    strong { color: var(--text-1); font-weight: 600; }
+    .content a { color: var(--primary); text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+    .content a:hover { border-color: var(--primary); }
+    address { font-style: normal; font-size: 1.05rem; margin-top: 16px; background: rgba(255,255,255,0.03); padding: 16px; border-radius: 8px; border: 1px solid var(--border); }
+    @media (max-width: 992px) { .container { grid-template-columns: 1fr; gap: 40px; } .toc-container { position: relative; top: 0; padding: 24px; } .content { padding: 32px; } }
+    @media (max-width: 600px) { .content { padding: 24px; } h2 { font-size: 1.3rem; } h3 { font-size: 1.05rem; } p, ul, ol { font-size: 0.95rem; } }
+  </style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <nav class="navbar">
+    <a href="/" class="logo">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <rect width="32" height="32" rx="8" fill="url(#g)"/>
+        <path d="M8 9l8 14 8-14" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#8b5cf6"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
+      </svg>
+      Velync
+    </a>
+    <div class="nav-links">
+      <a href="/">&larr; Back to App</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="hero">
+      <h1>Terms of Service</h1>
+      <p class="effective-date">Last updated: June 24, 2026</p>
+    </div>
+
+    <aside class="toc-container">
+      <div class="toc">
+        <h2>Table of Contents</h2>
+        <ol>
+          <li><a href="#acceptance">Acceptance of Terms</a></li>
+          <li><a href="#description">Service Description</a></li>
+          <li><a href="#accounts">User Accounts</a></li>
+          <li><a href="#subscriptions">Subscriptions & Billing</a></li>
+          <li><a href="#usage">Acceptable Use</a></li>
+          <li><a href="#third">Third-Party Services</a></li>
+          <li><a href="#data">Data Handling</a></li>
+          <li><a href="#limits">Service Limits</a></li>
+          <li><a href="#termination">Termination</a></li>
+          <li><a href="#disclaimers">Disclaimers</a></li>
+          <li><a href="#liability">Limitation of Liability</a></li>
+          <li><a href="#changes">Changes to Terms</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ol>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section id="acceptance">
+        <h2>1. Acceptance of Terms</h2>
+        <p>By accessing or using Velync ("the Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+        <p>These terms apply to all users, including free and paid subscribers.</p>
+      </section>
+
+      <section id="description">
+        <h2>2. Service Description</h2>
+        <p>Velync provides an integration platform that allows users to connect third-party services and automate data synchronization between them. Users configure "sync flows" that define how data moves between their connected accounts.</p>
+        <p>The Service executes syncs according to user-configured schedules and mapping rules. Data flows directly between the platforms you authorize.</p>
+      </section>
+
+      <section id="accounts">
+        <h2>3. User Accounts</h2>
+        <p>You are responsible for maintaining the confidentiality of your account credentials. You must provide accurate account information and keep it updated.</p>
+        <p>You are responsible for all activity that occurs under your account. Notify us immediately of any unauthorized use at <a href="mailto:security@velync.io">security@velync.io</a>.</p>
+        <p>Sharing accounts or allowing others to access your account is prohibited unless you explicitly invite them as workspace members through the platform's collaboration features.</p>
+      </section>
+
+      <section id="subscriptions">
+        <h2>4. Subscriptions & Billing</h2>
+        <p>Velync offers free and paid subscription plans. Paid plans are billed on a monthly or annual basis as selected during checkout.</p>
+        <p><strong>Payment.</strong> All charges are processed securely through Stripe. We do not store credit card information.</p>
+        <p><strong>Cancellation.</strong> You may cancel your subscription at any time through the billing portal. Upon cancellation, your subscription remains active until the end of the current billing period. After that, your workspace reverts to the Free plan.</p>
+        <p><strong>Refunds.</strong> We do not offer refunds for partial billing periods. If you cancel mid-cycle, you retain access until the period ends.</p>
+        <p><strong>Payment failures.</strong> If a payment fails, we will notify you and retry automatically. After multiple failures, your subscription will be canceled and your workspace downgraded to Free. It is your responsibility to keep your billing information current.</p>
+        <p><strong>Price changes.</strong> We may change plan prices with 30 days notice. Existing subscribers will be grandfathered at their current price for one billing cycle before new rates apply.</p>
+      </section>
+
+      <section id="usage">
+        <h2>5. Acceptable Use</h2>
+        <p>You agree not to:</p>
+        <ul>
+          <li>Use the Service for any unlawful purpose or in violation of any applicable law</li>
+          <li>Attempt to circumvent usage limits, rate limits, or plan restrictions</li>
+          <li>Reverse engineer, decompile, or disassemble the Service</li>
+          <li>Use the Service to sync data that violates the terms of your connected platforms</li>
+          <li>Knowingly sync malicious code, viruses, or harmful content</li>
+          <li>Use the Service for unauthorized data scraping or excessive API calls</li>
+        </ul>
+      </section>
+
+      <section id="third">
+        <h2>6. Third-Party Services</h2>
+        <p>Velync integrates with third-party platforms at your direction. We are not responsible for the availability, security, or data practices of these platforms. You are responsible for ensuring your use of their services complies with their respective terms of service.</p>
+        <p>You grant Velync permission to access your third-party accounts through OAuth and to perform read/write operations as configured in your sync flows. You may revoke this access at any time through each platform's settings or by disconnecting the account in Velync.</p>
+      </section>
+
+      <section id="data">
+        <h2>7. Data Handling</h2>
+        <p>Our Privacy Policy (<a href="/privacy.html">privacy.html</a>) describes how we collect, use, and protect your personal data. Key commitments:</p>
+        <ul>
+          <li>OAuth tokens are encrypted at rest</li>
+          <li>We do not sell your data</li>
+          <li>We only access data necessary to execute your configured syncs</li>
+          <li>You can delete your account and all associated data at any time</li>
+        </ul>
+      </section>
+
+      <section id="limits">
+        <h2>8. Service Limits</h2>
+        <p>Usage is subject to plan-specific limits described on our <a href="/pricing.html">pricing page</a> and in-app displays. Limits include:</p>
+        <ul>
+          <li>Maximum number of active sync configs</li>
+          <li>Minimum sync interval</li>
+          <li>Maximum items processed per sync run</li>
+          <li>Log retention period</li>
+          <li>Connector tier availability</li>
+        </ul>
+        <p>We reserve the right to enforce these limits and may suspend accounts that consistently exceed permitted usage.</p>
+      </section>
+
+      <section id="termination">
+        <h2>9. Termination</h2>
+        <p>You may terminate your account at any time by contacting us. Upon termination:</p>
+        <ul>
+          <li>Your sync configurations will stop executing</li>
+          <li>Your OAuth tokens will be revoked</li>
+          <li>Your data will be deleted within 30 days</li>
+        </ul>
+        <p>We reserve the right to suspend or terminate access for violations of these terms.</p>
+      </section>
+
+      <section id="disclaimers">
+        <h2>10. Disclaimers</h2>
+        <p>THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. We do not guarantee that the Service will be uninterrupted, error-free, or that all syncs will complete successfully. Sync execution depends on the availability and performance of third-party platforms.</p>
+      </section>
+
+      <section id="liability">
+        <h2>11. Limitation of Liability</h2>
+        <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, VELYNC SHALL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY IS LIMITED TO THE AMOUNT YOU PAID IN THE 12 MONTHS PRECEDING THE CLAIM.</p>
+      </section>
+
+      <section id="changes">
+        <h2>12. Changes to Terms</h2>
+        <p>We may update these terms from time to time. Material changes will be communicated via email or through the platform. Continued use after changes constitutes acceptance.</p>
+      </section>
+
+      <section id="contact">
+        <h2>13. Contact</h2>
+        <p>Questions about these terms?</p>
+        <address>
+          <strong>Velync Legal</strong><br>
+          Email: <a href="mailto:legal@velync.io">legal@velync.io</a><br>
+          Privacy: <a href="mailto:privacy@velync.io">privacy@velync.io</a>
+        </address>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

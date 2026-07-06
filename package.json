@@ -5,7 +5,10 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/unit.test.js",
+    "test:rules": "npx firebase emulators:exec --only firestore \"node --test test/firestore-rules.test.js\"",
+    "test:all": "npm test && npm run test:rules"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",
@@ -30,5 +33,8 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1"
   }
 }

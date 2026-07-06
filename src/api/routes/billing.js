@@ -234,6 +234,7 @@ router.post('/billing/webhook', (req, res) => {
             .get();
           if (!wsSnap.empty) {
             const wsRef = wsSnap.docs[0].ref;
+            const wsData = wsSnap.docs[0].data();
             await wsRef.update({
               planId: 'free',
               stripeSubscriptionId: FieldValue.delete(),
@@ -241,6 +242,24 @@ router.post('/billing/webhook', (req, res) => {
               currentPeriodEnd: null,
             });
             logger.info('billing', `Subscription deleted — "${subscription.id}" reverted to free`);
+
+            if (wsData.ownerId) {
+              try {
+                const userDoc = await db.collection('users').doc(wsData.ownerId).get();
+                const userEmail = userDoc.exists ? userDoc.data().email : null;
+                if (userEmail) {
+                  await db.collection('mail').add({
+                    to: userEmail,
+                    message: {
+                      subject: '[Velync] Subscription canceled',
+                      text: 'Your Velync subscription has been canceled after repeated payment failures. Your workspace has been reverted to the Free plan. You can resubscribe anytime at https://velync.web.app/settings.',
+                    },
+                  });
+                }
+              } catch (emailErr) {
+                logger.error('billing', 'Failed to send cancellation email', { error: emailErr.message });
+              }
+            }
           }
           break;
         }
@@ -253,8 +272,30 @@ router.post('/billing/webhook', (req, res) => {
               .where('stripeSubscriptionId', '==', subscriptionId)
               .get();
             if (!wsSnap.empty) {
-              await wsSnap.docs[0].ref.update({ subscriptionStatus: 'past_due' });
+              const wsRef = wsSnap.docs[0].ref;
+              const wsData = wsSnap.docs[0].data();
+              await wsRef.update({ subscriptionStatus: 'past_due' });
               logger.warn('billing', `Payment failed for subscription "${subscriptionId}"`);
+
+              const ownerIds = [wsData.ownerId, ...(wsData.members || [])];
+              const uniqueOwners = [...new Set(ownerIds)].slice(0, 3);
+              for (const uid of uniqueOwners) {
+                try {
+                  const userDoc = await db.collection('users').doc(uid).get();
+                  const userEmail = userDoc.exists ? userDoc.data().email : null;
+                  if (userEmail) {
+                    await db.collection('mail').add({
+                      to: userEmail,
+                      message: {
+                        subject: '[Velync] Payment failed — action required',
+                        text: 'Your Velync subscription payment failed. Please update your billing details at https://velync.web.app/settings to avoid service interruption.',
+                      },
+                    });
+                  }
+                } catch (emailErr) {
+                  logger.error('billing', 'Failed to send dunning email', { uid, error: emailErr.message });
+                }
+              }
             }
           }
           break;
