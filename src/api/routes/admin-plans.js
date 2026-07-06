@@ -15,8 +15,8 @@ const validate = (req, res, next) => {
   next();
 };
 
-const requireSuperAdmin = (req, res, next) => {
-  if (!req.user || !isSuperAdmin(req.user.uid)) {
+const requireSuperAdmin = async (req, res, next) => {
+  if (!req.user || !(await isSuperAdmin(req.user.uid))) {
     return res.status(403).json({ error: 'Forbidden: superadmin only' });
   }
   next();

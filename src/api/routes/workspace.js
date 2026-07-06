@@ -44,7 +44,7 @@ router.post('/workspace/invite', verifyAuth, [
     const isOwner = data.ownerId === req.user.uid;
     const isMember = data.members?.includes(req.user.uid);
     const { isSuperAdmin } = require('../../core/superadmin');
-    if (!isOwner && !isMember && !isSuperAdmin(req.user.uid)) {
+    if (!isOwner && !isMember && !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ success: false, error: 'Not authorized to invite' });
     }
     if (data.invitedEmails?.includes(email)) {
@@ -97,7 +97,7 @@ router.delete('/workspace/invite', verifyAuth, [
     const data = ws.data();
     const isOwner = data.ownerId === req.user.uid;
     const { isSuperAdmin } = require('../../core/superadmin');
-    if (!isOwner && !isSuperAdmin(req.user.uid)) {
+    if (!isOwner && !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ success: false, error: 'Not authorized to revoke invites' });
     }
     await wsRef.update({
@@ -150,7 +150,7 @@ router.get('/workspace/:id', verifyAuth, async (req, res) => {
     const isOwner = data.ownerId === req.user.uid;
     const isMember = data.members?.includes(req.user.uid);
     const { isSuperAdmin } = require('../../core/superadmin');
-    if (!isOwner && !isMember && !isSuperAdmin(req.user.uid)) {
+    if (!isOwner && !isMember && !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
     res.json({ success: true, workspace: { id: ws.id, ...data } });
@@ -173,7 +173,7 @@ router.put('/workspace/name', verifyAuth, [
     const isOwner = data.ownerId === req.user.uid;
     const isMember = data.members?.includes(req.user.uid);
     const { isSuperAdmin } = require('../../core/superadmin');
-    if (!isOwner && !isMember && !isSuperAdmin(req.user.uid)) {
+    if (!isOwner && !isMember && !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ success: false, error: 'Not authorized to rename this workspace' });
     }
 
@@ -219,7 +219,7 @@ router.delete('/workspace/:workspaceId', verifyAuth, async (req, res) => {
     const wsData = wsDoc.data();
     const isOwner = wsData.ownerId === req.user.uid;
     const { isSuperAdmin } = require('../../core/superadmin');
-    if (!isOwner && !isSuperAdmin(req.user.uid)) {
+    if (!isOwner && !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ error: 'Only the workspace owner or a superadmin can delete a workspace' });
     }
 

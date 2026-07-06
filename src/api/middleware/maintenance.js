@@ -16,7 +16,7 @@ async function maintenanceMode(req, res, next) {
     }
 
     if (maintenanceCache.enabled) {
-      if (req.user && isSuperAdmin(req.user.uid)) return next();
+      if (req.user && await isSuperAdmin(req.user.uid)) return next();
       return res.status(503).json({ error: 'Service is under maintenance. Please try again later.' });
     }
   } catch (err) {

@@ -42,7 +42,7 @@ router.put('/global', verifyAuth, [
   body('maintenanceMode').optional().isBoolean(),
 ], validate, async (req, res) => {
   try {
-    if (!req.user || !isSuperAdmin(req.user.uid)) {
+    if (!req.user || !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ error: 'Forbidden: superadmin only' });
     }
     const { whatsappNumber, maintenanceMode } = req.body;
@@ -70,7 +70,7 @@ router.get('/workspace/:workspaceId', verifyAuth, [
     if (!wsDoc.exists) return res.status(404).json({ error: 'Workspace not found' });
     const wsData = wsDoc.data();
     const isMember = req.user.uid === workspaceId || (wsData.members || []).includes(req.user.uid);
-    if (!isMember && !isSuperAdmin(req.user.uid)) {
+    if (!isMember && !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ error: 'Forbidden' });
     }
     return res.json(wsData || {});
@@ -90,7 +90,7 @@ router.put('/workspace/:workspaceId', verifyAuth, [
     if (!wsDoc.exists) return res.status(404).json({ error: 'Workspace not found' });
     const wsData = wsDoc.data();
     const isMember = req.user.uid === workspaceId || (wsData.members || []).includes(req.user.uid);
-    if (!isMember && !isSuperAdmin(req.user.uid)) {
+    if (!isMember && !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ error: 'Forbidden' });
     }
     const { name } = req.body;
