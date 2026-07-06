@@ -2188,6 +2188,11 @@ function isCommonPassword(password) {
 // ─── Wire toggle buttons at page load ─────────────────────────
 document.querySelectorAll('.password-toggle').forEach(btn => {
   const input = btn.closest('.password-input-wrapper').querySelector('input');
+  if (!input) return;
+  // The button ships empty in the HTML — togglePasswordVisibility() was the only
+  // place that ever set its icon, so it stayed invisible until the first click.
+  // Render the initial "eye" (password hidden) icon up front.
+  btn.innerHTML = feather.icons[input.type === 'password' ? 'eye' : 'eye-off'].toSvg({ width: 18, height: 18 });
   btn.addEventListener('click', () => togglePasswordVisibility(btn, input));
 });
 
