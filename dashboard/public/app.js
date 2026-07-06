@@ -4057,14 +4057,21 @@ function closeModal() {
   pendingDeleteId = null;
 }
 
-async function deleteMappingsSubcollection(workspaceId, configId) {
-  const snap = await getDocs(collection(db, "workspaces", workspaceId, "sync_configs", configId, "sync_mappings"));
-  if (snap.empty) return;
-  const batch = [];
-  snap.forEach(doc => batch.push(doc.id));
-  await Promise.all(batch.map(mid =>
-    deleteDoc(doc(db, "workspaces", workspaceId, "sync_configs", configId, "sync_mappings", mid))
-  ));
+// Delete a config through the server, which cascades to its sync_mappings + lock.
+// (Deleting client-side would orphan the sync_mappings subcollection — Firestore
+// does not cascade subcollection deletes.)
+async function deleteConfigViaApi(configId) {
+  const token = await auth.currentUser.getIdToken();
+  const API_BASE = window.VELYNC_CONFIG.apiBase;
+  const res = await fetch(`${API_BASE}/api/sync-configs/${encodeURIComponent(configId)}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Delete failed (${res.status})`);
+  }
+  return res.json();
 }
 
 async function deleteConfig() {
@@ -4072,8 +4079,7 @@ async function deleteConfig() {
   modalConfirm.disabled = true;
   try {
     const deletedCfg = configs.find(c => c.id === pendingDeleteId);
-    await deleteMappingsSubcollection(currentWorkspaceId, pendingDeleteId);
-    await deleteDoc(doc(db, "workspaces", currentWorkspaceId, "sync_configs", pendingDeleteId));
+    await deleteConfigViaApi(pendingDeleteId);
     selectedConfigIds.delete(pendingDeleteId);
     closeModal();
     await loadConfigs(true);
@@ -4442,8 +4448,7 @@ if (msbDelete) {
     for (const id of ids) {
       try {
         const deletedCfg = configs.find(c => c.id === id);
-        await deleteMappingsSubcollection(currentWorkspaceId, id);
-        await deleteDoc(doc(db, "workspaces", currentWorkspaceId, "sync_configs", id));
+        await deleteConfigViaApi(id);
         if (deletedCfg) {
           showToast(`"${deletedCfg.description || id}" deleted`, 'info', {
             actionLabel: 'Undo',

@@ -7,6 +7,7 @@ const { resolveConnectionTokens } = require('../../domains/connection/resolver')
 const { getConnector } = require('../../domains/connector/registry');
 const { suggestMappings } = require('../../domains/sync/mapping-suggester');
 const { getPlan, enforcePlanLimits } = require('../../core/plan');
+const { deleteSyncConfig } = require('../../domains/sync/config-deletion');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -258,6 +259,32 @@ router.put('/sync-configs/:configId', verifyAuth, [
     return res.json({ success: true, id: configId });
   } catch (err) {
     logger.error('sync-configs', 'Failed to update config', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a config and cascade to its sync_mappings + lock (Firestore does not
+// cascade subcollection deletes, so a client-side delete would orphan mappings).
+router.delete('/sync-configs/:configId', verifyAuth, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { configId } = req.params;
+
+    const ctx = await resolveWorkspacePlan(uid);
+    if (ctx.error) return res.status(404).json({ error: ctx.error });
+
+    const configRef = db.collection('workspaces').doc(ctx.workspaceId)
+      .collection('sync_configs').doc(configId);
+    const existing = await configRef.get();
+    if (!existing.exists) {
+      return res.status(404).json({ error: 'Config not found' });
+    }
+
+    const result = await deleteSyncConfig(ctx.workspaceId, configId);
+    logger.info('sync-configs', `Config deleted "${configId}" in workspace "${ctx.workspaceId}"`);
+    return res.json({ success: true, id: configId, ...result });
+  } catch (err) {
+    logger.error('sync-configs', 'Failed to delete config', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });

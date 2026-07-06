@@ -10,7 +10,8 @@
     "test:rules": "npx firebase emulators:exec --only firestore \"node --test test/firestore-rules.test.js\"",
     "test:engine": "npx firebase emulators:exec --only firestore \"node --test test/engine.test.js\"",
     "test:admin": "npx firebase emulators:exec --only firestore \"node --test test/admin-stats.test.js\"",
-    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin"
+    "test:config-deletion": "npx firebase emulators:exec --only firestore \"node --test test/config-deletion.test.js\"",
+    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin && npm run test:config-deletion"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",

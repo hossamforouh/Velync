@@ -317,8 +317,9 @@ describe('/workspaces/{wsId}/sync_configs/{configId}', () => {
     await assertSucceeds(ctx.member().firestore().collection('workspaces').doc('owner-wsid').collection('sync_configs').doc('test-config').update({ description: 'updated' }));
   });
 
-  it('workspace member can delete', async () => {
-    await assertSucceeds(ctx.member().firestore().collection('workspaces').doc('member-wsid').collection('sync_configs').doc('test-config').delete());
+  it('delete denied client-side — server-only (cascades sync_mappings)', async () => {
+    await assertFails(ctx.member().firestore().collection('workspaces').doc('member-wsid').collection('sync_configs').doc('test-config').delete());
+    await assertFails(ctx.owner().firestore().collection('workspaces').doc('owner-wsid').collection('sync_configs').doc('test-config').delete());
   });
 
   it('stranger cannot create', async () => {

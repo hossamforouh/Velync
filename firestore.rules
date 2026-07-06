@@ -74,7 +74,10 @@ service cloud.firestore {
         allow create: if isWorkspaceMember(workspaceId)
           && request.resource.data.keys().hasAny(['description', 'platform1', 'platform2']);
         allow update: if isWorkspaceMember(workspaceId);
-        allow delete: if isWorkspaceMember(workspaceId);
+        // Server-only: deletion must go through DELETE /api/sync-configs/:id, which
+        // cascades to the sync_mappings subcollection. A client-side delete would
+        // orphan those mappings (Firestore does not cascade subcollection deletes).
+        allow delete: if false;
 
         // Sync mappings subcollection
         match /sync_mappings/{mappingId} {
