@@ -2165,7 +2165,10 @@ function updatePasswordStrengthUI(fillEl, labelEl, reqsEl, password) {
   if (reqsEl) {
     reqsEl.querySelectorAll('li').forEach(li => {
       const req = li.dataset.req;
-      if (req && req in r.checks) li.classList.toggle('valid', r.checks[req]);
+      // Always toggle (not just when the key is present) — when password is empty,
+      // evaluatePasswordStrength() returns checks:{} and every req must clear back
+      // to unmet, not keep whatever state it was left in.
+      if (req) li.classList.toggle('valid', !!r.checks[req]);
     });
   }
   return r;
