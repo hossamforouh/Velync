@@ -1674,6 +1674,124 @@ header.legacy-header {
   border-color: var(--violet);
 }
 
+/* ── Add Connection Dialog ──────────────────────────────────── */
+.conn-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: var(--glass-heavy);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.conn-dialog {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px var(--shadow);
+  padding: 28px;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--text-1);
+}
+
+.conn-dialog h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-1);
+}
+
+.conn-dialog .form-row {
+  margin-top: 12px;
+}
+
+.conn-dialog .form-row label {
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.conn-dialog .form-row input,
+.conn-dialog .form-row select {
+  color: var(--text-1);
+  color-scheme: dark;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  padding: 10px;
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.conn-dialog .form-row input:focus,
+.conn-dialog .form-row select:focus {
+  border-color: var(--violet);
+  outline: none;
+}
+
+.conn-dialog .form-row input:disabled {
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.conn-dialog .form-row-hint {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+.conn-dialog-oauth-note {
+  padding: 16px;
+  background: rgba(129, 140, 248, 0.1);
+  border-radius: 8px;
+  color: var(--violet);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.conn-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.conn-dialog-empty {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  color: var(--text-1);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.conn-dialog-loading {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  color: var(--text-1);
+}
+
 /* Platform Admin Tabs */
 .admin-tabs-wrapper {
   overflow-x: auto;

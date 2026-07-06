@@ -383,6 +383,13 @@ function wireToolbar() {
     });
   }
 
+  // New Connection — opens the same Add Connection dialog used elsewhere
+  // (e.g. from the sync-config wizard), never wired to this page's own button.
+  const addBtn = document.getElementById('btn-add-conn');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => openAddConnectionDialog(null));
+  }
+
   // Refresh
   const refreshBtn = document.getElementById('conn-refresh-btn');
   if (refreshBtn) {
@@ -593,13 +600,9 @@ async function openAddConnectionDialog(presetProvider = null) {
 
   const overlay = document.createElement('div');
   overlay.id = 'conn-dialog-overlay';
-  overlay.style.cssText = [
-    'position:fixed;inset:0;z-index:2000;',
-    'background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);',
-    'display:flex;align-items:center;justify-content:center;'
-  ].join('');
+  overlay.className = 'conn-dialog-overlay';
 
-  overlay.innerHTML = `<div style="background:var(--bg-2);padding:2rem;border-radius:12px;color:var(--text-1);"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i>Loading providers...</div>`;
+  overlay.innerHTML = `<div class="conn-dialog-loading"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i>Loading providers...</div>`;
   if (window.feather) feather.replace();
   document.body.appendChild(overlay);
 
@@ -613,7 +616,7 @@ async function openAddConnectionDialog(presetProvider = null) {
   }
 
   if (platforms.length === 0) {
-    overlay.innerHTML = `<div style="background:var(--bg-2);padding:2rem;border-radius:12px;color:var(--text-1);display:flex;flex-direction:column;gap:16px;">
+    overlay.innerHTML = `<div class="conn-dialog-empty">
       <span>No platforms found. Please define platforms in the Admin Panel first.</span>
       <button class="btn btn-secondary" onclick="document.getElementById('conn-dialog-overlay').remove()">Close</button>
     </div>`;
@@ -624,25 +627,21 @@ async function openAddConnectionDialog(presetProvider = null) {
     const selectedPlatform = platforms.find(p => p.id === selectedKey) || platforms[0];
 
     overlay.innerHTML = `
-      <div class="conn-dialog" style="
-        background:var(--bg-2);border-radius:16px;padding:28px;
-        width:460px;max-width:calc(100vw - 32px);
-        box-shadow:0 20px 60px rgba(0,0,0,0.5);
-        display:flex;flex-direction:column;gap:16px;color:var(--text-1);">
-        <h3 style="font-size:1.1rem;font-weight:700;margin:0; display:flex; align-items:center; gap:8px;">${feather.icons['plus'].toSvg({width: 18, height: 18})} Add New Connection</h3>
-        
-        <div class="form-row">
-          <label for="conn-provider" style="color:var(--text-2);font-weight:600;font-size:0.9rem;margin-bottom:6px;display:block;">Connection Type *</label>
-          <select id="conn-provider" style="color:var(--text-1);color-scheme:dark;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:10px;border-radius:6px;width:100%;">
+      <div class="conn-dialog">
+        <h3>${feather.icons['plus'].toSvg({width: 18, height: 18})} Add New Connection</h3>
+
+        <div class="form-row" style="margin-top:0;">
+          <label for="conn-provider">Connection Type *</label>
+          <select id="conn-provider">
             ${platforms.map(p => `<option value="${p.id}" ${p.id === selectedPlatform.id ? 'selected' : ''}>${p.name}</option>`).join('')}
           </select>
         </div>
 
-        <div class="form-row" style="margin-top:12px;">
-          <label for="conn-label" style="color:var(--text-2);font-weight:600;font-size:0.9rem;margin-bottom:6px;display:block;">Connection Label *</label>
-          <input id="conn-label" type="text" placeholder="e.g. My ${selectedPlatform.name}" style="color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:10px;border-radius:6px;width:100%;box-sizing:border-box;" />
+        <div class="form-row">
+          <label for="conn-label">Connection Label *</label>
+          <input id="conn-label" type="text" placeholder="e.g. My ${selectedPlatform.name}" />
         </div>
-        
+
         <div id="conn-dynamic-fields" style="display:flex;flex-direction:column;gap:16px;">
           ${(selectedPlatform.attributes || []).map(attr => {
             const attrId = attr.id || attr.key || attr;
@@ -650,20 +649,20 @@ async function openAddConnectionDialog(presetProvider = null) {
             const isPassword = attr.type === 'password' || attrLabel.toLowerCase().includes('token') || attrLabel.toLowerCase().includes('secret');
             const requiredMark = attr.required !== false ? ' *' : '';
             return `
-              <div class="form-row" style="margin-top:12px;">
-                <label for="conn-attr-${attrId}" style="color:var(--text-2);font-weight:600;font-size:0.9rem;margin-bottom:6px;display:block;">${attrLabel}${requiredMark}</label>
-                <input id="conn-attr-${attrId}" type="${isPassword ? 'password' : 'text'}" autocomplete="off" style="color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:10px;border-radius:6px;width:100%;box-sizing:border-box;" />
+              <div class="form-row">
+                <label for="conn-attr-${attrId}">${attrLabel}${requiredMark}</label>
+                <input id="conn-attr-${attrId}" type="${isPassword ? 'password' : 'text'}" autocomplete="off" />
               </div>
             `;
           }).join('')}
-          ${selectedPlatform.authType === 'oauth' 
-            ? `<div style="padding: 16px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; color: #818cf8; font-size: 0.95rem; text-align: center;">
+          ${selectedPlatform.authType === 'oauth'
+            ? `<div class="conn-dialog-oauth-note">
                  You will be securely redirected to ${selectedPlatform.name} to authorize access.
                </div>`
             : ''}
         </div>
 
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <div class="conn-dialog-actions">
           <button class="btn btn-secondary" id="conn-dialog-cancel">Cancel</button>
           <button class="btn btn-primary" id="conn-dialog-save">
             ${selectedPlatform.authType === 'oauth' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Connect to Provider' : `<span>${feather.icons['save'].toSvg({width: 16, height: 16, style: 'vertical-align: middle;'})}</span> Save Connection` }
@@ -851,13 +850,9 @@ async function openEditConnectionDialog(conn) {
 
   const overlay = document.createElement('div');
   overlay.id = 'conn-dialog-overlay';
-  overlay.style.cssText = [
-    'position:fixed;inset:0;z-index:2000;',
-    'background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);',
-    'display:flex;align-items:center;justify-content:center;'
-  ].join('');
+  overlay.className = 'conn-dialog-overlay';
 
-  overlay.innerHTML = `<div style="background:var(--bg-2);padding:2rem;border-radius:12px;color:var(--text-1);"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i>Loading...</div>`;
+  overlay.innerHTML = `<div class="conn-dialog-loading"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i>Loading...</div>`;
   if (window.feather) feather.replace();
   document.body.appendChild(overlay);
 
@@ -881,24 +876,20 @@ async function openEditConnectionDialog(conn) {
   const existingAttrs = hasAttributes ? conn.attributes : {};
 
   overlay.innerHTML = `
-    <div class="conn-dialog" style="
-      background:var(--bg-2);border-radius:16px;padding:28px;
-      width:460px;max-width:calc(100vw - 32px);
-      box-shadow:0 20px 60px rgba(0,0,0,0.5);
-      display:flex;flex-direction:column;gap:16px;color:var(--text-1);">
-      <h3 style="font-size:1.1rem;font-weight:700;margin:0; display:flex; align-items:center; gap:8px;">
+    <div class="conn-dialog">
+      <h3>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         Edit Connection
       </h3>
 
-      <div class="form-row">
-        <label for="conn-edit-provider" style="color:var(--text-2);font-weight:600;font-size:0.9rem;margin-bottom:6px;display:block;">Connection Type</label>
-        <input id="conn-edit-provider" type="text" value="${escHtml(selectedPlatform.name)}" disabled style="color:var(--text-3);background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:10px;border-radius:6px;width:100%;box-sizing:border-box;opacity:0.7;cursor:not-allowed;" />
+      <div class="form-row" style="margin-top:0;">
+        <label for="conn-edit-provider">Connection Type</label>
+        <input id="conn-edit-provider" type="text" value="${escHtml(selectedPlatform.name)}" disabled />
       </div>
 
-      <div class="form-row" style="margin-top:12px;">
-        <label for="conn-edit-label" style="color:var(--text-2);font-weight:600;font-size:0.9rem;margin-bottom:6px;display:block;">Connection Label *</label>
-        <input id="conn-edit-label" type="text" value="${escHtml(conn.label || conn.providerName || '')}" style="color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:10px;border-radius:6px;width:100%;box-sizing:border-box;" />
+      <div class="form-row">
+        <label for="conn-edit-label">Connection Label *</label>
+        <input id="conn-edit-label" type="text" value="${escHtml(conn.label || conn.providerName || '')}" />
       </div>
 
       <div id="conn-edit-dynamic-fields" style="display:flex;flex-direction:column;gap:16px;">
@@ -909,26 +900,26 @@ async function openEditConnectionDialog(conn) {
           const currentVal = existingAttrs[attrId] || '';
           const requiredMark = attr.required !== false ? ' *' : '';
           return `
-            <div class="form-row" style="margin-top:12px;">
-              <label for="conn-edit-attr-${attrId}" style="color:var(--text-2);font-weight:600;font-size:0.9rem;margin-bottom:6px;display:block;">${attrLabel}${requiredMark}</label>
-              <input id="conn-edit-attr-${attrId}" type="${isPassword ? 'password' : 'text'}" value="${escHtml(currentVal)}" autocomplete="off" style="color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:10px;border-radius:6px;width:100%;box-sizing:border-box;" />
-              ${isPassword && currentVal ? '<div style="font-size:0.75rem;color:var(--text-3);margin-top:4px;">Leave blank to keep current value</div>' : ''}
+            <div class="form-row">
+              <label for="conn-edit-attr-${attrId}">${attrLabel}${requiredMark}</label>
+              <input id="conn-edit-attr-${attrId}" type="${isPassword ? 'password' : 'text'}" value="${escHtml(currentVal)}" autocomplete="off" />
+              ${isPassword && currentVal ? '<div class="form-row-hint">Leave blank to keep current value</div>' : ''}
             </div>
           `;
         }).join('')}
       </div>
 
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <div class="conn-dialog-actions">
         <button class="btn btn-secondary" id="conn-edit-dialog-cancel">Cancel</button>
         ${selectedPlatform.authType === 'oauth'
           ? `<button class="btn btn-secondary" id="conn-edit-dialog-save">
                Save Changes
              </button>
-             <button class="btn btn-primary" id="conn-edit-dialog-reauth" style="background:var(--violet);">
+             <button class="btn btn-primary" id="conn-edit-dialog-reauth">
                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                Reauthorize with ${selectedPlatform.name}
              </button>`
-          : `<button class="btn btn-primary" id="conn-edit-dialog-save" style="background:var(--violet);">
+          : `<button class="btn btn-primary" id="conn-edit-dialog-save">
                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                Save Changes
              </button>`
