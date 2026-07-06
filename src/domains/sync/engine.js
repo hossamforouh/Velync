@@ -5,6 +5,7 @@ const logger = require('../../core/logger');
 const { mapSourceToDest } = require('./mapper');
 const { resolveConflict } = require('./conflict');
 const { getPlan } = require('../../core/plan');
+const { getPlatform } = require('../../core/platform');
 const os = require('os');
 
 const runningConfigs = new Set();
@@ -113,6 +114,27 @@ async function retryWithBackoff(fn, options = {}) {
   throw lastError;
 }
 
+/**
+ * Load only the mapping docs relevant to the items touched this cycle, by querying
+ * sourceEntityId / destEntityId in batches (Firestore 'in' supports up to 30 values).
+ * Used on non-reconcile cycles to avoid reading the entire mapping set.
+ * @returns {Promise<Array>} Firestore document snapshots (deduped by id)
+ */
+async function loadMappingsForItems(mappingsCol, sourceItems, destItems) {
+  const byId = new Map();
+  const queryIn = async (field, values) => {
+    const clean = values.filter(Boolean);
+    for (let i = 0; i < clean.length; i += 30) {
+      const batch = clean.slice(i, i + 30);
+      const snap = await mappingsCol.where(field, 'in', batch).get();
+      snap.docs.forEach(d => byId.set(d.id, d));
+    }
+  };
+  await queryIn('sourceEntityId', sourceItems.map(i => i.id));
+  await queryIn('destEntityId', destItems.map(i => i.id));
+  return Array.from(byId.values());
+}
+
 async function runSync(config, configId) {
   if (runningConfigs.has(configId)) {
     logger.warn('sync', `Skipping "${configId}" — already running`);
@@ -158,6 +180,9 @@ async function runSync(config, configId) {
   }).catch(() => null);
 
   let synced = 0, deleted = 0, failed = 0;
+  // Whether this run performs full deletion reconciliation (decided below). Declared
+  // out here so the post-run config update can persist lastReconcileAt.
+  let doReconcile = false;
   try {
     const workspaceId = config.workspaceId;
     const sourceConnId = config.platform1ConnectionId || config.sourceConnectionId;
@@ -192,11 +217,13 @@ async function runSync(config, configId) {
     let resolvedSourcePlatform = sourcePlatformId;
     let resolvedDestPlatform = destPlatformId;
 
-    const p1Doc = await db.collection('platforms').doc(sourcePlatformId).get();
-    if (p1Doc.exists && p1Doc.data().name) resolvedSourcePlatform = p1Doc.data().name.toLowerCase();
+    // Cached lookups — platform docs almost never change, so avoid reading them
+    // from Firestore on every sync run (see core/platform.js).
+    const p1Data = await getPlatform(sourcePlatformId);
+    if (p1Data && p1Data.name) resolvedSourcePlatform = p1Data.name.toLowerCase();
 
-    const p2Doc = await db.collection('platforms').doc(destPlatformId).get();
-    if (p2Doc.exists && p2Doc.data().name) resolvedDestPlatform = p2Doc.data().name.toLowerCase();
+    const p2Data = await getPlatform(destPlatformId);
+    if (p2Data && p2Data.name) resolvedDestPlatform = p2Data.name.toLowerCase();
 
     const SourceConn = getConnector(resolvedSourcePlatform);
     const DestConn = getConnector(resolvedDestPlatform);
@@ -207,20 +234,37 @@ async function runSync(config, configId) {
     const sourceItems = (await source.fetch(entityType, filter, fetchOptions)).slice(0, MAX_ITEMS_PER_RUN);
     const destItems = (await dest.fetch(entityType, filter, fetchOptions)).slice(0, MAX_ITEMS_PER_RUN);
 
-    // Unfiltered ID-only fetch for deletion detection — must not use modifiedSince
-    // or MAX_ITEMS_PER_RUN, since an incomplete ID set would cause false-positive deletions.
-    const allSourceIds = (await source.fetchIds(entityType, filter)).map(i => i.id);
-    const allDestIds = (await dest.fetchIds(entityType, filter)).map(i => i.id);
-    const allSourceIdSet = new Set(allSourceIds);
-    const allDestIdSet = new Set(allDestIds);
+    // Deletion reconciliation must read the FULL mapping set, which is the dominant
+    // Firestore cost at scale. Run it only every `reconcileIntervalMinutes`; on other
+    // cycles load just the mappings for items touched this run, so steady-state reads
+    // scale with the number of CHANGES, not total data size. Deletions still propagate,
+    // just within the reconcile interval rather than instantly.
+    const RECONCILE_INTERVAL_MIN = config.reconcileIntervalMinutes || 60;
+    const lastReconcileAt = config.lastReconcileAt || null;
+    doReconcile = !lastReconcileAt
+      || (Date.now() - new Date(lastReconcileAt).getTime()) >= RECONCILE_INTERVAL_MIN * 60_000;
 
-    const mappingsSnapshot = await db.collection('workspaces').doc(workspaceId)
-      .collection('sync_configs').doc(configId).collection('sync_mappings').get();
+    // Unfiltered ID-only fetch — must not use modifiedSince or MAX_ITEMS_PER_RUN, since
+    // an incomplete ID set would cause false-positive deletions.
+    // Dest IDs are always needed (staleness check in the create/update loop below).
+    const allDestIdSet = new Set((await dest.fetchIds(entityType, filter)).map(i => i.id));
+    // Source IDs are only needed for deletion reconciliation — skip the fetch otherwise.
+    const allSourceIdSet = doReconcile
+      ? new Set((await source.fetchIds(entityType, filter)).map(i => i.id))
+      : null;
+
+    const mappingsCol = db.collection('workspaces').doc(workspaceId)
+      .collection('sync_configs').doc(configId).collection('sync_mappings');
+
+    // Full load on reconcile cycles (needed to detect deletions); targeted load otherwise.
+    const mappingDocs = doReconcile
+      ? (await mappingsCol.get()).docs
+      : await loadMappingsForItems(mappingsCol, sourceItems, destItems);
 
     const sourceToMapping = new Map();
     const destToMapping = new Map();
     const mappedDestIds = new Set();
-    mappingsSnapshot.forEach(doc => {
+    mappingDocs.forEach(doc => {
       const d = { mappingId: doc.id, ...doc.data() };
       sourceToMapping.set(d.sourceEntityId, d);
       destToMapping.set(d.destEntityId, d);
@@ -233,8 +277,7 @@ async function runSync(config, configId) {
     const saveMappingBatch = async (operations) => {
       if (operations.length === 0) return;
       const batch = db.batch();
-      const mappingsRef = db.collection('workspaces').doc(workspaceId)
-        .collection('sync_configs').doc(configId).collection('sync_mappings');
+      const mappingsRef = mappingsCol;
       for (const op of operations) {
         if (op.type === 'set') {
           batch.set(mappingsRef.doc(op.id), op.data);
@@ -350,19 +393,24 @@ async function runSync(config, configId) {
       await saveMappingBatch(pendingOps.splice(0));
     }
 
-    for (const [sourceId, mapping] of sourceToMapping.entries()) {
-      if (!allSourceIdSet.has(sourceId) && allDestIdSet.has(mapping.destEntityId)) {
-        try {
-          await retryWithBackoff(() => dest.delete(entityType, mapping.destEntityId));
-          queueRemoveMapping(mapping);
-          deleted++;
-        } catch (err) {
-          logger.error('sync', `Failed deletion propagation`, { error: err.message });
-          failed++;
+    // Deletion reconciliation — only on reconcile cycles, where allSourceIdSet is the
+    // complete set of live source IDs. On other cycles deletions are deferred to the
+    // next reconcile, avoiding a full mapping scan every run.
+    if (doReconcile) {
+      for (const [sourceId, mapping] of sourceToMapping.entries()) {
+        if (!allSourceIdSet.has(sourceId) && allDestIdSet.has(mapping.destEntityId)) {
+          try {
+            await retryWithBackoff(() => dest.delete(entityType, mapping.destEntityId));
+            queueRemoveMapping(mapping);
+            deleted++;
+          } catch (err) {
+            logger.error('sync', `Failed deletion propagation`, { error: err.message });
+            failed++;
+          }
         }
       }
+      await saveMappingBatch(pendingOps.splice(0));
     }
-    await saveMappingBatch(pendingOps.splice(0));
 
   } catch (err) {
     logger.error('sync', `Config "${configId}" failed`, { error: err.message });
@@ -375,7 +423,9 @@ async function runSync(config, configId) {
 
   const now = new Date().toISOString();
   if (logRef) await logRef.update({ status: 'success', endTime: now, syncedCount: synced, deletedCount: deleted, failedCount: failed }).catch(() => {});
-  await db.collection('workspaces').doc(config.workspaceId).collection('sync_configs').doc(configId).update({ lastRunAt: now, lastSuccessfulSyncAt: now }).catch(() => {});
+  const configUpdate = { lastRunAt: now, lastSuccessfulSyncAt: now };
+  if (doReconcile) configUpdate.lastReconcileAt = now;
+  await db.collection('workspaces').doc(config.workspaceId).collection('sync_configs').doc(configId).update(configUpdate).catch(() => {});
   logger.info('sync', `Completed "${configId}" — synced:${synced} deleted:${deleted} failed:${failed}`);
   return { synced, deleted, failed };
 }
