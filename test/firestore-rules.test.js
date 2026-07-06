@@ -64,9 +64,14 @@ let testEnv;
  * Helper: write seed documents using admin SDK (bypasses security rules).
  */
 async function seed(testEnv) {
-  const admin = testEnv.unauthenticatedContext(/* options */);
-  const firestore = admin.firestore();
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await seedDocs(firestore);
+  });
+}
 
+/** Writes all seed documents. Runs with security rules disabled. */
+async function seedDocs(firestore) {
   for (const [collection, docs] of Object.entries(SEED)) {
     for (const [docId, data] of Object.entries(docs)) {
       await firestore.collection(collection).doc(docId).set(data);
@@ -170,7 +175,8 @@ describe('Unauthenticated — no auth', () => {
     await assertFails(db.collection('users').doc('owner-uid').get());
     await assertFails(db.collection('activity_logs').doc('test-log').get());
     await assertFails(db.collection('superadmins').doc('superadmin-uid').get());
-    await assertFails(db.collection('app_settings').doc('theme').get());
+    // Note: app_settings is intentionally world-readable (see its own test below),
+    // so it is deliberately excluded from this "no unauth read" assertion.
   });
 
   it('cannot write to any collection', async () => {
@@ -212,7 +218,9 @@ describe('/users/{userId}', () => {
   });
 
   it('cannot create doc without required email field', async () => {
-    await assertFails(ctx.owner().firestore().collection('users').doc('owner-uid').set({ name: 'No Email' }));
+    // Use invited-uid (never written elsewhere) so this is a genuine create, not an
+    // update of a doc a prior test already created.
+    await assertFails(ctx.invited().firestore().collection('users').doc('invited-uid').set({ name: 'No Email' }));
   });
 
   it('can update own doc with allowed fields', async () => {
@@ -363,8 +371,11 @@ describe('Collection-group: sync_configs', () => {
   });
 
   it('write always denied', async () => {
+    // The collection-group scope is read-only for superadmins. There is no client API to
+    // write "through" a collectionGroup, so assert a superadmin (a non-member) cannot create
+    // a sync_config at a concrete nested path — the create rule requires workspace membership.
     const db = ctx.superAdmin().firestore();
-    await assertFails(db.collectionGroup('sync_configs').doc('new').set({ description: 'hack' }));
+    await assertFails(db.collection('workspaces').doc('owner-wsid').collection('sync_configs').doc('new').set({ description: 'hack' }));
   });
 });
 
@@ -524,10 +535,10 @@ describe('/activity_logs/{logId}', () => {
 // 15. /credentials/{documentId}
 // ─────────────────────────────────────────────
 describe('/credentials/{documentId}', () => {
-  it('only matching uid can read', async () => {
-    await assertSucceeds(ctx.owner().firestore().collection('credentials').doc('owner-uid').get());
+  it('read always denied — admin-sdk-only collection', async () => {
+    await assertFails(ctx.owner().firestore().collection('credentials').doc('owner-uid').get());
     await assertFails(ctx.stranger().firestore().collection('credentials').doc('owner-uid').get());
-    await assertFails(ctx.member().firestore().collection('credentials').doc('owner-uid').get());
+    await assertFails(ctx.superAdmin().firestore().collection('credentials').doc('owner-uid').get());
   });
 
   it('write always denied', async () => {

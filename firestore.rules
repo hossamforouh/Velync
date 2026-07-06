@@ -8,17 +8,21 @@ service cloud.firestore {
     }
 
     function isWorkspaceMember(workspaceId) {
-      return request.auth != null && (
-        request.auth.uid == workspaceId ||
-        request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.members
-      );
+      return request.auth != null
+        && exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+        && (
+          request.auth.uid == get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId ||
+          request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.get('members', [])
+        );
     }
 
     function isWorkspaceMemberFromField() {
-      return request.auth != null && resource != null && resource.data.workspaceId != null && (
-        request.auth.uid == resource.data.workspaceId ||
-        request.auth.uid in get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.members
-      );
+      return request.auth != null && resource != null && resource.data.workspaceId != null
+        && exists(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId))
+        && (
+          request.auth.uid == get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.ownerId ||
+          request.auth.uid in get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.get('members', [])
+        );
     }
 
     function isOwner(uid) {
@@ -28,8 +32,7 @@ service cloud.firestore {
     function isPendingInvite(workspaceId) {
       return request.auth != null
         && request.auth.token.email != null
-        && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.invitedEmails
-        && request.auth.token.email in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.invitedEmails;
+        && request.auth.token.email in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.get('invitedEmails', []);
     }
 
     // ─── Superadmins ──────────────────────────────────────────
@@ -54,8 +57,15 @@ service cloud.firestore {
       allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId) || isPendingInvite(workspaceId);
       allow create: if request.auth != null
         && request.resource.data.keys().hasAny(['name']);
-      allow update: if isSuperAdmin() || request.auth.uid == workspaceId
-        && request.resource.data.keys().hasAny(['name', 'description', 'members', 'invitedEmails', 'ownerId']);
+      // Owner may edit only these fields. Use affectedKeys().hasOnly(...) — NOT keys().hasAny(...) —
+      // because on an update request.resource.data is the full post-update doc, so hasAny would
+      // always pass (name/ownerId always present) and let billing fields like planId/stripeCustomerId
+      // through. Billing fields are written server-side (Admin SDK) only.
+      allow update: if isSuperAdmin() || (
+        request.auth.uid == resource.data.ownerId
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'description', 'members', 'invitedEmails', 'ownerId', 'updatedAt'])
+      );
       allow delete: if false;
 
       // Sync configs under a workspace
@@ -92,7 +102,8 @@ service cloud.firestore {
         && request.resource.data.keys().hasAny(['provider', 'userId'])
         && request.resource.data.userId == request.auth.uid;
       allow update: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.userId == request.auth.uid
+        && resource.data.userId == request.auth.uid;
       allow delete: if request.auth != null
         && get(/databases/$(database)/documents/connected_accounts/$(accountId)).data.userId == request.auth.uid;
     }
@@ -138,7 +149,7 @@ service cloud.firestore {
 
     // ─── Credentials ──────────────────────────────────────────
     match /credentials/{documentId} {
-      allow read: if request.auth != null && request.auth.uid == documentId;
+      allow read: if false;
       allow write: if false;
     }
 
