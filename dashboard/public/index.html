@@ -808,6 +808,7 @@
               <button class="admin-tab" data-target="admin-pane-platforms">Platforms</button>
               <button class="admin-tab" data-target="admin-pane-plans">Plans</button>
               <button class="admin-tab" data-target="admin-pane-workspaces">Workspaces</button>
+              <button class="admin-tab" data-target="admin-pane-sync-health">Sync Health</button>
               <button class="admin-tab" data-target="admin-pane-marketplace">Marketplace</button>
               <button class="admin-tab" data-target="admin-pane-activity">Activity Log</button>
             </div>
@@ -840,6 +841,28 @@
             <div style="text-align:center;margin-top:16px;">
               <button id="admin-ws-load-more" class="btn btn-secondary btn-sm" type="button" style="display:none;">Load more</button>
             </div>
+          </div>
+
+          <!-- Sync Health Pane -->
+          <div class="admin-pane" id="admin-pane-sync-health" style="display:none;">
+            <div class="stats-bar" style="margin-bottom:24px;">
+              <div class="stat-pill"><span class="dot violet"></span><span>Recent Runs: <strong id="admin-sh-total">—</strong></span></div>
+              <div class="stat-pill"><span class="dot green"></span><span>Success: <strong id="admin-sh-success">—</strong></span></div>
+              <div class="stat-pill"><span class="dot red"></span><span>Errors: <strong id="admin-sh-errors">—</strong></span></div>
+              <div class="stat-pill"><span class="dot cyan"></span><span>Success Rate: <strong id="admin-sh-rate">—</strong></span></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
+              <h3 style="margin:0;font-size:1rem;">Recent Executions</h3>
+              <button id="admin-sh-refresh" class="btn btn-secondary btn-sm" type="button">⟳ Refresh</button>
+            </div>
+            <table class="connections-table" id="admin-sh-table">
+              <thead>
+                <tr><th>Config</th><th>Workspace</th><th>Status</th><th>Started</th><th>Results</th><th>Error</th></tr>
+              </thead>
+              <tbody id="admin-sh-tbody">
+                <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
+              </tbody>
+            </table>
           </div>
 
           <!-- Overview Pane -->

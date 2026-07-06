@@ -16,6 +16,7 @@ import { initAdminIntegrations, setAdminAuth } from './js/admin-integrations.js'
 import { initAdminPlatforms } from './js/admin-platforms.js';
 import { initAdminPlans } from './js/admin-plans.js';
 import { initAdminWorkspaces } from './js/admin-workspaces.js';
+import { initAdminSyncHealth } from './js/admin-sync-health.js';
 import { initBilling } from './js/billing.js';
 import { initOnboarding } from './js/onboarding.js';
 import './js/integration-setup.js';
@@ -985,6 +986,7 @@ onAuthStateChanged(auth, async (user) => {
         initAdminPlatforms(db, auth);
         initAdminPlans(db, auth);
         initAdminWorkspaces(auth);
+        initAdminSyncHealth(auth);
         setAdminAuth(auth);
       }
     }
