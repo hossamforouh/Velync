@@ -1327,6 +1327,121 @@ onAuthStateChanged(auth, async (user) => {
         });
       }
 
+      // ─── Delete Workspace ──────────────────────────────────────
+      const deleteWsModal = document.getElementById('delete-ws-modal');
+      const btnDeleteWs = document.getElementById('btn-delete-workspace');
+      const deleteWsConfirm = document.getElementById('delete-ws-confirm');
+      const deleteWsCancel = document.getElementById('delete-ws-cancel');
+      const deleteWsNameInput = document.getElementById('delete-ws-name-input');
+      const deleteWsNameLabel = document.getElementById('delete-ws-name-label');
+      const deleteWsErrorMsg = document.getElementById('delete-ws-error-msg');
+      const deleteWsDone = document.getElementById('delete-ws-done');
+
+      function resetDeleteWsModal() {
+        document.getElementById('delete-ws-step-confirm').style.display = 'block';
+        document.getElementById('delete-ws-step-progress').style.display = 'none';
+        document.getElementById('delete-ws-step-result').style.display = 'none';
+        deleteWsConfirm.disabled = true;
+        deleteWsNameInput.value = '';
+        if (deleteWsErrorMsg) deleteWsErrorMsg.textContent = '';
+        document.getElementById('delete-ws-result-errors').style.display = 'none';
+      }
+
+      function openDeleteWsModal(workspaceName) {
+        resetDeleteWsModal();
+        if (deleteWsNameLabel) {
+          deleteWsNameLabel.textContent = `"${workspaceName}"`;
+        }
+        if (deleteWsModal) deleteWsModal.classList.add('show');
+      }
+
+      function closeDeleteWsModal() {
+        if (deleteWsModal) deleteWsModal.classList.remove('show');
+      }
+
+      if (deleteWsNameInput) {
+        deleteWsNameInput.addEventListener('input', () => {
+          const wsName = document.getElementById('settings-workspace-name')?.value || '';
+          deleteWsConfirm.disabled = deleteWsNameInput.value !== wsName;
+        });
+      }
+
+      if (btnDeleteWs) {
+        btnDeleteWs.addEventListener('click', () => {
+          const wsName = document.getElementById('settings-workspace-name')?.value || '';
+          openDeleteWsModal(wsName);
+        });
+      }
+
+      if (deleteWsConfirm) {
+        deleteWsConfirm.addEventListener('click', async () => {
+          deleteWsConfirm.disabled = true;
+          document.getElementById('delete-ws-step-confirm').style.display = 'none';
+          document.getElementById('delete-ws-step-progress').style.display = 'block';
+          deleteWsErrorMsg.textContent = '';
+          try {
+            const token = await auth.currentUser.getIdToken();
+            const res = await fetch(`/api/workspace/${currentWorkspaceId}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            document.getElementById('delete-ws-step-progress').style.display = 'none';
+            document.getElementById('delete-ws-step-result').style.display = 'block';
+            const icon = document.getElementById('delete-ws-result-icon');
+            const msg = document.getElementById('delete-ws-result-msg');
+            if (data.success) {
+              icon.textContent = '✓';
+              icon.style.color = '#34d399';
+              msg.textContent = 'Workspace and all associated data deleted. Signing out…';
+              showToast('Workspace deleted. Redirecting…', 'info');
+              setTimeout(() => {
+                signOut(auth).then(() => location.reload());
+              }, 2000);
+            } else {
+              icon.textContent = '✗';
+              icon.style.color = '#f43f5e';
+              msg.textContent = data.error || 'Workspace deletion failed.';
+              if (data.errors && data.errors.length) {
+                const errList = document.getElementById('delete-ws-result-errors-list');
+                data.errors.forEach(e => {
+                  const li = document.createElement('li');
+                  li.textContent = e;
+                  errList.appendChild(li);
+                });
+                document.getElementById('delete-ws-result-errors').style.display = 'block';
+              }
+              deleteWsConfirm.disabled = false;
+            }
+          } catch (err) {
+            document.getElementById('delete-ws-step-progress').style.display = 'none';
+            document.getElementById('delete-ws-step-result').style.display = 'block';
+            document.getElementById('delete-ws-result-icon').textContent = '✗';
+            document.getElementById('delete-ws-result-icon').style.color = '#f43f5e';
+            document.getElementById('delete-ws-result-msg').textContent = err.message || 'An unexpected error occurred.';
+            deleteWsConfirm.disabled = false;
+          }
+        });
+      }
+
+      if (deleteWsCancel) {
+        deleteWsCancel.addEventListener('click', closeDeleteWsModal);
+      }
+
+      if (deleteWsDone) {
+        deleteWsDone.addEventListener('click', closeDeleteWsModal);
+      }
+
+      // Close modal on overlay click or escape
+      if (deleteWsModal) {
+        deleteWsModal.addEventListener('click', (e) => {
+          if (e.target === deleteWsModal) closeDeleteWsModal();
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && deleteWsModal.classList.contains('show')) closeDeleteWsModal();
+        });
+      }
+
       // Invite UI logic
       const btnShowInvite = document.getElementById('btn-show-invite-form');
       const inviteForm = document.getElementById('invite-form');
@@ -1512,11 +1627,16 @@ onAuthStateChanged(auth, async (user) => {
            const wsRes = await fetch(`/api/workspace/${currentWorkspaceId}`, {
              headers: { 'Authorization': `Bearer ${token}` }
            });
-           if (!wsRes.ok) throw new Error('Failed to load workspace');
-           const wsData = await wsRes.json();
-           if (!wsData.workspace) return;
-           const tenant = wsData.workspace;
-           let html = '';
+            if (!wsRes.ok) throw new Error('Failed to load workspace');
+            const wsData = await wsRes.json();
+            if (!wsData.workspace) return;
+            const tenant = wsData.workspace;
+            // Show delete section only for the workspace owner
+            const deleteWsSection = document.getElementById('delete-workspace-section');
+            if (deleteWsSection) {
+              deleteWsSection.style.display = tenant.ownerId === auth.currentUser.uid ? 'block' : 'none';
+            }
+            let html = '';
            
            const wsInput = document.getElementById('settings-workspace-name');
            if (wsInput && tenant.name) {
