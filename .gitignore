@@ -6,3 +6,4 @@ npm-debug.log*
 sa-key.json
 archive/
 extensions/firestore-send-email.env
+.firebase/
