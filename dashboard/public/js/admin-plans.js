@@ -4,6 +4,7 @@ import { showToast } from './toast.js';
 let firestoreDb = null;
 let auth = null;
 let allPlans = [];
+let editingPlan = null; // null = create mode, plan object = edit mode
 
 export function initAdminPlans(dbInstance, authInstance) {
   firestoreDb = dbInstance;
@@ -12,8 +13,8 @@ export function initAdminPlans(dbInstance, authInstance) {
   const btnRefresh = document.getElementById('admin-plans-refresh-btn');
   if (btnRefresh) btnRefresh.addEventListener('click', () => loadPlans());
 
-  const addForm = document.getElementById('admin-plans-add-form');
-  if (addForm) addForm.addEventListener('submit', onCreatePlan);
+  const btnNewPlan = document.getElementById('btn-new-plan');
+  if (btnNewPlan) btnNewPlan.addEventListener('click', () => openPlanEditor(null));
 
   loadPlans();
 }
@@ -75,9 +76,13 @@ function renderPlans() {
 }
 
 function openPlanEditor(plan) {
+  editingPlan = plan || null;
   document.getElementById('plan-editor-panel-title').textContent = plan ? 'Edit Plan' : 'Create New Plan';
   document.getElementById('f-plan-id').value = plan ? plan.id : '';
   document.getElementById('f-plan-id').disabled = !!plan;
+  // The field also carries a static `readonly` HTML attribute — .disabled alone
+  // doesn't override it, so create-mode would stay non-editable without this.
+  document.getElementById('f-plan-id').readOnly = !!plan;
   document.getElementById('f-plan-name').value = plan ? plan.name : '';
   document.getElementById('f-plan-desc').value = plan ? (plan.description || '') : '';
   document.getElementById('f-plan-price-monthly').value = plan ? plan.priceMonthly : 0;
@@ -98,6 +103,7 @@ function openPlanEditor(plan) {
 }
 
 function closePlanEditor() {
+  editingPlan = null;
   document.getElementById('view-admin-plan-editor').style.display = 'none';
   document.getElementById('admin-plans-pane').style.display = 'block';
   loadPlans();
@@ -115,8 +121,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function onSavePlan(e) {
   e.preventDefault();
-  const id = document.getElementById('f-plan-id').value.trim();
-  const isNew = !id;
+  // Driven by which plan openPlanEditor() was opened with — NOT by whether the
+  // ID field happens to be empty. In create mode the ID field is now editable,
+  // so an admin typing an ID would otherwise flip this the wrong way.
+  const isNew = !editingPlan;
+  const id = isNew ? document.getElementById('f-plan-id').value.trim() : editingPlan.id;
+
+  if (isNew && !id) {
+    showToast('Plan ID is required', 'error');
+    return;
+  }
 
   const data = {
     name: document.getElementById('f-plan-name').value.trim(),
@@ -139,18 +153,24 @@ async function onSavePlan(e) {
   btnSave.textContent = 'Saving...';
 
   try {
+    const token = await auth.currentUser.getIdToken();
+    let res;
     if (isNew) {
-      await fetch(`/api/admin/plans`, {
+      res = await fetch(`/api/admin/plans`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await auth.currentUser.getIdToken()}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ id, ...data }),
       });
     } else {
-      await fetch(`/api/admin/plans/${id}`, {
+      res = await fetch(`/api/admin/plans/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await auth.currentUser.getIdToken()}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(data),
       });
+    }
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `Failed to save plan (${res.status})`);
     }
     showToast(`Plan ${isNew ? 'created' : 'updated'}`, 'success');
     closePlanEditor();
@@ -159,30 +179,6 @@ async function onSavePlan(e) {
   } finally {
     btnSave.disabled = false;
     btnSave.textContent = 'Save';
-  }
-}
-
-async function onCreatePlan(e) {
-  e.preventDefault();
-  const input = document.getElementById('f-admin-new-plan-id');
-  const id = input.value.trim();
-  if (!id) return;
-  try {
-    const token = await auth.currentUser.getIdToken();
-    const res = await fetch(`/api/admin/plans`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ id, name: id.charAt(0).toUpperCase() + id.slice(1) }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to create plan');
-    }
-    showToast(`Plan "${id}" created — edit it to configure limits`, 'success');
-    input.value = '';
-    loadPlans();
-  } catch (err) {
-    showToast(err.message, 'error');
   }
 }
 
