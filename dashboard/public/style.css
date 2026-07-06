@@ -4064,13 +4064,52 @@ header.legacy-header {
 }
 
 .dropdown-header {
-  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 12px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
 }
 
+.dropdown-avatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.dropdown-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.dropdown-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.dropdown-name:empty {
+  display: none;
+}
+
 .dropdown-email {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;

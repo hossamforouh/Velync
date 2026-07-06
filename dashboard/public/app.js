@@ -907,6 +907,8 @@ onAuthStateChanged(auth, async (user) => {
     const initials = user.email ? user.email.substring(0, 2).toUpperCase() : 'U';
     const userAvatar = document.getElementById('user-avatar');
     if (userAvatar) userAvatar.textContent = initials;
+    const dropAvatar = document.getElementById('dropdown-avatar');
+    if (dropAvatar) dropAvatar.textContent = initials;
     const dropEmail = document.getElementById('dropdown-user-email');
     if (dropEmail) dropEmail.textContent = user.email;
     const settingsEmail = document.getElementById('settings-email');
@@ -2009,6 +2011,8 @@ onAuthStateChanged(auth, async (user) => {
     // Clear all user-specific DOM to prevent stale data flash on next login
     const userAvatar = document.getElementById('user-avatar');
     if (userAvatar) userAvatar.textContent = '';
+    const dropAvatarClear = document.getElementById('dropdown-avatar');
+    if (dropAvatarClear) dropAvatarClear.textContent = '';
     const wsNameInput = document.getElementById('settings-workspace-name');
     if (wsNameInput) wsNameInput.value = '';
     const sidebarName = document.getElementById('sidebar-workspace-name');
