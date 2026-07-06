@@ -12,7 +12,7 @@ export function initOnboarding(db, auth, onComplete) {
   currentStep = 1;
   onboardState = { p1: null, p2: null, connection1: null, connection2: null };
   document.getElementById('table-body').innerHTML = renderWizard();
-  bindStep(1, db, auth, onComplete);
+  bindStep1(db, auth, onComplete);
 }
 
 function cleanup() {
