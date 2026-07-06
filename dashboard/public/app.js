@@ -1230,7 +1230,7 @@ onAuthStateChanged(auth, async (user) => {
             confirmPwInput.value = '';
           } catch (err) {
             if (pwMsg) {
-              if (err.code === 'auth/wrong-password') {
+              if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
                 pwMsg.textContent = 'Current password is incorrect.';
               } else if (err.code === 'auth/weak-password' || err.code === 'auth/password-does-not-meet-requirements') {
                 pwMsg.textContent = 'Password must be at least 8 characters and include a lowercase letter, an uppercase letter, a number, and a special character.';
