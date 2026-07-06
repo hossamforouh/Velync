@@ -31,6 +31,11 @@ const ALLOWED_ORIGINS = [
 function createApp() {
   const app = express();
 
+  // Cloud Run terminates TLS and forwards via a proxy (X-Forwarded-For). Trust it
+  // so express-rate-limit can identify clients by real IP (otherwise it throws a
+  // validation error and can't rate-limit correctly).
+  app.set('trust proxy', true);
+
   // Security headers
   app.use(helmet({
     contentSecurityPolicy: false,
@@ -95,6 +100,7 @@ function createApp() {
       await db.collection('app_settings').doc('general').get();
       res.json({ status: 'ok', uptime: process.uptime() });
     } catch (dbErr) {
+      logger.error('health', 'DB probe failed', { error: dbErr.message });
       res.status(503).json({ status: 'error', error: 'database unreachable' });
     }
   });
