@@ -40,15 +40,17 @@ router.get('/global', async (req, res) => {
 router.put('/global', verifyAuth, [
   body('whatsappNumber').optional().isString().trim(),
   body('maintenanceMode').optional().isBoolean(),
+  body('maintenanceMessage').optional().isString().trim().isLength({ max: 500 }),
 ], validate, async (req, res) => {
   try {
     if (!req.user || !(await isSuperAdmin(req.user.uid))) {
       return res.status(403).json({ error: 'Forbidden: superadmin only' });
     }
-    const { whatsappNumber, maintenanceMode } = req.body;
+    const { whatsappNumber, maintenanceMode, maintenanceMessage } = req.body;
     const updateData = {};
     if (whatsappNumber !== undefined) updateData.whatsappNumber = whatsappNumber;
     if (maintenanceMode !== undefined) updateData.maintenanceMode = !!maintenanceMode;
+    if (maintenanceMessage !== undefined) updateData.maintenanceMessage = maintenanceMessage;
     updateData.updatedAt = new Date().toISOString();
 
     await db.collection('app_settings').doc('general').set(updateData, { merge: true });

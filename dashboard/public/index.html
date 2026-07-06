@@ -980,28 +980,43 @@
           <!-- Global Settings Pane -->
           <div class="admin-pane" id="admin-pane-global" style="display: none;">
             <div class="surface-card">
-              <h2 style="margin-bottom: 16px;">Global Settings</h2>
-              <div class="form-group" style="margin-bottom: 16px;">
+              <h2 style="margin-bottom: 4px;">Global Settings</h2>
+              <p style="color:var(--text-3);font-size:0.85rem;margin:0 0 20px;">
+                Platform-wide settings that apply to every workspace. Per-workspace limits
+                (active configs, sync interval, log retention) are configured per plan in the
+                <strong>Plans</strong> tab, not here.
+              </p>
+
+              <h3 class="settings-section-title">Support</h3>
+              <div class="form-group" style="margin-bottom: 20px;">
                 <label for="admin-whatsapp-number">WhatsApp Support Number (include country code)</label>
                 <input type="text" id="admin-whatsapp-number" class="admin-input" placeholder="201018988989" />
+                <p class="field-hint">Powers the WhatsApp support button shown to signed-in users.</p>
               </div>
+
+              <h3 class="settings-section-title">Maintenance</h3>
               <div class="form-group" style="margin-bottom: 16px;">
-                <label class="toggle" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                  <input type="checkbox" id="admin-maintenance-mode" />
-                  <span class="toggle-track"></span>
-                  <span class="toggle-thumb"></span>
-                  <span style="margin-left:4px;">Maintenance Mode</span>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                  <span class="toggle">
+                    <input type="checkbox" id="admin-maintenance-mode" />
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </span>
+                  <span>Maintenance Mode</span>
                 </label>
-                <p style="color:var(--text-3);font-size:0.82rem;margin:4px 0 0 28px;">When enabled, non-admin users will see a maintenance notice.</p>
+                <p class="field-hint" style="margin-left:54px;">
+                  When enabled, all non-admin API requests are blocked (503) — superadmins can
+                  still use the app to turn this back off.
+                </p>
               </div>
               <div class="form-group" style="margin-bottom: 16px;">
-                <label for="admin-max-configs">Max Sync Configs per User</label>
-                <input type="number" id="admin-max-configs" class="admin-input" value="50" min="1" max="1000" style="width:120px;" />
+                <label for="admin-maintenance-message">Maintenance Message</label>
+                <textarea id="admin-maintenance-message" class="admin-input" rows="2" maxlength="500"
+                  style="max-width:480px;resize:vertical;font-family:inherit;"
+                  placeholder="We're performing scheduled maintenance and will be back shortly."></textarea>
+                <p class="field-hint">Shown to blocked users while maintenance mode is on.</p>
               </div>
-              <div class="form-group" style="margin-bottom: 16px;">
-                <label for="admin-default-sync-interval">Default Sync Interval (minutes)</label>
-                <input type="number" id="admin-default-sync-interval" class="admin-input" value="15" min="1" max="1440" style="width:120px;" />
-              </div>
+
               <div id="admin-global-save-msg" style="color:var(--success);font-size:0.85rem;margin-bottom:12px;display:none;"></div>
               <button id="btn-save-global-settings" class="btn btn-primary"
                 style="padding: 8px 16px; font-size: 14px;">Save</button>

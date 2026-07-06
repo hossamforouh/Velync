@@ -667,10 +667,8 @@ const db = getFirestore(app);
       }
       const maintCheck = document.getElementById('admin-maintenance-mode');
       if (maintCheck && data.maintenanceMode) maintCheck.checked = data.maintenanceMode;
-      const maxCfg = document.getElementById('admin-max-configs');
-      if (maxCfg && data.maxConfigsPerUser) maxCfg.value = data.maxConfigsPerUser;
-      const defInterval = document.getElementById('admin-default-sync-interval');
-      if (defInterval && data.defaultSyncIntervalMinutes) defInterval.value = data.defaultSyncIntervalMinutes;
+      const maintMsg = document.getElementById('admin-maintenance-message');
+      if (maintMsg && data.maintenanceMessage) maintMsg.value = data.maintenanceMessage;
     }
   } catch (err) {
     console.error("Error fetching global settings:", err);
@@ -999,9 +997,8 @@ onAuthStateChanged(auth, async (user) => {
       btnSaveGlobalSettings.addEventListener('click', async () => {
         const num = document.getElementById('admin-whatsapp-number').value.trim();
         const maintenanceMode = document.getElementById('admin-maintenance-mode')?.checked || false;
-        const maxConfigs = parseInt(document.getElementById('admin-max-configs')?.value, 10) || 50;
-        const defaultInterval = parseInt(document.getElementById('admin-default-sync-interval')?.value, 10) || 15;
-        
+        const maintenanceMessage = document.getElementById('admin-maintenance-message')?.value.trim() || '';
+
         setButtonLoading(btnSaveGlobalSettings, true);
         try {
           const token = await auth.currentUser.getIdToken();
@@ -1011,11 +1008,13 @@ onAuthStateChanged(auth, async (user) => {
             body: JSON.stringify({
               whatsappNumber: num,
               maintenanceMode,
-              maxConfigsPerUser: maxConfigs,
-              defaultSyncIntervalMinutes: defaultInterval
+              maintenanceMessage
             })
           });
-          if (!res.ok) throw new Error(await res.text());
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.error || `Failed to save settings (${res.status})`);
+          }
           const waLink = document.getElementById('whatsapp-fab-link');
           if (waLink) waLink.href = `https://wa.me/${num}`;
           const msg = document.getElementById('admin-global-save-msg');

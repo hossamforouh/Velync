@@ -1674,6 +1674,27 @@ header.legacy-header {
   border-color: var(--violet);
 }
 
+.settings-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin: 24px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section-title:first-of-type {
+  margin-top: 0;
+}
+
+.field-hint {
+  color: var(--text-3);
+  font-size: 0.82rem;
+  margin: 4px 0 0;
+}
+
 /* ── Add Connection Dialog ──────────────────────────────────── */
 .conn-dialog-overlay {
   position: fixed;
