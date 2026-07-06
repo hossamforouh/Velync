@@ -99,13 +99,16 @@ function openPlanEditor(plan) {
 
   const editor = document.getElementById('view-admin-plan-editor');
   if (editor) editor.style.display = 'block';
-  document.getElementById('admin-plans-pane').style.display = 'none';
+  const plansPane = document.getElementById('admin-pane-plans');
+  if (plansPane) plansPane.style.display = 'none';
 }
 
 function closePlanEditor() {
   editingPlan = null;
-  document.getElementById('view-admin-plan-editor').style.display = 'none';
-  document.getElementById('admin-plans-pane').style.display = 'block';
+  const editor = document.getElementById('view-admin-plan-editor');
+  if (editor) editor.style.display = 'none';
+  const plansPane = document.getElementById('admin-pane-plans');
+  if (plansPane) plansPane.style.display = 'block';
   loadPlans();
 }
 
