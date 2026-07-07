@@ -267,7 +267,7 @@
   <div class="container">
     <div class="hero">
       <h1>Privacy Policy</h1>
-      <p class="effective-date">Last updated: June 24, 2026</p>
+      <p class="effective-date">Last updated: July 7, 2026</p>
     </div>
 
     <!-- Sticky Table of Contents -->
@@ -301,7 +301,9 @@
         <h3>OAuth Credentials</h3>
         <p>When you connect a third-party platform (e.g., Google Contacts, TickTick, Notion), we store encrypted OAuth tokens to maintain the connection. These tokens are stored securely in Firestore and are used solely to facilitate the integrations you configure.</p>
         <h3>Usage Data</h3>
-        <p>We collect anonymous usage statistics such as sync frequency, error rates, and feature usage to improve the platform. This data does not contain personal information.</p>
+        <p>We use Google Analytics to collect usage statistics such as page views, sign-up and login events, sync frequency, and feature usage, to help us understand and improve the platform. Google Analytics assigns your browser a unique identifier via cookies — see Section 8 (Cookies) for details.</p>
+        <h3>AI-Assisted Features</h3>
+        <p>When you use our field-mapping suggestion feature, the structure of your source and destination fields (such as field names and types) is sent to Google's Gemini model, via Google Cloud Vertex AI, to generate mapping suggestions. We only send the field schema information needed to suggest a mapping — we do not knowingly send the full content of your records to the AI model.</p>
       </section>
 
       <section id="use">
@@ -310,7 +312,8 @@
         <ul>
           <li>Operate, maintain, and improve the Velync platform</li>
           <li>Execute the sync configurations you create between your connected platforms</li>
-          <li>Send service-related communications (e.g., sync failure alerts, policy updates)</li>
+          <li>Provide AI-assisted field-mapping suggestions using Google's Gemini model (via Vertex AI)</li>
+          <li>Send service-related communications (e.g., sync failure alerts, policy updates), delivered via our backend infrastructure on Google Cloud</li>
           <li>Provide customer support and troubleshoot issues</li>
           <li>Prevent abuse, fraud, or unauthorized access</li>
         </ul>
@@ -322,7 +325,15 @@
         <p>We do not sell your personal information. We share your data only in the following circumstances:</p>
         <ul>
           <li><strong>With your consent</strong> — When you authorize a sync between platforms, data flows directly between those platforms according to your configuration.</li>
-          <li><strong>Service providers</strong> — We use Firebase (Google Cloud Platform) as our infrastructure provider. They process data in accordance with their DPA and are GDPR-compliant.</li>
+          <li><strong>Service providers</strong> — We rely on the following providers to operate Velync, each processing data only as needed to provide their service:
+            <ul>
+              <li><strong>Firebase / Google Cloud Platform</strong> — hosting, database, and authentication infrastructure.</li>
+              <li><strong>Stripe</strong> — payment processing for paid subscriptions. Stripe receives your payment details directly; we never see or store your full card number.</li>
+              <li><strong>Google Vertex AI (Gemini)</strong> — AI-assisted field-mapping suggestions (see Section 1).</li>
+              <li><strong>Google reCAPTCHA / Firebase App Check</strong> — bot and abuse prevention.</li>
+              <li><strong>Google Analytics</strong> — usage analytics (see Section 1 and Section 8).</li>
+            </ul>
+          </li>
           <li><strong>Legal requirements</strong> — If required by law, court order, or governmental regulation.</li>
         </ul>
       </section>
@@ -333,10 +344,10 @@
         <ul>
           <li><strong>Account data</strong> — Retained until you delete your account.</li>
           <li><strong>Sync configurations</strong> — Retained until deleted by you or when your account is deleted.</li>
-          <li><strong>Execution logs</strong> — Retained for 90 days for debugging and monitoring purposes.</li>
+          <li><strong>Execution logs</strong> — Retained according to your plan's log-retention setting (7 days by default on the Free plan; longer on paid plans), for debugging and monitoring purposes.</li>
           <li><strong>OAuth tokens</strong> — Retained until you revoke the connection or delete your account.</li>
         </ul>
-        <p>You can delete your account and all associated data at any time. Contact us and we will process the deletion within 30 days.</p>
+        <p>You can delete your workspace or your entire account at any time from within the app (Settings → Account → Delete My Account, or Workspace Settings → Delete Workspace). Deletion is immediate and self-service — it cascades to your sync configurations, field mappings, connected accounts, stored credentials, and execution logs. You do not need to contact us to do this, though you're welcome to if you have questions.</p>
       </section>
 
       <section id="security">
@@ -344,7 +355,7 @@
         <p>We implement industry-standard security measures to protect your data:</p>
         <ul>
           <li>All data transmitted via TLS 1.3 encryption</li>
-          <li>OAuth tokens encrypted at rest in Firestore</li>
+          <li>OAuth tokens and credentials are encrypted at rest and stored in a database collection with security rules that deny all direct client-side read or write access — they are only ever accessible through our own server-side infrastructure</li>
           <li>Authentication handled by Firebase Auth (Google Cloud)</li>
           <li>Regular security audits and dependency updates</li>
           <li>Minimal data access principle — we only access data required to perform the sync</li>
@@ -353,13 +364,15 @@
 
       <section id="third">
         <h2>6. Third-Party Services</h2>
-        <p>Velync integrates with third-party platforms you explicitly authorize. Each third party has its own privacy policy governing how they handle your data:</p>
+        <p>Velync integrates with third-party platforms you explicitly authorize, and relies on other third parties to operate the service itself. Each has its own privacy policy governing how they handle data:</p>
         <ul>
-          <li><strong>Google</strong> — <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a></li>
-          <li><strong>TickTick</strong> — <a href="https://ticktick.com/about/privacy" target="_blank">TickTick Privacy Policy</a></li>
-          <li><strong>Notion</strong> — <a href="https://www.notion.so/privacy" target="_blank">Notion Privacy Policy</a></li>
+          <li><strong>Google</strong> — covers Google Cloud Platform / Firebase (hosting, database, authentication), Google Analytics (usage analytics), Google reCAPTCHA / Firebase App Check (bot prevention), and Google Vertex AI / Gemini (AI-assisted field-mapping suggestions) — <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a></li>
+          <li><strong>Stripe</strong> — payment processing for paid subscriptions — <a href="https://stripe.com/privacy" target="_blank">Stripe Privacy Policy</a></li>
+          <li><strong>TickTick</strong> — connected as an integration platform you authorize — <a href="https://ticktick.com/about/privacy" target="_blank">TickTick Privacy Policy</a></li>
+          <li><strong>Notion</strong> — connected as an integration platform you authorize — <a href="https://www.notion.so/privacy" target="_blank">Notion Privacy Policy</a></li>
+          <li><strong>WhatsApp (Meta)</strong> — if you use the in-app WhatsApp support button, your conversation takes place on WhatsApp, governed by Meta's policies — <a href="https://www.whatsapp.com/legal/privacy-policy" target="_blank">WhatsApp Privacy Policy</a></li>
         </ul>
-        <p>We are not responsible for the privacy practices of these third-party services. You should review their policies before connecting them to Velync.</p>
+        <p>We are not responsible for the privacy practices of these third-party services. You should review their policies, particularly for platforms you choose to connect to Velync (TickTick, Notion, and any others).</p>
       </section>
 
       <section id="rights">
@@ -377,7 +390,13 @@
 
       <section id="cookies">
         <h2>8. Cookies</h2>
-        <p>Velync uses minimal cookies essential for authentication and platform functionality. We do not use tracking cookies, analytics cookies, or third-party advertising cookies. Firebase Authentication uses session cookies to maintain your login state.</p>
+        <p>Velync uses cookies and similar technologies for the following purposes:</p>
+        <ul>
+          <li><strong>Authentication</strong> — Firebase Authentication uses session cookies to maintain your login state.</li>
+          <li><strong>Analytics</strong> — We use Google Analytics, which sets cookies (such as <code>_ga</code>) to help us understand how the platform is used. This is covered in more detail in Section 1.</li>
+          <li><strong>Security</strong> — Google reCAPTCHA / Firebase App Check may set cookies as part of verifying that requests come from a real browser rather than a bot.</li>
+        </ul>
+        <p>We do not use third-party advertising cookies, and we do not sell or share cookie data for advertising purposes.</p>
       </section>
 
       <section id="changes">
