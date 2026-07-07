@@ -2866,6 +2866,9 @@ async function loadConfigs(silent = false) {
 
 
 // ─── Toggle active/paused ─────────────────────────────────────
+// Goes through the backend (not a direct client write) so activating a
+// config actually re-runs plan enforcement (max active configs, connector
+// tiers, min sync interval) instead of silently bypassing it.
 async function toggleConfig(id, checkbox) {
   const prev = checkbox.checked;
   checkbox.disabled = true;
@@ -2873,12 +2876,8 @@ async function toggleConfig(id, checkbox) {
     const cfg = configs.find(c => c.id === id);
     const wasActive = cfg ? configIsActive(cfg) : false;
     const newStatus = wasActive ? 'paused' : 'active';
-    const docRef = doc(db, 'workspaces', currentWorkspaceId, 'sync_configs', id);
-    await updateDoc(docRef, {
-      status: newStatus,
-      updatedAt: new Date().toISOString()
-    });
-    
+    await updateConfigViaApi(id, { status: newStatus });
+
     if (cfg) cfg.status = newStatus;
     renderCards();
     showToast(`Config ${newStatus === 'active' ? 'activated' : 'paused'}`, newStatus === 'active' ? 'success' : 'info');
@@ -3257,7 +3256,17 @@ function addMappingRow(sourceField = '', destField = '', confidence = null, reas
     
     <select class="map-dest" style="flex: 1; padding: 10px 12px; border-radius: 8px; background: transparent; color: var(--text-1); border: 1px solid transparent; font-size: 0.9rem; font-weight: 500; outline: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';" onmouseout="this.style.background='transparent'; this.style.borderColor='transparent';">${dOptions}</select>
     
-    ${confidence !== null ? `<div class="mapping-reasoning-badge" style="background: rgba(129, 140, 248, 0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;" title="${reasoning.replace(/"/g, '&quot;')}">${Math.round(confidence * 100)}%</div>` : ''}
+    ${confidence !== null ? (() => {
+      // Color-code by confidence so a weak AI suggestion is visually
+      // distinct, not just a percentage a user has to read carefully.
+      const pct = Math.round(confidence * 100);
+      const isLow = confidence < 0.5;
+      const isMedium = confidence >= 0.5 && confidence < 0.8;
+      const bg = isLow ? 'rgba(251,113,133,0.15)' : isMedium ? 'rgba(245,158,11,0.15)' : 'rgba(129,140,248,0.15)';
+      const color = isLow ? 'var(--rose)' : isMedium ? '#f59e0b' : 'var(--primary)';
+      const label = isLow ? `⚠ ${pct}% — please verify` : `${pct}%`;
+      return `<div class="mapping-reasoning-badge" style="background: ${bg}; color: ${color}; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;" title="${reasoning.replace(/"/g, '&quot;')}">${label}</div>`;
+    })() : ''}
     
     <button type="button" class="btn-remove-mapping" style="background: rgba(251, 113, 133, 0.1); border: 1px solid transparent; color: var(--rose); cursor: pointer; padding: 6px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(251, 113, 133, 0.2)'" onmouseout="this.style.background='rgba(251, 113, 133, 0.1)'">
       ${feather.icons['x'].toSvg({width: 16, height: 16})}
@@ -3505,10 +3514,24 @@ async function loadDefaultMappingsPreset() {
       window._lastMappedDestId = destConnId;
       window._lastMappedSourceContext = sourceContextStr;
       window._lastMappedDestContext = destContextStr;
+      let applied = 0, lowConfidence = 0;
       data.suggestions.forEach(s => {
-        if (s.destField) addMappingRow(s.sourceField, s.destField, s.confidence, s.reasoning);
+        if (s.destField) {
+          addMappingRow(s.sourceField, s.destField, s.confidence, s.reasoning);
+          applied++;
+          if (typeof s.confidence === 'number' && s.confidence < 0.5) lowConfidence++;
+        }
       });
       window.markConfigDirty();
+      // These are suggestions, not a final config — nothing is saved until
+      // Save/Submit is clicked, so surface a clear prompt to actually look
+      // at them rather than assuming they're all correct.
+      showToast(
+        lowConfidence > 0
+          ? `${applied} field mapping(s) suggested — ${lowConfidence} marked low-confidence. Please review before saving.`
+          : `${applied} field mapping(s) suggested. Please review before saving.`,
+        lowConfidence > 0 ? 'warning' : 'info'
+      );
       return;
     }
 
@@ -3890,6 +3913,25 @@ async function saveConfig(e, isSubmit = false) {
     return;
   }
 
+  // Warn (don't block) if another config already syncs this exact same
+  // connection pair — easy to end up with confusing/conflicting duplicates.
+  const duplicateConfig = configs.find(c =>
+    c.id !== editingId &&
+    c.platform1ConnectionId === payload.platform1ConnectionId &&
+    c.platform2ConnectionId === payload.platform2ConnectionId
+  );
+  if (duplicateConfig) {
+    const proceedAnyway = await confirmDialog({
+      title: 'Similar sync already exists',
+      message: `"${duplicateConfig.description || duplicateConfig.id}" already syncs this exact same pair of connections. Creating another one can cause duplicate or conflicting syncs. Continue anyway?`,
+      confirmText: 'Create Anyway',
+    });
+    if (!proceedAnyway) {
+      isSavingConfig = false;
+      return;
+    }
+  }
+
   // Validate duplicate destination fields
   const mappedDestFields = new Set();
   for (const m of payload.fieldMappings) {
@@ -4100,6 +4142,42 @@ async function deleteConfigViaApi(configId) {
   return res.json();
 }
 
+// Restore a just-deleted config through the server (used by the "Undo" toast
+// action) — keeps the same enforced-fields guarantee as create/update instead
+// of writing the client SDK directly back into sync_configs.
+async function restoreConfigViaApi(configId, data) {
+  const token = await auth.currentUser.getIdToken();
+  const API_BASE = window.VELYNC_CONFIG.apiBase;
+  const res = await fetch(`${API_BASE}/api/sync-configs/${encodeURIComponent(configId)}/restore`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Restore failed (${res.status})`);
+  }
+  return res.json();
+}
+
+// Update a config's status (active/paused) through the server, so plan
+// enforcement (max active configs, connector tiers, min sync interval)
+// actually runs — a direct client-side write here would bypass it entirely.
+async function updateConfigViaApi(configId, data) {
+  const token = await auth.currentUser.getIdToken();
+  const API_BASE = window.VELYNC_CONFIG.apiBase;
+  const res = await fetch(`${API_BASE}/api/sync-configs/${encodeURIComponent(configId)}`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Update failed (${res.status})`);
+  }
+  return res.json();
+}
+
 async function deleteConfig() {
   if (!pendingDeleteId) return;
   modalConfirm.disabled = true;
@@ -4114,7 +4192,7 @@ async function deleteConfig() {
       onAction: async () => {
         if (deletedCfg) {
           const { id, ...data } = deletedCfg;
-          await setDoc(doc(db, "workspaces", currentWorkspaceId, "sync_configs", id), data);
+          await restoreConfigViaApi(id, data);
           await loadConfigs(true);
           showToast('Config restored', 'success');
         }
@@ -4480,7 +4558,7 @@ if (msbDelete) {
             actionLabel: 'Undo',
             onAction: async () => {
               const { id: did, ...data } = deletedCfg;
-              await setDoc(doc(db, "workspaces", currentWorkspaceId, "sync_configs", did), data);
+              await restoreConfigViaApi(did, data);
               await loadConfigs(true);
               showToast('Config restored', 'success');
             }

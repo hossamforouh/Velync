@@ -6,7 +6,7 @@ const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
 const { getConnector } = require('../../domains/connector/registry');
 const { suggestMappings } = require('../../domains/sync/mapping-suggester');
-const { getPlan, enforcePlanLimits } = require('../../core/plan');
+const { getPlan, enforcePlanLimits, enforceTotalConfigCap } = require('../../core/plan');
 const { deleteSyncConfig } = require('../../domains/sync/config-deletion');
 const { runSync } = require('../../domains/sync/engine');
 const db = require('../../core/db');
@@ -135,7 +135,7 @@ router.post('/sync-configs', verifyAuth, [
   body('platform2').isString().trim().notEmpty(),
   body('platform1ConnectionId').isString().trim().notEmpty(),
   body('platform2ConnectionId').isString().trim().notEmpty(),
-  body('status').optional().isIn(['draft', 'active']),
+  body('status').optional().isIn(['draft', 'active', 'paused']),
   body('cronSchedule').optional().isString(),
   body('fieldMappings').optional().isArray(),
   body('p1Settings').optional().isObject(),
@@ -154,6 +154,7 @@ router.post('/sync-configs', verifyAuth, [
 
     // Plan enforcement (throws on violation)
     try {
+      await enforceTotalConfigCap(ctx.workspaceId);
       await enforcePlanLimits(ctx.workspaceId, ctx.plan, {
         status,
         platform1: req.body.platform1,
@@ -198,7 +199,7 @@ router.put('/sync-configs/:configId', verifyAuth, [
   body('platform2').optional().isString().trim(),
   body('platform1ConnectionId').optional().isString().trim(),
   body('platform2ConnectionId').optional().isString().trim(),
-  body('status').optional().isIn(['draft', 'active']),
+  body('status').optional().isIn(['draft', 'active', 'paused']),
   body('cronSchedule').optional().isString(),
   body('fieldMappings').optional().isArray(),
   body('p1Settings').optional().isObject(),
@@ -252,6 +253,9 @@ router.put('/sync-configs/:configId', verifyAuth, [
       }
     }
 
+    // Re-pin fields the client must never be able to override, same as POST.
+    merged.workspaceId = ctx.workspaceId;
+    merged.ownerId = existingData.ownerId;
     merged.updatedAt = new Date().toISOString();
     await configRef.set(merged, { merge: true });
 
@@ -286,6 +290,40 @@ router.delete('/sync-configs/:configId', verifyAuth, async (req, res) => {
     return res.json({ success: true, id: configId, ...result });
   } catch (err) {
     logger.error('sync-configs', 'Failed to delete config', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Restore a just-deleted config (used by the frontend's "Undo" toast action).
+// Body is the full previously-deleted document, as returned to the client at
+// delete time. workspaceId/ownerId are re-pinned server-side regardless of
+// what the client sends, same as create/update.
+router.post('/sync-configs/:configId/restore', verifyAuth, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { configId } = req.params;
+
+    const ctx = await resolveWorkspacePlan(uid);
+    if (ctx.error) return res.status(404).json({ error: ctx.error });
+
+    const configRef = db.collection('workspaces').doc(ctx.workspaceId)
+      .collection('sync_configs').doc(configId);
+    const existing = await configRef.get();
+    if (existing.exists) {
+      return res.status(409).json({ error: 'A config with this ID already exists.' });
+    }
+
+    const data = { ...req.body };
+    delete data.id;
+    data.workspaceId = ctx.workspaceId;
+    data.ownerId = data.ownerId || uid;
+    data.updatedAt = new Date().toISOString();
+
+    await configRef.set(data);
+    logger.info('sync-configs', `Config restored "${configId}" in workspace "${ctx.workspaceId}"`);
+    return res.json({ success: true, id: configId });
+  } catch (err) {
+    logger.error('sync-configs', 'Failed to restore config', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });

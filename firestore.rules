@@ -86,13 +86,13 @@ service cloud.firestore {
       // Sync configs under a workspace
       match /sync_configs/{configId} {
         allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId);
-        allow create: if isWorkspaceMember(workspaceId)
-          && request.resource.data.keys().hasAny(['description', 'platform1', 'platform2']);
-        allow update: if isWorkspaceMember(workspaceId);
-        // Server-only: deletion must go through DELETE /api/sync-configs/:id, which
-        // cascades to the sync_mappings subcollection. A client-side delete would
-        // orphan those mappings (Firestore does not cascade subcollection deletes).
-        allow delete: if false;
+        // Server-only: create/update/delete must go through
+        // POST/PUT/DELETE /api/sync-configs — that's the only place
+        // enforcePlanLimits() (max active configs, connector tiers, min sync
+        // interval) actually runs. A direct client write here would bypass
+        // all of it, and a client-side delete would also orphan the
+        // sync_mappings subcollection (Firestore doesn't cascade deletes).
+        allow write: if false;
 
         // Sync mappings subcollection
         match /sync_mappings/{mappingId} {

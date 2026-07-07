@@ -1,8 +1,33 @@
+const { CronExpressionParser } = require('cron-parser');
 const db = require('./db');
 const logger = require('./logger');
 
 const planCache = { data: new Map(), time: 0 };
 const PLAN_CACHE_TTL = 120_000;
+
+// Flat cap on total sync_configs per workspace (draft + active + paused).
+// enforcePlanLimits()'s maxActiveConfigs check only looks at active configs,
+// so without this an unlimited number of drafts could still be created,
+// growing the DB unboundedly. This is deliberately generous — it's a growth
+// guard, not a monetization lever, so it isn't part of the per-plan schema.
+const TOTAL_CONFIG_CAP = 200;
+
+/**
+ * Reject creating a new sync config once a workspace holds TOTAL_CONFIG_CAP
+ * configs of any status. Only meant to be called on create (POST), not
+ * update (PUT) — updating an existing config doesn't add to the total.
+ * @param {string} workspaceId
+ * @returns {Promise<void>}
+ */
+async function enforceTotalConfigCap(workspaceId) {
+  const totalSnap = await db.collection('workspaces').doc(workspaceId)
+    .collection('sync_configs').count().get();
+  if (totalSnap.data().count >= TOTAL_CONFIG_CAP) {
+    throw new Error(
+      `This workspace has reached the maximum of ${TOTAL_CONFIG_CAP} sync configs (including drafts). Delete unused configs to add more.`
+    );
+  }
+}
 
 /**
  * Fetch a plan document with a short-lived in-memory cache.
@@ -112,10 +137,16 @@ async function enforcePlanLimits(workspaceId, plan, context, options = {}) {
     }
   }
 
-  // 3. Min sync interval
+  // 3. Min sync interval — fail closed: anything we can't confidently parse
+  // is rejected rather than silently let through (a raw cron string like
+  // "* * * * *" must not bypass this check just because it doesn't match a
+  // hand-rolled regex pattern).
   if (plan.minSyncIntervalMinutes && context.cronSchedule) {
     const intervalMinutes = cronToMinutes(context.cronSchedule);
-    if (intervalMinutes !== null && intervalMinutes < plan.minSyncIntervalMinutes) {
+    if (intervalMinutes === null) {
+      throw new Error(`"${context.cronSchedule}" is not a valid cron schedule.`);
+    }
+    if (intervalMinutes < plan.minSyncIntervalMinutes) {
       throw new Error(
         `Your ${planName} plan requires a minimum sync interval of ${plan.minSyncIntervalMinutes} minutes. "${context.cronSchedule}" runs every ${intervalMinutes} minute(s).`
       );
@@ -124,19 +155,29 @@ async function enforcePlanLimits(workspaceId, plan, context, options = {}) {
 }
 
 /**
- * Convert a cron expression to its approximate interval in minutes.
- * Handles star-slash-N minute patterns and "0 star-slash-N" hour patterns.
- * Returns null for complex/unrecognised schedules (enforcement skipped).
+ * Compute a cron expression's minimum interval in minutes by sampling its
+ * next several fire times and taking the smallest gap — handles any valid
+ * cron syntax (not just star-slash-N shorthand), so it can't be bypassed by
+ * writing an equivalent schedule the old regex-based check didn't recognize.
+ * Returns null only for genuinely invalid cron syntax.
  */
 function cronToMinutes(cronExpr) {
   if (!cronExpr || typeof cronExpr !== 'string') return null;
-  const parts = cronExpr.trim().split(/\s+/);
-  if (parts.length !== 5) return null;
-  const minuteMatch = parts[0].match(/^\*\/(\d+)$/);
-  if (minuteMatch) return parseInt(minuteMatch[1], 10);
-  const hourMatch = parts[1].match(/^\*\/(\d+)$/);
-  if (hourMatch && (parts[0] === '0' || parts[0] === '0,30')) return parseInt(hourMatch[1], 10) * 60;
-  return null;
+  try {
+    const interval = CronExpressionParser.parse(cronExpr.trim());
+    const SAMPLE_SIZE = 5;
+    let prev = interval.next().getTime();
+    let minGapMinutes = Infinity;
+    for (let i = 0; i < SAMPLE_SIZE; i++) {
+      const next = interval.next().getTime();
+      const gapMinutes = (next - prev) / 60000;
+      if (gapMinutes < minGapMinutes) minGapMinutes = gapMinutes;
+      prev = next;
+    }
+    return Math.round(minGapMinutes);
+  } catch (err) {
+    return null;
+  }
 }
 
-module.exports = { getPlan, enforcePlanLimits, cronToMinutes };
+module.exports = { getPlan, enforcePlanLimits, enforceTotalConfigCap, cronToMinutes };

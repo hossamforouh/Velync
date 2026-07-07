@@ -357,22 +357,19 @@ describe('/workspaces/{wsId}/sync_configs/{configId}', () => {
     await assertFails(ctx.stranger().firestore().collection('workspaces').doc('owner-wsid').collection('sync_configs').doc('test-config').get());
   });
 
-  it('workspace member can create', async () => {
-    await assertSucceeds(ctx.member().firestore().collection('workspaces').doc('owner-wsid').collection('sync_configs').add({
+  it('create denied client-side — server-only (POST /api/sync-configs runs enforcePlanLimits)', async () => {
+    await assertFails(ctx.member().firestore().collection('workspaces').doc('owner-wsid').collection('sync_configs').add({
       description: 'new', platform1: 'notion', platform2: 'ticktick',
     }));
   });
 
-  it('workspace member can update', async () => {
-    await assertSucceeds(ctx.member().firestore().collection('workspaces').doc('owner-wsid').collection('sync_configs').doc('test-config').update({ description: 'updated' }));
+  it('update denied client-side — server-only, even for the doc owner', async () => {
+    await assertFails(ctx.member().firestore().collection('workspaces').doc('owner-wsid').collection('sync_configs').doc('test-config').update({ description: 'updated' }));
   });
 
-  it('solo user can read/create sync_configs under their own uid, with no parent workspace doc', async () => {
-    await assertSucceeds(ctx.owner().firestore().collection('workspaces').doc('owner-uid').collection('sync_configs').add({
+  it('solo user cannot create sync_configs client-side either, even under their own uid', async () => {
+    await assertFails(ctx.owner().firestore().collection('workspaces').doc('owner-uid').collection('sync_configs').add({
       description: 'solo config', platform1: 'notion', platform2: 'ticktick',
-    }));
-    await assertFails(ctx.stranger().firestore().collection('workspaces').doc('owner-uid').collection('sync_configs').add({
-      description: 'hack', platform1: 'notion', platform2: 'ticktick',
     }));
   });
 
