@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
 const { getConnector } = require('../../domains/connector/registry');
+const { resolveConnectorKey } = require('../../core/platform');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -66,9 +67,12 @@ router.post('/platform-entities', verifyAuth, [
     const provider = connDoc.data().provider;
     if (!provider) throw new Error('Connection has no provider');
 
-    // Resolve credentials and instantiate the connector
+    // Resolve credentials and instantiate the connector. `provider` is a
+    // `platforms` Firestore doc ID, not necessarily the connector registry
+    // key (platform docs get auto-generated IDs) — resolve it first.
     const creds = await resolveConnectionTokens(req.user.uid, connectionId);
-    const ConnectorClass = getConnector(provider);
+    const connectorKey = await resolveConnectorKey(provider);
+    const ConnectorClass = getConnector(connectorKey);
     const connector = new ConnectorClass(creds);
 
     // Map legacy dataSourceId names to canonical field IDs

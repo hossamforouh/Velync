@@ -269,7 +269,23 @@ export function initAdminPlatforms(dbInstance, authInstance) {
   btnAddSchemaField.addEventListener('click', () => createSchemaRow());
 
   let cachedDataSources = null;
+  let cachedConnectorKeys = null;
   const API_URL = window.VELYNC_CONFIG.apiBase;
+
+  async function populateConnectorKeyOptions() {
+    const select = document.getElementById('f-plat-connector-key');
+    if (!select) return;
+    if (!cachedConnectorKeys) {
+      try {
+        cachedConnectorKeys = await apiRequest('/api/admin/connector-keys').then(r => r.connectorKeys || []);
+      } catch (err) {
+        console.error('Failed to load connector keys', err);
+        cachedConnectorKeys = [];
+      }
+    }
+    select.innerHTML = '<option value="">— No connector (config only) —</option>' +
+      cachedConnectorKeys.map(k => `<option value="${escAttr(k)}">${escHtml(k)}</option>`).join('');
+  }
 
   async function openModal(platform = null) {
     const panelBody = document.querySelector('#view-admin-platform-editor .panel-body');
@@ -306,11 +322,13 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     attrsContainer.innerHTML = '';
     schemaContainer.innerHTML = '';
     resetTabs();
+    await populateConnectorKeyOptions();
     if (platform) {
       document.getElementById('platform-panel-title').textContent = 'Edit Platform';
       document.getElementById('f-plat-doc-id').value = platform.id;
       document.getElementById('f-plat-name').value = platform.name || '';
       document.getElementById('f-plat-logo').value = platform.logo || '';
+      document.getElementById('f-plat-connector-key').value = platform.connectorKey || '';
       document.getElementById('f-plat-auth-type').value = platform.authType || 'manual';
       document.getElementById('f-plat-auth-url').value = platform.authUrl || '';
       document.getElementById('f-plat-token-url').value = platform.tokenUrl || '';
@@ -338,6 +356,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       document.getElementById('f-plat-doc-id').value = '';
       document.getElementById('f-plat-name').value = '';
       document.getElementById('f-plat-logo').value = '';
+      document.getElementById('f-plat-connector-key').value = '';
       document.getElementById('f-plat-auth-type').value = 'manual';
       document.getElementById('f-plat-auth-url').value = '';
       document.getElementById('f-plat-token-url').value = '';
@@ -419,6 +438,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       const platformData = {
         name: document.getElementById('f-plat-name').value.trim(),
         logo: document.getElementById('f-plat-logo').value.trim(),
+        connectorKey: document.getElementById('f-plat-connector-key').value,
         authType: document.getElementById('f-plat-auth-type').value,
         authUrl: document.getElementById('f-plat-auth-url').value.trim(),
         tokenUrl: document.getElementById('f-plat-token-url').value.trim(),

@@ -5,7 +5,7 @@ const logger = require('../../core/logger');
 const { mapSourceToDest } = require('./mapper');
 const { resolveConflict } = require('./conflict');
 const { getPlan } = require('../../core/plan');
-const { getPlatform } = require('../../core/platform');
+const { resolveConnectorKey } = require('../../core/platform');
 const { acquireLease, releaseLease } = require('../../core/lock');
 const { notifySyncFailure } = require('../../core/notifications');
 
@@ -159,16 +159,11 @@ async function runSync(config, configId) {
     const sourceCreds = sourceConnId ? { ...await resolveCredentials(null, sourceConnId), ...p1Settings } : { ...p1Settings };
     const destCreds = destConnId ? { ...await resolveCredentials(null, destConnId), databaseId: p2Settings.database, ...p2Settings } : { databaseId: p2Settings.database, ...p2Settings };
 
-    let resolvedSourcePlatform = sourcePlatformId;
-    let resolvedDestPlatform = destPlatformId;
-
-    // Cached lookups — platform docs almost never change, so avoid reading them
-    // from Firestore on every sync run (see core/platform.js).
-    const p1Data = await getPlatform(sourcePlatformId);
-    if (p1Data && p1Data.name) resolvedSourcePlatform = p1Data.name.toLowerCase();
-
-    const p2Data = await getPlatform(destPlatformId);
-    if (p2Data && p2Data.name) resolvedDestPlatform = p2Data.name.toLowerCase();
+    // Platform docs get auto-generated Firestore IDs, not necessarily the
+    // connector registry key — resolveConnectorKey() handles that mapping
+    // (and uses the same cached platform lookup as getPlatform() elsewhere).
+    const resolvedSourcePlatform = await resolveConnectorKey(sourcePlatformId);
+    const resolvedDestPlatform = await resolveConnectorKey(destPlatformId);
 
     const SourceConn = getConnector(resolvedSourcePlatform);
     const DestConn = getConnector(resolvedDestPlatform);

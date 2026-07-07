@@ -7,6 +7,7 @@ const { resolveConnectionTokens } = require('../../domains/connection/resolver')
 const { getConnector } = require('../../domains/connector/registry');
 const { suggestMappings } = require('../../domains/sync/mapping-suggester');
 const { getPlan, enforcePlanLimits, enforceTotalConfigCap } = require('../../core/plan');
+const { resolveConnectorKey } = require('../../core/platform');
 const { deleteSyncConfig } = require('../../domains/sync/config-deletion');
 const { runSync } = require('../../domains/sync/engine');
 const db = require('../../core/db');
@@ -31,21 +32,6 @@ const validate = (req, res, next) => {
   }
   next();
 };
-
-/**
- * Resolve a platform ID to its connector key.
- */
-async function resolvePlatform(platformId) {
-  try {
-    getConnector(platformId);
-    return platformId;
-  } catch (e) {
-    const platDoc = await db.collection('platforms').doc(platformId).get();
-    if (!platDoc.exists) return platformId;
-    const platData = platDoc.data();
-    return platData.connectorKey || platData.key || platformId;
-  }
-}
 
 /**
  * Look up workspace and plan for the current user.
@@ -91,8 +77,8 @@ router.post('/suggest-mappings', verifyAuth, suggestLimiter, [
       resolveConnectionTokens(req.user.uid, destConnectionId)
     ]);
 
-    const resolvedSourcePlatform = await resolvePlatform(sourcePlatform);
-    const resolvedDestPlatform = await resolvePlatform(destPlatform);
+    const resolvedSourcePlatform = await resolveConnectorKey(sourcePlatform);
+    const resolvedDestPlatform = await resolveConnectorKey(destPlatform);
 
     let SourceConnectorClass, DestConnectorClass;
     try {

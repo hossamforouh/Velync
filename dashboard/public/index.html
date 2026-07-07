@@ -1266,6 +1266,13 @@
                     <label for="f-plat-logo">Platform Logo (SVG) *</label>
                     <textarea id="f-plat-logo" rows="3" placeholder="<svg>...</svg>" required></textarea>
                   </div>
+                  <div class="form-row">
+                    <label for="f-plat-connector-key">Connector Key</label>
+                    <select id="f-plat-connector-key">
+                      <option value="">— No connector (config only) —</option>
+                    </select>
+                    <small class="form-row-hint">Which backend connector code actually powers syncs for this platform. Required for real syncing/entity-fetching to work — leave blank only for a purely informational entry.</small>
+                  </div>
                 </div>
 
                 <div class="form-section tab-pane" id="tab-auth" style="margin-bottom: 24px;">

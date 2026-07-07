@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
 const { logAdminActivity } = require('../../core/activityLog');
+const { getRegisteredPlatforms } = require('../../domains/connector');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -28,7 +29,7 @@ const requireSuperAdmin = async (req, res, next) => {
 // since `platforms` is readable by any authenticated user for the connect-flow UI.
 const PLATFORM_FIELDS = [
   'name', 'logo', 'authType', 'authUrl', 'tokenUrl', 'clientId',
-  'guideUrl', 'attributes', 'configSchema',
+  'guideUrl', 'attributes', 'configSchema', 'connectorKey',
 ];
 
 function pickPlatformFields(body) {
@@ -50,9 +51,22 @@ async function syncIntegrationNames(platformId, name) {
   if (!snap1.empty || !snap2.empty) await batch.commit();
 }
 
+// List the connector keys actually registered in code (src/domains/connector/*),
+// so the admin UI can offer a dropdown instead of admins guessing/typing a
+// value that has to exactly match what's registered.
+router.get('/admin/connector-keys', verifyAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    return res.json({ connectorKeys: getRegisteredPlatforms() });
+  } catch (err) {
+    logger.error('admin-platforms', 'Failed to list connector keys', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Create a new platform
 router.post('/admin/platforms', verifyAuth, requireSuperAdmin, [
   body('name').isString().trim().notEmpty(),
+  body('connectorKey').optional().isString().trim(),
 ], validate, async (req, res) => {
   try {
     const data = pickPlatformFields(req.body);
@@ -78,6 +92,7 @@ router.post('/admin/platforms', verifyAuth, requireSuperAdmin, [
 // Update an existing platform
 router.put('/admin/platforms/:platformId', verifyAuth, requireSuperAdmin, [
   body('name').optional().isString().trim().isLength({ min: 1 }),
+  body('connectorKey').optional().isString().trim(),
 ], validate, async (req, res) => {
   try {
     const { platformId } = req.params;
