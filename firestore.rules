@@ -63,7 +63,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['email'])
         && request.resource.data.email is string;
       allow update: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['name', 'email', 'notificationPrefs', 'workspaceId', 'authVersion', 'lastSessionRevokedAt', 'updatedAt']);
+        && request.resource.data.keys().hasOnly(['id', 'name', 'email', 'workspaceName', 'notificationPrefs', 'workspaceId', 'authVersion', 'lastSessionRevokedAt', 'createdAt', 'updatedAt']);
       allow delete: if isOwner(userId);
     }
 

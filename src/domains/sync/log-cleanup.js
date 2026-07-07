@@ -3,6 +3,7 @@ const db = require('../../core/db');
 const logger = require('../../core/logger');
 const { getPlan } = require('../../core/plan');
 const { acquireLease, releaseLease } = require('../../core/lock');
+const { notifySyncFailure } = require('../../core/notifications');
 
 const BATCH_SIZE = 100;
 const CLEANUP_LOCK_ID = 'daily-log-cleanup';
@@ -156,15 +157,27 @@ async function reconcileStuckRuns() {
       .get();
 
     if (!stuckSnap.empty) {
+      const timeoutMessage = 'Sync timed out or was interrupted before completion (no result recorded).';
       const batch = db.batch();
       stuckSnap.docs.forEach(d => batch.update(d.ref, {
         status: 'error',
         endTime: now,
-        error: 'Sync timed out or was interrupted before completion (no result recorded).',
+        error: timeoutMessage,
       }));
       await batch.commit();
       reconciled = stuckSnap.size;
       logger.warn('log-cleanup', `Reconciled ${reconciled} stuck "running" execution log(s)`);
+
+      await Promise.all(stuckSnap.docs.map(d => {
+        const log = d.data();
+        return notifySyncFailure({
+          workspaceId: log.workspaceId,
+          configId: log.configId,
+          configName: log.configName,
+          error: timeoutMessage,
+          currentLogId: d.id,
+        }).catch(() => {});
+      }));
     }
 
     return reconciled;

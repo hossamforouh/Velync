@@ -238,6 +238,29 @@ describe('/users/{userId}', () => {
     await assertFails(ctx.owner().firestore().collection('users').doc('stranger-uid').update({ name: 'Hack' }));
   });
 
+  it('can update notificationPrefs on a doc shaped like the real first-login write (id/workspaceName/createdAt present)', async () => {
+    // Regression test: the first-login client code (app.js) creates the user
+    // doc with id/workspaceName/createdAt in addition to email/name/workspaceId.
+    // The update rule's hasOnly(...) allowlist must include every field that
+    // create actually persists, or every subsequent update — not just
+    // notification preference saves — fails with permission-denied.
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().collection('users').doc('first-login-uid').set({
+        id: 'first-login-uid',
+        email: 'firstlogin@test.com',
+        workspaceName: "Personal Workspace",
+        name: '',
+        workspaceId: 'first-login-uid',
+        createdAt: new Date().toISOString(),
+      });
+    });
+    await assertSucceeds(
+      testEnv.authenticatedContext('first-login-uid', { email: 'firstlogin@test.com' })
+        .firestore().collection('users').doc('first-login-uid')
+        .update({ notificationPrefs: { 'notif-sync-failure': true } })
+    );
+  });
+
   it('can delete own doc', async () => {
     await assertSucceeds(ctx.owner().firestore().collection('users').doc('owner-uid').delete());
   });

@@ -7,6 +7,7 @@ const { resolveConflict } = require('./conflict');
 const { getPlan } = require('../../core/plan');
 const { getPlatform } = require('../../core/platform');
 const { acquireLease, releaseLease } = require('../../core/lock');
+const { notifySyncFailure } = require('../../core/notifications');
 
 const runningConfigs = new Set();
 
@@ -359,6 +360,13 @@ async function runSync(config, configId) {
   } catch (err) {
     logger.error('sync', `Config "${configId}" failed`, { error: err.message });
     if (logRef) await logRef.update({ status: 'error', endTime: new Date().toISOString(), error: err.message }).catch(() => {});
+    notifySyncFailure({
+      workspaceId: config.workspaceId,
+      configId,
+      configName: config.description,
+      error: err.message,
+      currentLogId: logRef?.id,
+    }).catch(() => {});
     throw err;
   } finally {
     runningConfigs.delete(configId);
