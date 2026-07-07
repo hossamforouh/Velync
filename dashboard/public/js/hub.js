@@ -6,16 +6,50 @@
 
 import { collection, doc, getDoc, getDocs, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { getSkeletonCardGridHTML } from './loading-components.js';
+import { showToast } from './toast.js';
 
 // ─── State ──────────────────────────────────────────────────
 let allIntegrations = [];
 let platformsMap = {};
+let gatedPlatformIds = new Set(); // platforms excluded by the workspace's plan tier
 let connectedIds = new Set();
 let searchTerm = '';
 let displayCount = 0;
 let dbRef = null;
 let onNavigateRef = null;
 const PAGE_SIZE = 12;
+
+// ─── Logo sanitization ───────────────────────────────────────
+// platforms.logo is admin-authored inline SVG/HTML rendered via innerHTML —
+// strip anything script-capable before it ever reaches the DOM, same as any
+// other untrusted-ish HTML fragment would need.
+function sanitizeLogoHtml(html) {
+  if (!html) return '';
+  try {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    const DISALLOWED_TAGS = new Set(['script', 'iframe', 'object', 'embed', 'link', 'style', 'meta']);
+    const strip = (root) => {
+      for (const el of Array.from(root.querySelectorAll('*'))) {
+        if (DISALLOWED_TAGS.has(el.tagName.toLowerCase())) {
+          el.remove();
+          continue;
+        }
+        for (const attr of Array.from(el.attributes)) {
+          const name = attr.name.toLowerCase();
+          const value = attr.value.trim();
+          if (name.startsWith('on') || /^\s*javascript:/i.test(value)) {
+            el.removeAttribute(attr.name);
+          }
+        }
+      }
+    };
+    strip(template.content);
+    return template.innerHTML;
+  } catch (_) {
+    return '';
+  }
+}
 
 // ─── Main Render Entry Point ────────────────────────────────
 export async function renderHubView(db, onNavigate) {
@@ -35,6 +69,7 @@ export async function renderHubView(db, onNavigate) {
     platformsMap = cached.platformsMap;
     allIntegrations = cached.allIntegrations;
     connectedIds = cached.connectedIds;
+    gatedPlatformIds = cached.gatedPlatformIds || new Set();
     searchTerm = '';
     displayCount = PAGE_SIZE;
     if (toolbar) toolbar.style.display = 'flex';
@@ -50,9 +85,17 @@ export async function renderHubView(db, onNavigate) {
     ]);
 
     platformsMap = {};
-    pSnap.forEach(doc => { platformsMap[doc.id] = doc.data(); });
+    pSnap.forEach(doc => {
+      const data = doc.data();
+      if (data.logo) data.logo = sanitizeLogoHtml(data.logo);
+      platformsMap[doc.id] = data;
+    });
 
-    // Filter platforms by workspace plan's connectorTiers
+    // Mark platforms outside the workspace plan's connectorTiers as gated —
+    // kept in platformsMap (so name/logo still render) but flagged so the UI
+    // can show a clear "Upgrade to Connect" state instead of silently
+    // swapping in a generic placeholder logo with no explanation.
+    gatedPlatformIds = new Set();
     if (window.currentWorkspaceId) {
       try {
         const wsSnap = await getDoc(doc(db, 'workspaces', window.currentWorkspaceId));
@@ -66,13 +109,14 @@ export async function renderHubView(db, onNavigate) {
             for (const [pid, pData] of Object.entries(platformsMap)) {
               const pTier = pData.tier || 'basic';
               if (!allowedTiers.includes(pTier)) {
-                delete platformsMap[pid];
+                gatedPlatformIds.add(pid);
               }
             }
           }
         }
       } catch (pfErr) {
         console.warn('Failed to filter platforms by plan tier', pfErr);
+        showToast('Could not verify plan-based access for some integrations — connect buttons may not reflect your plan correctly.', 'warning');
       }
     }
 
@@ -97,7 +141,7 @@ export async function renderHubView(db, onNavigate) {
     }
 
     if (window.__setViewCache) {
-      window.__setViewCache('hub', { platformsMap, allIntegrations, connectedIds });
+      window.__setViewCache('hub', { platformsMap, allIntegrations, connectedIds, gatedPlatformIds });
     }
   } catch (err) {
     console.error("Error fetching integrations:", err);
@@ -177,6 +221,20 @@ function applyFilter() {
   );
 }
 
+// ─── Plan-tier gating helpers ────────────────────────────────
+function isIntegrationGated(p1Id, p2Id) {
+  return (p1Id && gatedPlatformIds.has(p1Id)) || (p2Id && gatedPlatformIds.has(p2Id));
+}
+
+function openUpgradeModal() {
+  const modal = document.getElementById('settings-modal');
+  const billingTab = modal?.querySelector('.settings-tab[data-tab="billing"]');
+  if (modal && billingTab) {
+    modal.classList.add('show');
+    billingTab.click();
+  }
+}
+
 // ─── Create Card Element ────────────────────────────────────
 function createCard(integ) {
   const card = document.createElement('div');
@@ -188,12 +246,15 @@ function createCard(integ) {
     `<span class="hub-tag" data-tag="${escHtml(t)}">${escHtml(t)}</span>`
   ).join('');
 
-  const statusBadge = isActive
-    ? `<span class="hub-status-badge hub-status-active">● Active</span>`
-    : `<span class="hub-status-badge hub-status-soon">${escHtml(integ.status || 'Coming Soon')}</span>`;
-
   const p1Id = typeof integ.platform1 === 'string' ? integ.platform1 : (integ.platform1?.id || integ.platform1?.key);
   const p2Id = typeof integ.platform2 === 'string' ? integ.platform2 : (integ.platform2?.id || integ.platform2?.key);
+  const isGated = isActive && isIntegrationGated(p1Id, p2Id);
+
+  const statusBadge = isGated
+    ? `<span class="hub-status-badge hub-status-soon" title="Not included in your current plan">🔒 Upgrade to Unlock</span>`
+    : isActive
+      ? `<span class="hub-status-badge hub-status-active">● Active</span>`
+      : `<span class="hub-status-badge hub-status-soon">${escHtml(integ.status || 'Coming Soon')}</span>`;
 
   const p1Logo = (p1Id && platformsMap[p1Id]?.logo) || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>';
   const p2Logo = (p2Id && platformsMap[p2Id]?.logo) || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>';
@@ -203,9 +264,9 @@ function createCard(integ) {
   card.innerHTML = `
     <div class="hub-card-header">
       <div class="hub-card-logos">
-        <span class="hub-logo">${p1Logo}</span>
+        <span class="hub-logo" ${isGated ? 'style="opacity:0.5;"' : ''}>${p1Logo}</span>
         <span class="hub-logo-connector">⇄</span>
-        <span class="hub-logo">${p2Logo}</span>
+        <span class="hub-logo" ${isGated ? 'style="opacity:0.5;"' : ''}>${p2Logo}</span>
       </div>
       ${statusBadge}
     </div>
@@ -216,10 +277,10 @@ function createCard(integ) {
     </div>
     <div class="hub-card-footer">
       <button
-        class="btn ${hasActiveConfig ? 'btn-secondary' : (isActive ? 'btn-primary' : 'btn-secondary')} btn-sm hub-cta-btn"
-        ${hasActiveConfig || !isActive ? 'disabled' : ''}
+        class="btn ${hasActiveConfig ? 'btn-secondary' : (isGated ? 'btn-secondary' : (isActive ? 'btn-primary' : 'btn-secondary'))} btn-sm hub-cta-btn"
+        ${hasActiveConfig || (!isActive && !isGated) ? 'disabled' : ''}
       >
-        ${hasActiveConfig ? 'Already Connected' : (isActive ? 'Connect' : 'Coming Soon')}
+        ${hasActiveConfig ? 'Already Connected' : (isGated ? 'Upgrade to Connect' : (isActive ? 'Connect' : 'Coming Soon'))}
       </button>
     </div>
   `;
@@ -248,6 +309,10 @@ function createCard(integ) {
       e.stopPropagation();
       if (hasActiveConfig) {
         if (onNavigateRef) onNavigateRef('flows');
+        return;
+      }
+      if (isGated) {
+        openUpgradeModal();
         return;
       }
       window.dispatchEvent(new CustomEvent('open-integration-setup', {
@@ -338,6 +403,7 @@ function openDetailPanel(integ) {
   const p2Logo = (p2Id && platformsMap[p2Id]?.logo) || '';
 
   const isActive = integ.status === 'Active';
+  const isGated = isActive && isIntegrationGated(p1Id, p2Id);
   const hasActiveConfig = connectedIds.has(integ.id);
   const tagsHtml = (integ.tags || []).map(t =>
     `<span class="hub-tag" style="cursor:default;">${escHtml(t)}</span>`
@@ -360,7 +426,9 @@ function openDetailPanel(integ) {
 
       <div>
         <h2 style="margin:0 0 4px;font-size:1.3rem;">${escHtml(integ.name)}</h2>
-        <span class="hub-status-badge ${isActive ? 'hub-status-active' : 'hub-status-soon'}">● ${escHtml(integ.status || 'Coming Soon')}</span>
+        ${isGated
+          ? `<span class="hub-status-badge hub-status-soon" title="Not included in your current plan">🔒 Upgrade to Unlock</span>`
+          : `<span class="hub-status-badge ${isActive ? 'hub-status-active' : 'hub-status-soon'}">● ${escHtml(integ.status || 'Coming Soon')}</span>`}
       </div>
 
       <p style="color:var(--text-2);line-height:1.6;margin:0;">${escHtml(integ.description || 'No description available.')}</p>
@@ -387,8 +455,8 @@ function openDetailPanel(integ) {
         </div>` : ''}
       </div>
 
-      <button class="btn ${hasActiveConfig ? 'btn-secondary' : (isActive ? 'btn-primary' : 'btn-secondary')} hub-cta-btn" ${hasActiveConfig || !isActive ? 'disabled' : ''} style="width:100%;margin-top:8px;">
-        ${hasActiveConfig ? 'Already Connected' : (isActive ? 'Connect Now' : 'Coming Soon')}
+      <button class="btn ${hasActiveConfig ? 'btn-secondary' : (isGated ? 'btn-secondary' : (isActive ? 'btn-primary' : 'btn-secondary'))} hub-cta-btn" ${hasActiveConfig || (!isActive && !isGated) ? 'disabled' : ''} style="width:100%;margin-top:8px;">
+        ${hasActiveConfig ? 'Already Connected' : (isGated ? 'Upgrade to Connect' : (isActive ? 'Connect Now' : 'Coming Soon'))}
       </button>
     </div>
   `;
@@ -397,6 +465,11 @@ function openDetailPanel(integ) {
   const detailBtn = body.querySelector('.hub-cta-btn');
   if (detailBtn && !detailBtn.disabled) {
     detailBtn.addEventListener('click', () => {
+      if (isGated) {
+        closeDetailPanel();
+        openUpgradeModal();
+        return;
+      }
       closeDetailPanel();
       window.dispatchEvent(new CustomEvent('open-integration-setup', {
         detail: { integration: integ, platformsMap }
