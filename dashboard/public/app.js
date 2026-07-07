@@ -4,7 +4,7 @@
    ============================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendEmailVerification, setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app-check.js";
 import { initLogs } from "./js/logs.js";
@@ -895,7 +895,12 @@ onAuthStateChanged(auth, async (user) => {
 
     authOverlay.style.display = 'none';
     appContainer.style.display = 'flex';
-    
+
+    // Email verification reminder (non-blocking) — Google sign-ins are always
+    // pre-verified by Google, so this only ever shows for email/password accounts.
+    const verifyBanner = document.getElementById('verify-email-banner');
+    if (verifyBanner) verifyBanner.style.display = user.emailVerified ? 'none' : 'flex';
+
     // Set Avatar Initials
     const initials = user.email ? user.email.substring(0, 2).toUpperCase() : 'U';
     const userAvatar = document.getElementById('user-avatar');
@@ -1941,6 +1946,8 @@ onAuthStateChanged(auth, async (user) => {
     authError.style.borderColor = 'rgba(239, 68, 68, 0.2)';
 
     // Clear all user-specific DOM to prevent stale data flash on next login
+    const verifyBannerClear = document.getElementById('verify-email-banner');
+    if (verifyBannerClear) verifyBannerClear.style.display = 'none';
     const userAvatar = document.getElementById('user-avatar');
     if (userAvatar) userAvatar.textContent = '';
     const dropAvatarClear = document.getElementById('dropdown-avatar');
@@ -2166,6 +2173,11 @@ authToggleLink.addEventListener('click', (e) => {
   if(btnLogin) btnLogin.style.display = 'flex';
   if(forgotPasswordLink) forgotPasswordLink.style.display = isSignUpMode ? 'none' : 'block';
 
+  const rememberGroup = document.getElementById('auth-remember-group');
+  if (rememberGroup) rememberGroup.style.display = 'block';
+  const termsGroup = document.getElementById('auth-terms-group');
+  if (termsGroup) termsGroup.style.display = isSignUpMode ? 'block' : 'none';
+
   const authStrength = document.getElementById('auth-password-strength');
   if (authStrength) authStrength.style.display = isSignUpMode ? 'block' : 'none';
   if (!isSignUpMode && authPassword) {
@@ -2207,10 +2219,20 @@ if (forgotPasswordLink) {
     if(authDivider) authDivider.style.display = 'none';
     if(btnLogin) btnLogin.style.display = 'none';
     forgotPasswordLink.style.display = 'none';
-    
+
+    const rememberGroup = document.getElementById('auth-remember-group');
+    if (rememberGroup) rememberGroup.style.display = 'none';
+    const termsGroup = document.getElementById('auth-terms-group');
+    if (termsGroup) termsGroup.style.display = 'none';
+
     authToggleText.textContent = "Remembered your password?";
     authToggleLink.textContent = "Sign In";
   });
+}
+
+function rememberMeChecked() {
+  const cb = document.getElementById('auth-remember-me');
+  return !cb || cb.checked; // default to "remember" if the checkbox isn't present
 }
 
 authForm.addEventListener('submit', async (e) => {
@@ -2219,6 +2241,15 @@ authForm.addEventListener('submit', async (e) => {
   const password = authPassword.value;
   
   if (!email || (!isResetMode && !password)) return;
+
+  if (isSignUpMode) {
+    const termsCheckbox = document.getElementById('auth-terms-checkbox');
+    if (termsCheckbox && !termsCheckbox.checked) {
+      authError.textContent = 'Please agree to the Terms of Service and Privacy Policy to continue.';
+      authError.style.display = 'block';
+      return;
+    }
+  }
 
   authError.style.display = 'none';
   authError.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'; // Reset to red
@@ -2242,7 +2273,7 @@ authForm.addEventListener('submit', async (e) => {
           throw resetErr;
         }
       }
-      authError.textContent = "If an account exists for this email, a reset link has been sent.";
+      authError.textContent = "If an account exists for this email, a reset link has been sent. Check your inbox (and spam folder) for the link.";
       authError.style.display = 'block';
       authError.style.backgroundColor = 'rgba(16, 185, 129, 0.1)'; // Green success
       authError.style.color = '#10B981';
@@ -2258,9 +2289,13 @@ authForm.addEventListener('submit', async (e) => {
       if (isCommonPassword(password)) {
         throw new Error('This password is too common and easily guessed. Please choose a stronger password.');
       }
-      await createUserWithEmailAndPassword(auth, email, password);
+      await setPersistence(auth, rememberMeChecked() ? browserLocalPersistence : browserSessionPersistence);
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
       if (analytics) logEvent(analytics, 'sign_up', { method: 'email' });
+      // Best-effort — don't block account creation if sending the verification email fails.
+      try { await sendEmailVerification(cred.user); } catch (verifyErr) { console.warn('Could not send verification email:', verifyErr); }
     } else {
+      await setPersistence(auth, rememberMeChecked() ? browserLocalPersistence : browserSessionPersistence);
       await signInWithEmailAndPassword(auth, email, password);
       if (analytics) logEvent(analytics, 'login', { method: 'email' });
     }
@@ -2279,6 +2314,7 @@ btnLogin.addEventListener('click', async () => {
   btnLogin.disabled = true;
   btnLogin.innerHTML = 'Connecting...';
   try {
+    await setPersistence(auth, rememberMeChecked() ? browserLocalPersistence : browserSessionPersistence);
     await signInWithPopup(auth, provider);
     if (analytics) logEvent(analytics, 'login', { method: 'google' });
   } catch (error) {
@@ -2289,6 +2325,25 @@ btnLogin.addEventListener('click', async () => {
     btnLogin.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="18" height="18" /> Continue with Google';
   }
 });
+
+const btnResendVerification = document.getElementById('btn-resend-verification');
+if (btnResendVerification) {
+  btnResendVerification.addEventListener('click', async () => {
+    if (!auth.currentUser) return;
+    btnResendVerification.disabled = true;
+    const originalLabel = btnResendVerification.textContent;
+    btnResendVerification.textContent = 'Sending...';
+    try {
+      await sendEmailVerification(auth.currentUser);
+      showToast('Verification email sent — check your inbox.', 'success');
+    } catch (err) {
+      showToast('Could not send verification email: ' + err.message, 'error');
+    } finally {
+      btnResendVerification.disabled = false;
+      btnResendVerification.textContent = originalLabel;
+    }
+  });
+}
 
 btnLogout.addEventListener('click', async () => {
   try {

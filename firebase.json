@@ -1,6 +1,9 @@
 {
   "hosting": {
-    "public": "dashboard/public",
+    "public": "dashboard/dist",
+    "predeploy": [
+      "node scripts/build-dashboard.js"
+    ],
     "ignore": [
       "firebase.json",
       "**/.*",

@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "5050", "--directory", "dashboard/public"],
       "port": 5050
+    },
+    {
+      "name": "static-dashboard-dist",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "5051", "--directory", "dashboard/dist"],
+      "port": 5051
     }
   ]
 }
