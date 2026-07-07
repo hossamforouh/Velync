@@ -1068,7 +1068,7 @@ onAuthStateChanged(auth, async (user) => {
     window.currentWorkspaceId = currentWorkspaceId;
     window.isSuperadmin = isSuperadmin;
 
-    initLogs(db, currentWorkspaceId);
+    initLogs(db, currentWorkspaceId, auth);
 
     // Load configs in background — renders when done
     loadConfigs();

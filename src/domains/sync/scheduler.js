@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { runSync } = require('./engine');
-const { cleanupLogs, cleanupActivityLogs } = require('./log-cleanup');
+const { cleanupLogs, cleanupActivityLogs, reconcileStuckRuns } = require('./log-cleanup');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -24,6 +24,15 @@ function startScheduler() {
       await cleanupActivityLogs();
     } catch (err) {
       logger.error('scheduler', 'Activity log cleanup failed', { error: err.message });
+    }
+  }).start();
+
+  // Stuck "running" execution_logs reconciliation, every 15 min
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      await reconcileStuckRuns();
+    } catch (err) {
+      logger.error('scheduler', 'Stuck-run reconciliation failed', { error: err.message });
     }
   }).start();
 

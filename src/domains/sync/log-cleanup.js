@@ -13,6 +13,13 @@ const CLEANUP_LEASE_MS = 10 * 60 * 1000; // 10 min — generous upper bound for 
 const ACTIVITY_LOG_LOCK_ID = 'daily-activity-log-cleanup';
 const ACTIVITY_LOG_RETENTION_DAYS = 180;
 
+// If a Cloud Run instance dies mid-sync (deploy, OOM, crash), its execution_logs
+// entry is left at status:'running' forever with no endTime — this reconciles
+// those into a terminal 'error' state so the Execution Logs page doesn't show
+// permanently "running" phantom entries.
+const STUCK_RUN_LOCK_ID = 'stuck-run-reconciliation';
+const STUCK_RUN_TIMEOUT_MS = 15 * 60 * 1000; // well above LEASE_DURATION_MS in engine.js
+
 /**
  * Delete execution_logs older than each workspace's plan's logRetentionDays.
  * Runs in batches to avoid unbounded Firestore deletes.
@@ -125,4 +132,45 @@ async function cleanupActivityLogs() {
   }
 }
 
-module.exports = { cleanupLogs, cleanupActivityLogs };
+/**
+ * Mark execution_logs stuck at status:'running' beyond STUCK_RUN_TIMEOUT_MS
+ * as status:'error' with an explanatory message, so they stop showing as
+ * perpetually in-progress.
+ */
+async function reconcileStuckRuns() {
+  const gotLease = await acquireLease(STUCK_RUN_LOCK_ID, CLEANUP_LEASE_MS);
+  if (!gotLease) {
+    logger.info('log-cleanup', 'Another instance holds the stuck-run reconciliation lease — skipping this run');
+    return 0;
+  }
+
+  try {
+    const cutoff = new Date(Date.now() - STUCK_RUN_TIMEOUT_MS).toISOString();
+    const now = new Date().toISOString();
+    let reconciled = 0;
+
+    const stuckSnap = await db.collection('execution_logs')
+      .where('status', '==', 'running')
+      .where('startTime', '<', cutoff)
+      .limit(BATCH_SIZE)
+      .get();
+
+    if (!stuckSnap.empty) {
+      const batch = db.batch();
+      stuckSnap.docs.forEach(d => batch.update(d.ref, {
+        status: 'error',
+        endTime: now,
+        error: 'Sync timed out or was interrupted before completion (no result recorded).',
+      }));
+      await batch.commit();
+      reconciled = stuckSnap.size;
+      logger.warn('log-cleanup', `Reconciled ${reconciled} stuck "running" execution log(s)`);
+    }
+
+    return reconciled;
+  } finally {
+    await releaseLease(STUCK_RUN_LOCK_ID);
+  }
+}
+
+module.exports = { cleanupLogs, cleanupActivityLogs, reconcileStuckRuns };

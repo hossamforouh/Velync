@@ -9,7 +9,6 @@ const db = require('../core/db');
 const authRoutes = require('./routes/auth');
 const platformRoutes = require('./routes/platform');
 const schemaRoutes = require('./routes/schema');
-const syncRoutes = require('./routes/sync');
 const workspaceRoutes = require('./routes/workspace');
 const syncConfigsRoutes = require('./routes/sync-configs');
 const settingsRoutes = require('./routes/settings');
@@ -124,7 +123,6 @@ function createApp() {
   app.use('/api', adminPlatformsRoutes);
   app.use('/api', adminIntegrationsRoutes);
   app.use('/api', billingRoutes);
-  app.use(syncRoutes);
   app.use('/api', publicPlansRoutes);
   app.use('/api', internalRoutes);
 

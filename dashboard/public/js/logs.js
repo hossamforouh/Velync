@@ -1,4 +1,5 @@
 import { navigateTo } from './navigation.js';
+import { showToast } from './toast.js';
 import {
   collection, query, where, orderBy, limit, getDocs, startAfter
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
@@ -10,6 +11,7 @@ let lastVisible = null;
 let hasMore = true;
 let currentDb = null;
 let currentWorkspaceId = null;
+let currentAuth = null;
 let filterListenersAttached = false;
 let fetchRequestId = 0;
 let autoRefreshTimer = null;
@@ -17,9 +19,10 @@ let autoRefreshEnabled = false;
 
 /* ── Init ───────────────────────────────────────────────────── */
 
-export async function initLogs(db, workspaceId) {
+export async function initLogs(db, workspaceId, authInstance) {
   currentDb = db;
   currentWorkspaceId = workspaceId;
+  currentAuth = authInstance || currentAuth;
 
   const logsTbody = document.getElementById('logs-tbody');
   if (!logsTbody) return;
@@ -47,6 +50,10 @@ export async function initLogs(db, workspaceId) {
       if (document.hidden) {
         stopAutoRefresh();
       } else if (autoRefreshEnabled) {
+        // Refresh immediately on regaining focus (cheaper than a tight
+        // interval, and gives fresher data than waiting for the next tick)
+        // then resume the interval.
+        fetchLogs(true);
         startAutoRefresh();
       }
     });
@@ -121,7 +128,12 @@ async function fetchLogs(reset = false) {
     where("workspaceId", "==", currentWorkspaceId),
   ];
 
-  if (f.status !== 'all') {
+  if (f.status === 'failed') {
+    // The engine writes status:'error' on failure, but the UI's "Failed"
+    // filter/badge language is 'failed' — match both so the filter actually
+    // returns results.
+    constraints.push(where("status", "in", ['failed', 'error']));
+  } else if (f.status !== 'all') {
     constraints.push(where("status", "==", f.status));
   }
 
@@ -248,6 +260,14 @@ function renderLogs() {
   const clearBtn = document.getElementById('logs-clear-filters');
   if (clearBtn) {
     clearBtn.style.display = hasActiveFilters() ? 'inline-flex' : 'none';
+  }
+
+  const partialHint = document.getElementById('logs-partial-filter-hint');
+  if (partialHint) {
+    // Firestore can only range-filter one field server-side at a time — when
+    // both search and date range are active, the date filter only applies to
+    // the pages already fetched, not the full matching set.
+    partialHint.style.display = (f.search && (f.fromDate || f.toDate)) ? '' : 'none';
   }
 
   updateCount(filtered.length, cachedLogs.length, f);
@@ -419,9 +439,10 @@ function openLogDetail(log) {
 
   let statusColor = 'var(--text-3)';
   let statusIcon = '';
+  let statusLabel = log.status || 'Unknown';
   if (log.status === 'success') { statusColor = '#6ee7b7'; statusIcon = '✓'; }
   else if (log.status === 'running') { statusColor = '#fcd34d'; statusIcon = '↻'; }
-  else if (log.status === 'failed') { statusColor = '#fca5a5'; statusIcon = '✕'; }
+  else { statusColor = '#fca5a5'; statusIcon = '✕'; statusLabel = 'Failed'; }
 
   panel.innerHTML = `
     <div class="panel-header">
@@ -431,7 +452,7 @@ function openLogDetail(log) {
     <div class="panel-body">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding:16px;background:var(--bg-3);border-radius:var(--radius-xs);border:1px solid var(--border);">
         <span style="font-size:1.2rem;color:${statusColor};font-weight:700;">${statusIcon}</span>
-        <span style="font-size:1rem;font-weight:600;color:${statusColor};text-transform:capitalize;">${log.status || 'Unknown'}</span>
+        <span style="font-size:1rem;font-weight:600;color:${statusColor};text-transform:capitalize;">${statusLabel}</span>
       </div>
 
       <div class="log-detail-grid">
@@ -481,8 +502,16 @@ function openLogDetail(log) {
         <pre style="font-size:0.8rem;color:var(--text-2);white-space:pre-wrap;word-break:break-word;font-family:inherit;margin:0;">${escHtml(log.error)}</pre>
       </div>` : ''}
 
-      ${log.configId ? `
+      ${log.configId && log.status !== 'success' && log.status !== 'running' ? `
       <div style="margin-top:20px;">
+        <button class="btn btn-primary btn-sm" id="log-detail-retry" style="width:100%;justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Retry Sync
+        </button>
+      </div>` : ''}
+
+      ${log.configId ? `
+      <div style="margin-top:12px;">
         <button class="btn btn-secondary btn-sm" id="log-detail-goto-config" style="width:100%;justify-content:center;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           Open Config
@@ -497,6 +526,12 @@ function openLogDetail(log) {
   const closeBtn = panel.querySelector('#log-detail-close');
   if (closeBtn) closeBtn.addEventListener('click', closeLogDetail);
   overlay.addEventListener('click', closeLogDetail);
+
+  // Attach "Retry Sync" handler
+  const retryBtn = panel.querySelector('#log-detail-retry');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => retrySync(log.configId, retryBtn));
+  }
 
   // Attach "Open Config" handler
   const gotoBtn = panel.querySelector('#log-detail-goto-config');
@@ -518,6 +553,36 @@ function closeLogDetail() {
   if (panel) panel.classList.remove('open');
 }
 
+/* ── Retry ─────────────────────────────────────────────────── */
+
+async function retrySync(configId, btn) {
+  if (!configId) return;
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Retrying...';
+  }
+  try {
+    const token = currentAuth && currentAuth.currentUser ? await currentAuth.currentUser.getIdToken() : null;
+    const res = await fetch(`${window.VELYNC_CONFIG.apiBase}/api/sync-configs/${configId}/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    showToast('Sync re-run triggered.', 'success');
+    closeLogDetail();
+    fetchLogs(true);
+  } catch (err) {
+    showToast('Failed to retry sync: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+}
+
 function navigateToConfig(configId) {
   if (!configId) return;
   navigateTo('flows');
@@ -530,8 +595,30 @@ function navigateToConfig(configId) {
 
 /* ── CSV Export ────────────────────────────────────────────── */
 
-function exportLogsCSV() {
-  if (cachedLogs.length === 0) return;
+async function exportLogsCSV() {
+  if (cachedLogs.length === 0 && !hasMore) return;
+
+  const exportBtn = document.getElementById('logs-export-btn');
+  const originalTitle = exportBtn ? exportBtn.title : '';
+  if (exportBtn) {
+    exportBtn.disabled = true;
+    exportBtn.title = 'Loading all logs before export…';
+    exportBtn.style.opacity = '0.6';
+  }
+
+  try {
+    // Load every remaining page first — otherwise this would silently only
+    // export whatever happened to be paginated in so far.
+    while (hasMore) {
+      await fetchLogs(false);
+    }
+  } finally {
+    if (exportBtn) {
+      exportBtn.disabled = false;
+      exportBtn.title = originalTitle;
+      exportBtn.style.opacity = '';
+    }
+  }
 
   const f = getFilters();
   let data = [...cachedLogs];
@@ -542,7 +629,9 @@ function exportLogsCSV() {
       (l.configName || '').toLowerCase().includes(term)
     );
   }
-  if (f.status !== 'all') {
+  if (f.status === 'failed') {
+    data = data.filter(l => l.status === 'failed' || l.status === 'error');
+  } else if (f.status !== 'all') {
     data = data.filter(l => l.status === f.status);
   }
 
@@ -583,7 +672,7 @@ function startAutoRefresh() {
       if (logsView && logsView.style.display !== 'none') {
         await fetchLogs(true);
       }
-    }, 30000);
+    }, 60000);
   }
 }
 

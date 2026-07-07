@@ -8,6 +8,7 @@ const { getConnector } = require('../../domains/connector/registry');
 const { suggestMappings } = require('../../domains/sync/mapping-suggester');
 const { getPlan, enforcePlanLimits } = require('../../core/plan');
 const { deleteSyncConfig } = require('../../domains/sync/config-deletion');
+const { runSync } = require('../../domains/sync/engine');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -285,6 +286,33 @@ router.delete('/sync-configs/:configId', verifyAuth, async (req, res) => {
     return res.json({ success: true, id: configId, ...result });
   } catch (err) {
     logger.error('sync-configs', 'Failed to delete config', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Manually trigger (or retry) a single config's sync. Scoped to the caller's
+// own workspace via resolveWorkspacePlan + the sync_configs subcollection
+// path — a user can never trigger another workspace's sync this way.
+router.post('/sync-configs/:configId/run', verifyAuth, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { configId } = req.params;
+
+    const ctx = await resolveWorkspacePlan(uid);
+    if (ctx.error) return res.status(404).json({ error: ctx.error });
+
+    const configRef = db.collection('workspaces').doc(ctx.workspaceId)
+      .collection('sync_configs').doc(configId);
+    const existing = await configRef.get();
+    if (!existing.exists) {
+      return res.status(404).json({ error: 'Config not found' });
+    }
+
+    logger.info('sync-configs', `Manual run triggered for "${configId}" in workspace "${ctx.workspaceId}"`, { user: uid });
+    const result = await runSync(existing.data(), configId);
+    return res.json({ success: true, id: configId, ...(result || {}) });
+  } catch (err) {
+    logger.error('sync-configs', 'Manual sync run failed', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });

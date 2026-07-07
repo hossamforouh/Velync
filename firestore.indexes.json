@@ -35,6 +35,14 @@
       ]
     },
     {
+      "collectionGroup": "execution_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startTime", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "connected_accounts",
       "queryScope": "COLLECTION",
       "fields": [

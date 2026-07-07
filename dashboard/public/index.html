@@ -771,8 +771,11 @@
             </div>
           </div>
 
-          <div class="logs-count-bar" style="padding:6px 16px;background:var(--bg-2);border:1px solid var(--border);border-top:none;border-bottom:none;display:flex;justify-content:space-between;align-items:center;">
-            <span id="logs-count" style="color:var(--text-3);font-size:0.8rem;">Showing 0 logs</span>
+          <div class="logs-count-bar" style="padding:6px 16px;background:var(--bg-2);border:1px solid var(--border);border-top:none;border-bottom:none;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span id="logs-count" style="color:var(--text-3);font-size:0.8rem;">Showing 0 logs</span>
+              <span id="logs-partial-filter-hint" style="display:none;color:var(--amber, #f59e0b);font-size:0.75rem;">Search + date filters only apply within loaded pages — click Load More to see older matches.</span>
+            </div>
             <div style="display:flex;gap:12px;align-items:center;">
               <button class="btn btn-ghost btn-sm" id="logs-clear-filters" style="display:none;color:var(--violet);font-size:0.75rem;">Clear Filters</button>
             </div>
