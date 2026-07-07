@@ -121,6 +121,12 @@ async function refreshToken(uid, providerCreds, provider, connectionId) {
 async function ensureFreshToken(uid, providerCreds, provider, connectionId) {
   if (!providerCreds) return providerCreds;
 
+  // No refresh token (static API keys / manual attribute-based connections)
+  // means there's no refresh lifecycle to run — an absent expiresAt would
+  // otherwise be treated as "already expired" and wrongly flag these as
+  // needing reauthorization on every single resolve.
+  if (!providerCreds.refreshToken) return providerCreds;
+
   const expiresAt = providerCreds.expiresAt ? new Date(providerCreds.expiresAt).getTime() : 0;
   const isExpired = Date.now() + EXPIRY_MARGIN_MS >= expiresAt;
 
@@ -170,17 +176,35 @@ async function resolveCredentials(uid, connectionId) {
     const credsData = credsDoc.data();
     if (credsData[connectionId]) {
       const providerCreds = credsData[connectionId];
+
+      // Manual/attribute-based connections (API keys, integration tokens) are
+      // stored as a single encrypted JSON blob rather than fixed
+      // accessToken/clientId/clientSecret fields — decrypt and spread
+      // whatever keys were entered (e.g. Notion's "integrationToken").
+      let decryptedAttributes = {};
+      if (providerCreds.encryptedAttributes) {
+        try {
+          decryptedAttributes = JSON.parse(decrypt(providerCreds.encryptedAttributes));
+        } catch (err) {
+          logger.error('auth', `Failed to decrypt attributes for connection "${connectionId}"`, { error: err.message });
+        }
+      }
+
       rawCreds = {
-        accessToken: decrypt(providerCreds.accessToken),
+        accessToken: providerCreds.accessToken ? decrypt(providerCreds.accessToken) : undefined,
         refreshToken: providerCreds.refreshToken ? decrypt(providerCreds.refreshToken) : null,
         clientId: providerCreds.clientId,
         clientSecret: providerCreds.clientSecret,
         expiresAt: providerCreds.expiresAt || null,
+        ...decryptedAttributes,
       };
     }
   }
 
-  // Fallback: creds stored directly on the connection doc (legacy)
+  // Fallback: creds stored directly on the connection doc (legacy — predates
+  // encrypted `credentials` storage for manual connections; a migration
+  // script moves these forward, but this stays as a safety net for anything
+  // not yet migrated).
   if (!rawCreds) {
     if (connData.accessToken || connData.clientId) {
       rawCreds = {
@@ -203,6 +227,18 @@ async function resolveCredentials(uid, connectionId) {
           expiresAt: null,
         };
       }
+    } else if (connData.attributes && typeof connData.attributes === 'object' && Object.keys(connData.attributes).length > 0) {
+      // Plain-object shape (attrId -> value) — what connections.js has always
+      // actually written for manual connections; the array-shaped branch
+      // above never matched this, meaning these credentials never resolved.
+      rawCreds = {
+        accessToken: undefined,
+        refreshToken: null,
+        clientId: connData.attributes.clientId || '',
+        clientSecret: connData.attributes.clientSecret || '',
+        expiresAt: null,
+        ...connData.attributes,
+      };
     }
   }
 
@@ -217,7 +253,11 @@ async function resolveCredentials(uid, connectionId) {
     logger.warn('auth', `Connection ${connectionId} (${provider}) needs reauthorization`);
   }
 
+  // Spread freshCreds first so any decrypted attribute keys (e.g. Notion's
+  // "integrationToken") reach the connector — narrowing to a fixed key list
+  // here would silently drop manual/attribute-based connections' credentials.
   return {
+    ...freshCreds,
     accessToken: freshCreds.accessToken,
     refreshToken: freshCreds.refreshToken,
     clientId: freshCreds.clientId,
@@ -232,13 +272,7 @@ async function resolveCredentials(uid, connectionId) {
  * Calls resolveCredentials internally.
  */
 async function resolveConnectionTokens(uid, connectionId) {
-  const result = await resolveCredentials(uid, connectionId);
-  return {
-    accessToken: result.accessToken,
-    refreshToken: result.refreshToken,
-    clientId: result.clientId,
-    clientSecret: result.clientSecret,
-  };
+  return resolveCredentials(uid, connectionId);
 }
 
 module.exports = { resolveCredentials, resolveConnectionTokens };

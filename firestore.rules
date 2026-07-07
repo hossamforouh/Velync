@@ -114,16 +114,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Writes go through backend routes only (src/api/routes/auth.js's OAuth
+    // exchange and src/api/routes/connections.js for manual connections) —
+    // secrets are encrypted server-side into `credentials`, never stored in
+    // plaintext on this client-readable collection.
     match /connected_accounts/{accountId} {
       allow read: if isSuperAdmin() || isWorkspaceMemberFromField();
-      allow create: if request.auth != null
-        && request.resource.data.keys().hasAny(['provider', 'userId'])
-        && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null
-        && request.resource.data.userId == request.auth.uid
-        && resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null
-        && get(/databases/$(database)/documents/connected_accounts/$(accountId)).data.userId == request.auth.uid;
+      allow write: if false;
     }
 
     // ─── Mail collection (for firestore-send-email extension) ──

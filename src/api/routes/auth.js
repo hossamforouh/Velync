@@ -1,14 +1,29 @@
 const { Router } = require('express');
 const axios = require('axios');
+const rateLimit = require('express-rate-limit');
+const { defaultKeyGenerator } = rateLimit;
 const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { encrypt } = require('../../../utils/encryption');
 const { getPlan } = require('../../core/plan');
+const { resolveAuthorizedWorkspaceId } = require('../../core/workspaceAuth');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 const config = require('../../core/config');
 
 const router = Router();
+
+/** Per-user rate limiter — this endpoint calls an external token endpoint and
+ * writes Firestore docs per request, so it needs a cap independent of the
+ * general API rate limiter. */
+const oauthExchangeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.user?.uid ?? defaultKeyGenerator(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many connection attempts. Please wait before trying again.' },
+});
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -18,7 +33,7 @@ const validate = (req, res, next) => {
   next();
 };
 
-router.post('/oauth/exchange', verifyAuth, [
+router.post('/oauth/exchange', verifyAuth, oauthExchangeLimiter, [
   body('code').isString().trim().notEmpty(),
   body('platformId').isString().trim().notEmpty(),
   body('label').optional().isString().trim(),
@@ -27,14 +42,23 @@ router.post('/oauth/exchange', verifyAuth, [
 ], validate, async (req, res) => {
   try {
     const uid = req.user.uid;
-    const { code, platformId, label, workspaceId, redirectUri } = req.body;
+    const { code, platformId, label, redirectUri } = req.body;
+
+    // The client supplies workspaceId (e.g. from OAuth state relayed via the
+    // callback popup) — never trust it without verifying membership, or any
+    // authenticated user could target another workspace's connections.
+    let resolvedWsId;
+    try {
+      resolvedWsId = await resolveAuthorizedWorkspaceId(uid, req.body.workspaceId);
+    } catch (authErr) {
+      return res.status(authErr.statusCode || 403).json({ error: authErr.message });
+    }
 
     const platformDoc = await db.collection('platforms').doc(platformId).get();
     if (!platformDoc.exists) return res.status(404).json({ error: 'Platform not found' });
     const platform = platformDoc.data();
 
     // Connector tier gating: check workspace plan before allowing connection
-    const resolvedWsId = workspaceId || uid;
     const wsDoc = await db.collection('workspaces').doc(resolvedWsId).get();
     const wsData = wsDoc.data() || {};
     const planId = wsData.planId || 'free';
@@ -83,7 +107,7 @@ router.post('/oauth/exchange', verifyAuth, [
       provider: platformId,
       label: label || platform?.name || 'OAuth Connection',
       userId: uid,
-      workspaceId: workspaceId || uid,
+      workspaceId: resolvedWsId,
       authType: 'oauth',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -105,7 +129,7 @@ router.post('/oauth/exchange', verifyAuth, [
       },
     }, { merge: true });
 
-    logger.info('oauth', `Connection "${connRef.id}" created for ${platformId}`, { workspaceId: workspaceId || uid });
+    logger.info('oauth', `Connection "${connRef.id}" created for ${platformId}`, { workspaceId: resolvedWsId });
 
     res.json({ success: true, message: 'OAuth successful. Credentials securely stored.', connectionId: connRef.id });
   } catch (err) {

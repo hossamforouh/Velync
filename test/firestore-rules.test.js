@@ -454,32 +454,14 @@ describe('/connected_accounts/{accountId}', () => {
     await assertFails(ctx.stranger().firestore().collection('connected_accounts').doc('owner-acct').get());
   });
 
-  it('can create own connected account', async () => {
-    await assertSucceeds(ctx.owner().firestore().collection('connected_accounts').add({
+  it('write always denied — create/update/delete go through backend routes only', async () => {
+    await assertFails(ctx.owner().firestore().collection('connected_accounts').add({
       provider: 'notion', userId: 'owner-uid', workspaceId: 'owner-wsid',
     }));
-  });
-
-  it('cannot create connected account for another user', async () => {
-    await assertFails(ctx.owner().firestore().collection('connected_accounts').add({
-      provider: 'notion', userId: 'stranger-uid', workspaceId: 'owner-wsid',
+    await assertFails(ctx.owner().firestore().collection('connected_accounts').doc('owner-acct').update({
+      label: 'hack',
     }));
-  });
-
-  it('can update own connected account', async () => {
-    await assertSucceeds(ctx.owner().firestore().collection('connected_accounts').doc('owner-acct').update({
-      userId: 'owner-uid',
-    }));
-  });
-
-  it('cannot update another user connected account', async () => {
-    await assertFails(ctx.stranger().firestore().collection('connected_accounts').doc('owner-acct').update({
-      userId: 'stranger-uid',
-    }));
-  });
-
-  it('can delete own connected account', async () => {
-    await assertSucceeds(ctx.owner().firestore().collection('connected_accounts').doc('owner-acct').delete());
+    await assertFails(ctx.owner().firestore().collection('connected_accounts').doc('owner-acct').delete());
   });
 
   it('solo user can read an account whose workspaceId is their own uid (no workspace doc)', async () => {
@@ -490,10 +472,6 @@ describe('/connected_accounts/{accountId}', () => {
     });
     await assertSucceeds(ctx.owner().firestore().collection('connected_accounts').doc('solo-acct').get());
     await assertFails(ctx.stranger().firestore().collection('connected_accounts').doc('solo-acct').get());
-  });
-
-  it('cannot delete another user connected account', async () => {
-    await assertFails(ctx.owner().firestore().collection('connected_accounts').doc('stranger-acct').delete());
   });
 });
 

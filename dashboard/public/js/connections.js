@@ -4,7 +4,7 @@
    renders the Connections view panel.
    ============================================================= */
 
-import { getFirestore, collection, getDocs, addDoc, deleteDoc, updateDoc, doc, setDoc, query, where, orderBy, limit, startAfter, serverTimestamp }
+import { getFirestore, collection, getDocs, getDoc, doc, query, where, orderBy, limit, startAfter }
   from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
@@ -48,6 +48,26 @@ const FALLBACK_COLORS = [
 // ─── Lazy Firebase accessors ─────────────────────────────────
 function getDb() { return getFirestore(getApp()); }
 function getAuthInstance() { return getAuth(getApp()); }
+
+// ─── Backend API helper ────────────────────────────────────────
+// Connection create/update/delete go through backend routes — secrets are
+// encrypted server-side into `credentials`, never written in plaintext from
+// the browser (the Firestore write rule for connected_accounts is `if false`).
+async function apiRequest(path, options = {}) {
+  const user = getAuthInstance().currentUser;
+  const token = user ? await user.getIdToken() : null;
+  const res = await fetch(`${window.VELYNC_CONFIG.apiBase}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
 
 // ─── Load connections from Firestore ──────────────────────────
 export async function loadConnections(reset = false) {
@@ -115,77 +135,55 @@ export async function loadConnections(reset = false) {
 
 // ─── Save a new connection ─────────────────────────────────────
 export async function saveConnection(payload) {
-  const user = getAuthInstance().currentUser;
-  if (!user) throw new Error('Not authenticated');
-
-  const data = {
-    userId: user.uid,
-    workspaceId: window.currentWorkspaceId,
-    provider: payload.provider,
-    label: payload.label || payload.provider,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-
-  if (payload.attributes) {
-    data.attributes = payload.attributes;
-  } else {
-    if (payload.provider === 'ticktick') {
-      data.accessToken = payload.accessToken || '';
-      data.clientId = payload.clientId || '';
-      data.clientSecret = payload.clientSecret || '';
-    }
-    if (payload.provider === 'notion') {
-      data.integrationToken = payload.integrationToken || '';
-    }
-  }
-
-  const docRef = await addDoc(collection(getDb(), 'connected_accounts'), data);
-  return { id: docRef.id, ...data };
+  return apiRequest('/api/connections', {
+    method: 'POST',
+    body: JSON.stringify({
+      provider: payload.provider,
+      label: payload.label || payload.provider,
+      attributes: payload.attributes || {},
+      workspaceId: window.currentWorkspaceId,
+    }),
+  });
 }
 
 // ─── Delete a connection ───────────────────────────────────────
 export async function deleteConnection(id) {
-  await deleteDoc(doc(getDb(), 'connected_accounts', id));
+  return apiRequest(`/api/connections/${id}`, { method: 'DELETE' });
 }
 
 // ─── Check if connection is in use by any active sync config ──
+// Throws on failure rather than silently returning [] — a caller treating a
+// failed check as "not in use" would let a delete proceed without ever
+// having actually verified that, which is the wrong failure mode for a
+// destructive action.
 export async function isConnectionInUse(connId) {
-  try {
-    const snap = await getDocs(query(
-      collection(getDb(), 'workspaces', window.currentWorkspaceId, 'sync_configs'),
-      where('platform1ConnectionId', '==', connId)
-    ));
-    let names = [];
-    snap.forEach(d => {
-      const data = d.data();
-      if (data.status !== 'draft') names.push(data.description || data.id);
-    });
+  const snap = await getDocs(query(
+    collection(getDb(), 'workspaces', window.currentWorkspaceId, 'sync_configs'),
+    where('platform1ConnectionId', '==', connId)
+  ));
+  let names = [];
+  snap.forEach(d => {
+    const data = d.data();
+    if (data.status !== 'draft') names.push(data.description || data.id);
+  });
 
-    const snap2 = await getDocs(query(
-      collection(getDb(), 'workspaces', window.currentWorkspaceId, 'sync_configs'),
-      where('platform2ConnectionId', '==', connId)
-    ));
-    snap2.forEach(d => {
-      const data = d.data();
-      if (data.status !== 'draft' && !names.includes(data.description || data.id)) {
-        names.push(data.description || data.id);
-      }
-    });
+  const snap2 = await getDocs(query(
+    collection(getDb(), 'workspaces', window.currentWorkspaceId, 'sync_configs'),
+    where('platform2ConnectionId', '==', connId)
+  ));
+  snap2.forEach(d => {
+    const data = d.data();
+    if (data.status !== 'draft' && !names.includes(data.description || data.id)) {
+      names.push(data.description || data.id);
+    }
+  });
 
-    return names;
-  } catch (err) {
-    console.warn('[connections] Failed to check in-use:', err);
-    return [];
-  }
+  return names;
 }
 
 // ─── Update a connection ───────────────────────────────────────
 export async function updateConnection(id, data) {
-  await updateDoc(doc(getDb(), 'connected_accounts', id), {
-    ...data,
-    updatedAt: serverTimestamp()
-  });
+  return apiRequest(`/api/connections/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
 // ─── Render the Connections view ──────────────────────────────
@@ -281,9 +279,16 @@ export async function renderConnectionsView() {
       : '—';
 
     const moreBtnId = 'conn-more-' + conn.id;
+    const needsReauthBadge = conn.needsReauth
+      ? `<div class="conn-reauth-badge" title="${escHtml(conn.reauthReason || 'This connection needs to be reauthorized.')}" style="display:flex;align-items:center;gap:4px;margin-top:4px;color:var(--rose, #f87171);font-size:0.75rem;font-weight:500;cursor:pointer;">
+           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+           Needs Reconnection
+         </div>`
+      : '';
     tr.innerHTML = `
       <td data-label="Connection Name" style="font-weight: 500;">
         <span class="conn-label-text">${escHtml(conn.label || conn.providerName)}</span>
+        ${needsReauthBadge}
       </td>
       <td data-label="Provider">
         <span class="conn-badge" style="background: ${badge.bg}; color: ${badge.color};">
@@ -308,6 +313,13 @@ export async function renderConnectionsView() {
         </div>
       </td>
     `;
+    const reauthBadgeEl = tr.querySelector('.conn-reauth-badge');
+    if (reauthBadgeEl) {
+      reauthBadgeEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEditConnectionDialog(conn);
+      });
+    }
     tbody.appendChild(tr);
   });
 
@@ -493,8 +505,15 @@ function wireDeleteButtons() {
       const id = btn.dataset.id;
       const conn = connections.find(c => c.id === id);
 
-      // Check if in use before delete
-      const inUseBy = await isConnectionInUse(id);
+      // Check if in use before delete — if the check itself fails, block the
+      // delete rather than silently proceeding as if it were unused.
+      let inUseBy;
+      try {
+        inUseBy = await isConnectionInUse(id);
+      } catch (err) {
+        showToast('Could not verify whether this connection is in use — delete cancelled. Please try again.', 'error');
+        return;
+      }
       let message = `Delete connection "${conn?.label || id}"? This cannot be undone.`;
       if (inUseBy.length > 0) {
         message = `This connection is used by ${inUseBy.length} active config(s):\n\n${inUseBy.map(n => '• ' + n).join('\n')}\n\nDeleting it will break these integrations. Are you sure?`;
@@ -510,20 +529,18 @@ function wireDeleteButtons() {
       btn.disabled = true;
       btn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>';
       try {
-        const deletedConn = connections.find(c => c.id === id);
-        await deleteConnection(id);
+        const { deletedData } = await deleteConnection(id);
         await loadConnections(true);
         renderConnectionsView();
         window.dispatchEvent(new CustomEvent('connections-refreshed'));
         showToast('Connection deleted', 'info', {
           actionLabel: 'Undo',
           onAction: async () => {
-            if (deletedConn) {
-              const { id: delId, ...data } = deletedConn;
-              const db = getFirestore(getApp());
-              data.createdAt = data.createdAt || serverTimestamp();
-              data.updatedAt = serverTimestamp();
-              await setDoc(doc(db, 'connected_accounts', delId), data);
+            if (deletedData) {
+              await apiRequest(`/api/connections/${id}/restore`, {
+                method: 'POST',
+                body: JSON.stringify(deletedData),
+              });
               await loadConnections(true);
               renderConnectionsView();
               window.dispatchEvent(new CustomEvent('connections-refreshed'));
@@ -682,7 +699,18 @@ async function openAddConnectionDialog(presetProvider = null) {
       const label = document.getElementById('conn-label').value.trim();
       if (!label) { showToast('Label is required', 'error'); return; }
 
-      const payload = { provider: selectedPlatform.key || selectedPlatform.id, label, attributes: {} };
+      const providerId = selectedPlatform.key || selectedPlatform.id;
+      const existingCount = connections.filter(c => c.provider === providerId).length;
+      if (existingCount > 0) {
+        const proceed = await confirmDialog({
+          title: 'Duplicate Connection?',
+          message: `You already have ${existingCount} connection(s) to ${selectedPlatform.name}. Adding another can be confusing to tell apart later — continue anyway?`,
+          confirmText: 'Add Anyway',
+        });
+        if (!proceed) return;
+      }
+
+      const payload = { provider: providerId, label, attributes: {} };
 
       if (selectedPlatform.authType === 'oauth') {
         const encodeBase64 = (str) => btoa(unescape(encodeURIComponent(str)));
@@ -899,11 +927,14 @@ async function openEditConnectionDialog(conn) {
           const isPassword = attr.type === 'password' || attrLabel.toLowerCase().includes('token') || attrLabel.toLowerCase().includes('secret');
           const currentVal = existingAttrs[attrId] || '';
           const requiredMark = attr.required !== false ? ' *' : '';
+          // Attribute values live encrypted server-side and are never sent
+          // back to the client, so this always renders blank on edit — that's
+          // expected, not a missing value.
           return `
             <div class="form-row">
               <label for="conn-edit-attr-${attrId}">${attrLabel}${requiredMark}</label>
               <input id="conn-edit-attr-${attrId}" type="${isPassword ? 'password' : 'text'}" value="${escHtml(currentVal)}" autocomplete="off" />
-              ${isPassword && currentVal ? '<div class="form-row-hint">Leave blank to keep current value</div>' : ''}
+              ${isPassword ? '<div class="form-row-hint">Leave blank to keep current value</div>' : ''}
             </div>
           `;
         }).join('')}
