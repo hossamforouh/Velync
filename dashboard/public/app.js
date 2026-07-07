@@ -12,11 +12,6 @@ import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.
 import { bindNavEvents, navigateTo } from './js/navigation.js';
 import { renderHubView } from './js/hub.js';
 import { connections, loadConnections, renderConnectionsView, renderConnectionsSkeleton, initiateDirectOAuthFlow } from './js/connections.js';
-import { initAdminIntegrations } from './js/admin-integrations.js';
-import { initAdminPlatforms } from './js/admin-platforms.js';
-import { initAdminPlans } from './js/admin-plans.js';
-import { initAdminWorkspaces } from './js/admin-workspaces.js';
-import { initAdminSyncHealth } from './js/admin-sync-health.js';
 import { initBilling } from './js/billing.js';
 import { initOnboarding } from './js/onboarding.js';
 import './js/integration-setup.js';
@@ -921,56 +916,68 @@ onAuthStateChanged(auth, async (user) => {
     if (user.displayName) workspaceName = user.displayName.split(' ')[0] + "'s Workspace";
 
     try {
-      const userSnap = await Promise.race([getDoc(userRef), firestoreTimeout(10000)]);
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          id: user.uid,
-          email: user.email,
-          workspaceName: workspaceName,
-          name: user.displayName || '',
-          workspaceId: user.uid,
-          createdAt: serverTimestamp()
-        });
-        const settingsName = document.getElementById('settings-name');
-        if (settingsName && user.displayName) settingsName.value = user.displayName;
-      } else {
-        const uData = userSnap.data();
-        // Populate UI with loaded data
-        const settingsName = document.getElementById('settings-name');
-        if (settingsName && uData.name) {
-          settingsName.value = uData.name;
+      const ensureUserDoc = async () => {
+        const userSnap = await Promise.race([getDoc(userRef), firestoreTimeout(10000)]);
+        if (!userSnap.exists()) {
+          await setDoc(userRef, {
+            id: user.uid,
+            email: user.email,
+            workspaceName: workspaceName,
+            name: user.displayName || '',
+            workspaceId: user.uid,
+            createdAt: serverTimestamp()
+          });
+          const settingsName = document.getElementById('settings-name');
+          if (settingsName && user.displayName) settingsName.value = user.displayName;
+        } else {
+          const uData = userSnap.data();
+          // Populate UI with loaded data
+          const settingsName = document.getElementById('settings-name');
+          if (settingsName && uData.name) {
+            settingsName.value = uData.name;
+          }
+          if (uData.name) {
+            const avatarDropName = document.getElementById('dropdown-user-name');
+            if (avatarDropName) avatarDropName.textContent = uData.name;
+          }
         }
-        if (uData.name) {
-          const avatarDropName = document.getElementById('dropdown-user-name');
-          if (avatarDropName) avatarDropName.textContent = uData.name;
-        }
-      }
+      };
 
-      // Determine superadmin status via backend (single source of truth)
-      const adminToken = await user.getIdToken();
-      const adminRes = await fetch('/api/admin/status', {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
-      });
-      if (adminRes.ok) {
-        const adminData = await adminRes.json();
-        isSuperadmin = adminData.isSuperadmin;
-      }
-
-      // Ensure default workspace exists
-      const workspaceRef = doc(db, 'workspaces', user.uid);
-      const workspaceSnap = await Promise.race([getDoc(workspaceRef), firestoreTimeout(10000)]);
-      if (!workspaceSnap.exists()) {
-        await setDoc(workspaceRef, {
-          id: user.uid,
-          name: workspaceName,
-          ownerId: user.uid,
-          members: [user.uid],
-          invitedEmails: []
+      const checkSuperadmin = async () => {
+        // Determine superadmin status via backend (single source of truth)
+        const adminToken = await user.getIdToken();
+        const adminRes = await fetch('/api/admin/status', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
         });
-      }
+        if (adminRes.ok) {
+          const adminData = await adminRes.json();
+          isSuperadmin = adminData.isSuperadmin;
+        }
+      };
 
-      // Process pending invites via backend (bypasses Firestore rules)
-      await processPendingInvites(user);
+      const ensureWorkspaceDoc = async () => {
+        const workspaceRef = doc(db, 'workspaces', user.uid);
+        const workspaceSnap = await Promise.race([getDoc(workspaceRef), firestoreTimeout(10000)]);
+        if (!workspaceSnap.exists()) {
+          await setDoc(workspaceRef, {
+            id: user.uid,
+            name: workspaceName,
+            ownerId: user.uid,
+            members: [user.uid],
+            invitedEmails: []
+          });
+        }
+      };
+
+      // These four are independent of each other (different docs/endpoints,
+      // no cross-references) — run them concurrently instead of stacking
+      // round-trips serially, to cut time-to-usable-dashboard after sign-in.
+      await Promise.all([
+        ensureUserDoc(),
+        checkSuperadmin(),
+        ensureWorkspaceDoc(),
+        processPendingInvites(user), // hits the backend directly; bypasses Firestore rules
+      ]);
     } catch (err) {
       console.error("Error fetching user profile:", err);
       if (navigator.onLine) showToast('Failed to load profile', 'error');
@@ -982,6 +989,23 @@ onAuthStateChanged(auth, async (user) => {
     if (adminSection) {
       adminSection.style.display = isSuperadmin ? 'block' : 'none';
       if (isSuperadmin) {
+        // Lazy-loaded: these 5 modules (~100KB+) are admin-only, so fetching
+        // them eagerly for every visitor — including on the sign-in page,
+        // before we even know if they're logged in — was pure waste for the
+        // vast majority of users who are never superadmins.
+        const [
+          { initAdminIntegrations },
+          { initAdminPlatforms },
+          { initAdminPlans },
+          { initAdminWorkspaces },
+          { initAdminSyncHealth },
+        ] = await Promise.all([
+          import('./js/admin-integrations.js'),
+          import('./js/admin-platforms.js'),
+          import('./js/admin-plans.js'),
+          import('./js/admin-workspaces.js'),
+          import('./js/admin-sync-health.js'),
+        ]);
         initAdminIntegrations(db, auth);
         initAdminPlatforms(db, auth);
         initAdminPlans(db, auth);
@@ -2209,20 +2233,23 @@ authForm.addEventListener('submit', async (e) => {
     if (isResetMode) {
       try {
         await sendPasswordResetEmail(auth, email);
-        authError.textContent = "Reset link sent! Please check your email.";
-        authError.style.display = 'block';
-        authError.style.backgroundColor = 'rgba(16, 185, 129, 0.1)'; // Green success
-        authError.style.color = '#10B981';
-        authError.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-        btnAuthSubmit.textContent = "Send Reset Link";
-        btnAuthSubmit.disabled = false;
-        return; // Stop here, don't trigger the auth state changes
       } catch (resetErr) {
-        if (resetErr.code === 'auth/user-not-found' || resetErr.code === 'auth/invalid-credential') {
-          throw new Error('This email is not registered. Please create an account first.');
+        // Don't reveal whether the account exists — showing a different message
+        // for "no such account" vs success lets an attacker enumerate registered
+        // emails. Any other error (bad format, network, rate limit) still
+        // surfaces normally below.
+        if (resetErr.code !== 'auth/user-not-found' && resetErr.code !== 'auth/invalid-credential') {
+          throw resetErr;
         }
-        throw resetErr;
       }
+      authError.textContent = "If an account exists for this email, a reset link has been sent.";
+      authError.style.display = 'block';
+      authError.style.backgroundColor = 'rgba(16, 185, 129, 0.1)'; // Green success
+      authError.style.color = '#10B981';
+      authError.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+      btnAuthSubmit.textContent = "Send Reset Link";
+      btnAuthSubmit.disabled = false;
+      return; // Stop here, don't trigger the auth state changes
     } else if (isSignUpMode) {
       const missingReqs = getPasswordPolicyErrors(password);
       if (missingReqs.length) {
