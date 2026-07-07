@@ -31,7 +31,11 @@ async function refreshToken(uid, providerCreds, provider, connectionId) {
   const platform = platformDoc.data();
   const tokenUrl = platform.tokenUrl;
   const clientId = providerCreds.clientId || platform.clientId;
-  const clientSecret = providerCreds.clientSecret || platform.clientSecret;
+  let clientSecret = providerCreds.clientSecret;
+  if (!clientSecret) {
+    const secretDoc = await db.collection('platform_secrets').doc(provider).get();
+    clientSecret = secretDoc.exists ? secretDoc.data().clientSecret : null;
+  }
 
   if (!tokenUrl || !clientId || !clientSecret) {
     logger.error('auth', `Missing tokenUrl/clientId/clientSecret for ${provider} — cannot refresh`);

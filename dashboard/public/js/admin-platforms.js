@@ -1,8 +1,7 @@
-import { collection, doc, setDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, addDoc, getDocs, where, updateDoc, limit, startAfter, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { collection, onSnapshot, query, orderBy, getDocs, where, limit, startAfter, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
 import { getSkeletonTableHTML, setButtonLoading } from './loading-components.js';
-import { logActivity } from './admin-integrations.js';
 
 let firestoreDb = null;
 let auth = null;
@@ -22,6 +21,24 @@ let platControlsWired = false;
 // Integration count cache (platformId -> count)
 let integrationCountByPlatform = {};
 let countsFetched = false;
+
+// Platform create/edit/delete goes through backend routes (not direct Firestore
+// writes — the `platforms` collection's write rule is `if false`, and
+// clientSecret lives server-side only in `platform_secrets`).
+async function apiRequest(path, options = {}) {
+  const token = auth && auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const res = await fetch(`${window.VELYNC_CONFIG.apiBase}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
 
 export function initAdminPlatforms(dbInstance, authInstance) {
   firestoreDb = dbInstance;
@@ -298,7 +315,9 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       document.getElementById('f-plat-auth-url').value = platform.authUrl || '';
       document.getElementById('f-plat-token-url').value = platform.tokenUrl || '';
       document.getElementById('f-plat-client-id').value = platform.clientId || '';
-      document.getElementById('f-plat-client-secret').value = platform.clientSecret || '';
+      document.getElementById('f-plat-client-secret').value = '';
+      document.getElementById('f-plat-client-secret-hint').style.display = '';
+      document.getElementById('f-plat-client-secret-required').style.display = 'none';
       document.getElementById('f-plat-guide-url').value = platform.guideUrl || '';
       const attrs = platform.attributes || [];
       attrs.forEach(attr => {
@@ -324,6 +343,8 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       document.getElementById('f-plat-token-url').value = '';
       document.getElementById('f-plat-client-id').value = '';
       document.getElementById('f-plat-client-secret').value = '';
+      document.getElementById('f-plat-client-secret-hint').style.display = 'none';
+      document.getElementById('f-plat-client-secret-required').style.display = '';
       document.getElementById('f-plat-guide-url').value = '';
       createAttributeRow();
     }
@@ -409,23 +430,9 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       };
 
       if (docId) {
-        platformData.key = docId;
-        await setDoc(doc(firestoreDb, 'platforms', docId), platformData);
-        try {
-          const q1 = query(collection(firestoreDb, 'integrations'), where('platform1.id', '==', docId));
-          const snap1 = await getDocs(q1);
-          snap1.forEach(docSnap => updateDoc(docSnap.ref, { 'platform1.name': platformData.name }));
-          const q2 = query(collection(firestoreDb, 'integrations'), where('platform2.id', '==', docId));
-          const snap2 = await getDocs(q2);
-          snap2.forEach(docSnap => updateDoc(docSnap.ref, { 'platform2.name': platformData.name }));
-        } catch (updateErr) {
-          console.warn("Failed to update related integrations:", updateErr);
-        }
-        await logActivity('update', 'platform', docId, platformData.name);
+        await apiRequest(`/api/admin/platforms/${docId}`, { method: 'PUT', body: JSON.stringify(platformData) });
       } else {
-        const docRef = await addDoc(collection(firestoreDb, 'platforms'), platformData);
-        await setDoc(docRef, { key: docRef.id }, { merge: true });
-        await logActivity('create', 'platform', docRef.id, platformData.name);
+        await apiRequest('/api/admin/platforms', { method: 'POST', body: JSON.stringify(platformData) });
       }
       closeModal();
       loadPlatformsPage(true);
@@ -610,10 +617,7 @@ function wirePlatformControls() {
       let success = 0;
       for (const id of ids) {
         try {
-          const snap = await getDoc(doc(firestoreDb, 'platforms', id));
-          const data = snap.exists() ? snap.data() : null;
-          await deleteDoc(doc(firestoreDb, 'platforms', id));
-          await logActivity('delete', 'platform', id, data?.name || id);
+          await apiRequest(`/api/admin/platforms/${id}`, { method: 'DELETE' });
           success++;
         } catch (err) {
           console.warn(`Failed to delete platform ${id}:`, err);
@@ -811,18 +815,15 @@ if (btnDelConfirm) {
     btnDelConfirm.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span><span style="vertical-align:middle;">Deleting...</span>';
 
     try {
-      const snap = await getDoc(doc(firestoreDb, 'platforms', id));
-      const deletedData = snap.exists() ? snap.data() : null;
-      await deleteDoc(doc(firestoreDb, 'platforms', id));
-      await logActivity('delete', 'platform', id, platformToDeleteName || id);
+      const { deletedData } = await apiRequest(`/api/admin/platforms/${id}`, { method: 'DELETE' });
       hideDeleteModal();
       showToast('Platform deleted', 'info', {
         actionLabel: 'Undo',
         onAction: async () => {
           if (deletedData) {
-            await setDoc(doc(firestoreDb, 'platforms', id), deletedData);
-            await logActivity('restore', 'platform', id, platformToDeleteName || id);
+            await apiRequest(`/api/admin/platforms/${id}/restore`, { method: 'POST', body: JSON.stringify(deletedData) });
             showToast('Platform restored', 'success');
+            loadPlatformsPage(true);
           }
         }
       });

@@ -1,9 +1,28 @@
-import { collection, collectionGroup, doc, setDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, where, addDoc, getDocs, limit, startAfter, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { collection, collectionGroup, onSnapshot, query, orderBy, where, getDocs, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { getSkeletonTableHTML, setButtonLoading } from './loading-components.js';
 import { showToast } from './toast.js';
 
 let firestoreDb = null;
 let authInstance = null;
+
+// Integration create/edit/delete goes through backend routes (not direct
+// Firestore writes — the `integrations` collection's write rule is `if false`).
+// The backend also handles audit logging server-side now.
+async function apiRequest(path, options = {}) {
+  const token = authInstance && authInstance.currentUser ? await authInstance.currentUser.getIdToken() : null;
+  const res = await fetch(`${window.VELYNC_CONFIG.apiBase}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
 let allIntegrationsCache = [];
 let searchTerm = '';
 let adminIntegrationsWired = false;
@@ -229,11 +248,9 @@ export function initAdminIntegrations(db, auth) {
       }
 
       if (docId) {
-        await setDoc(doc(firestoreDb, 'integrations', docId), integrationData, { merge: true });
-        await logActivity('update', 'integration', docId, integrationData.name);
+        await apiRequest(`/api/admin/integrations/${docId}`, { method: 'PUT', body: JSON.stringify(integrationData) });
       } else {
-        const ref = await addDoc(collection(firestoreDb, 'integrations'), integrationData);
-        await logActivity('create', 'integration', ref.id, integrationData.name);
+        await apiRequest('/api/admin/integrations', { method: 'POST', body: JSON.stringify(integrationData) });
       }
 
       const fe = document.getElementById('form-error-message');
@@ -590,10 +607,7 @@ function wireAdminControls() {
       let success = 0;
       for (const id of ids) {
         try {
-          const snap = await getDoc(doc(firestoreDb, 'integrations', id));
-          const data = snap.exists() ? snap.data() : null;
-          await deleteDoc(doc(firestoreDb, 'integrations', id));
-          await logActivity('delete', 'integration', id, data?.name || id);
+          await apiRequest(`/api/admin/integrations/${id}`, { method: 'DELETE' });
           success++;
         } catch (err) {
           console.warn(`Failed to delete ${id}:`, err);
@@ -785,18 +799,15 @@ if (btnDelConfirm) {
     btnDelConfirm.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span><span style="vertical-align:middle;">Deleting...</span>';
 
     try {
-      const snap = await getDoc(doc(firestoreDb, 'integrations', id));
-      const deletedData = snap.exists() ? snap.data() : null;
-      await deleteDoc(doc(firestoreDb, 'integrations', id));
-      await logActivity('delete', 'integration', id, deletedData?.name || id);
+      const { deletedData } = await apiRequest(`/api/admin/integrations/${id}`, { method: 'DELETE' });
       hideDeleteModal();
       showToast('Integration deleted', 'info', {
         actionLabel: 'Undo',
         onAction: async () => {
           if (deletedData) {
-            await setDoc(doc(firestoreDb, 'integrations', id), deletedData);
-            await logActivity('restore', 'integration', id, deletedData?.name || id);
+            await apiRequest(`/api/admin/integrations/${id}/restore`, { method: 'POST', body: JSON.stringify(deletedData) });
             showToast('Integration restored', 'success');
+            loadIntegrationsPage(true);
           }
         }
       });
@@ -921,41 +932,6 @@ async function loadActivityLog(reset = false) {
   }
 }
 
-const activityLogThrottle = new Map();
-
-async function logActivity(action, targetType, targetId, targetName) {
-  const now = Date.now();
-  const throttleKey = `${action}:${targetType}`;
-  const lastLog = activityLogThrottle.get(throttleKey);
-  if (lastLog && (now - lastLog) < 2000) return;
-  activityLogThrottle.set(throttleKey, now);
-
-  try {
-    let userId = 'system', userEmail = 'system@velync.app', userDisplayName = '';
-    try {
-      const u = authInstance?.currentUser;
-      if (u) {
-        userId = u.uid;
-        userEmail = u.email || userId;
-        userDisplayName = (u.displayName || u.email || userId).split('@')[0];
-      }
-    } catch (_) {}
-    await addDoc(collection(firestoreDb, 'activity_logs'), {
-      action,
-      targetType,
-      targetId,
-      targetName: targetName || targetId,
-      userId,
-      userEmail,
-      userDisplayName,
-      timestamp: serverTimestamp(),
-      details: `${action} ${targetType} "${targetName || targetId}"`
-    });
-  } catch (err) {
-    console.warn('[admin-integrations] Failed to log activity:', err);
-  }
-}
-
 // Wire activity log controls
 (function wireActivityControls() {
   const refreshBtn = document.getElementById('admin-activity-refresh');
@@ -983,9 +959,6 @@ async function logActivity(action, targetType, targetId, targetName) {
     });
   }
 })();
-
-// Expose logActivity for other modules (admin-platforms.js)
-export { logActivity };
 
 // ─── Utilities ──────────────────────────────────────────────
 function escHtml(str) {

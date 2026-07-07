@@ -145,6 +145,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ─── Platform OAuth client secrets (Admin SDK only) ───────
+    // Split out of `platforms` because that collection is readable by any
+    // authenticated user (needed for the connect-flow UI) — secrets must
+    // never live in a doc with that read rule.
+    match /platform_secrets/{platformId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
     // ─── Plans (publicly readable, backend/admin-writable) ───
     match /plans/{planId} {
       allow read: if request.auth != null;

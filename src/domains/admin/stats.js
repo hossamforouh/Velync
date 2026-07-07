@@ -54,9 +54,21 @@ async function getAdminStats() {
  * missing that field).
  * @param {{limit?: number, startAfter?: string|null}} opts
  */
-async function listWorkspaces({ limit = 50, startAfter = null } = {}) {
-  let query = db.collection('workspaces').orderBy(FieldPath.documentId()).limit(limit);
-  if (startAfter) query = query.startAfter(startAfter);
+async function listWorkspaces({ limit = 50, startAfter = null, search = null } = {}) {
+  let query;
+  if (search) {
+    // Prefix-range match on `name` (case-sensitive as stored). Workspaces
+    // without a `name` field are excluded from search results.
+    query = db.collection('workspaces')
+      .orderBy('name')
+      .startAt(search)
+      .endAt(search + '')
+      .limit(limit);
+    if (startAfter) query = query.startAfter(startAfter);
+  } else {
+    query = db.collection('workspaces').orderBy(FieldPath.documentId()).limit(limit);
+    if (startAfter) query = query.startAfter(startAfter);
+  }
 
   const snap = await query.get();
   const items = snap.docs.map(d => {
@@ -70,7 +82,9 @@ async function listWorkspaces({ limit = 50, startAfter = null } = {}) {
       createdAt: data.createdAt || null,
     };
   });
-  const nextCursor = snap.size === limit ? snap.docs[snap.docs.length - 1].id : null;
+  const nextCursor = snap.size === limit
+    ? (search ? snap.docs[snap.docs.length - 1].data().name : snap.docs[snap.docs.length - 1].id)
+    : null;
   return { items, nextCursor };
 }
 

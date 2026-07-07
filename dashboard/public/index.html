@@ -848,6 +848,7 @@
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
               <h3 style="margin:0;font-size:1rem;">Workspaces</h3>
               <div style="display:flex;align-items:center;gap:10px;">
+                <input id="admin-ws-search" type="text" placeholder="Search by name…" class="form-input" style="max-width:220px;padding:6px 10px;font-size:0.85rem;">
                 <span id="admin-ws-count" style="color:var(--text-3);font-size:0.82rem;"></span>
                 <button id="admin-ws-refresh" class="btn btn-secondary btn-sm" type="button">⟳ Refresh</button>
               </div>
@@ -1287,9 +1288,10 @@
                       <input id="f-plat-client-id" type="text" placeholder="Your app's Client ID" autocomplete="off" />
                     </div>
                     <div class="form-row">
-                      <label for="f-plat-client-secret">Client Secret *</label>
+                      <label for="f-plat-client-secret">Client Secret <span id="f-plat-client-secret-required">*</span></label>
                       <input id="f-plat-client-secret" type="password" autocomplete="new-password"
                         placeholder="Your app's Client Secret" />
+                      <small id="f-plat-client-secret-hint" style="display:none;color:var(--text-3);">Leave blank to keep the current value.</small>
                     </div>
                   </div>
 

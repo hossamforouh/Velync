@@ -47,7 +47,8 @@ router.post('/oauth/exchange', verifyAuth, [
     }
 
     const clientId = platform.clientId;
-    const clientSecret = platform.clientSecret;
+    const secretDoc = await db.collection('platform_secrets').doc(platformId).get();
+    const clientSecret = secretDoc.exists ? secretDoc.data().clientSecret : null;
     if (!clientId || !clientSecret) throw new Error('Platform is missing OAuth Client ID or Client Secret');
 
     const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');

@@ -139,7 +139,9 @@ before(async () => {
     projectId: PROJECT_ID,
     firestore: {
       host: 'localhost',
-      port: 8080,
+      port: process.env.FIRESTORE_EMULATOR_HOST
+        ? parseInt(process.env.FIRESTORE_EMULATOR_HOST.split(':')[1], 10)
+        : 8080,
       rules,
     },
   });
@@ -612,6 +614,22 @@ describe('/api_keys/{keyId}', () => {
   it('write always denied', async () => {
     await assertFails(ctx.superAdmin().firestore().collection('api_keys').add({ key: 'hack' }));
     await assertFails(ctx.owner().firestore().collection('api_keys').add({ key: 'hack' }));
+  });
+});
+
+// ─────────────────────────────────────────────
+// 17. /platform_secrets/{platformId}
+// ─────────────────────────────────────────────
+describe('/platform_secrets/{platformId}', () => {
+  it('read always denied — admin-sdk-only collection', async () => {
+    await assertFails(ctx.superAdmin().firestore().collection('platform_secrets').doc('notion').get());
+    await assertFails(ctx.owner().firestore().collection('platform_secrets').doc('notion').get());
+    await assertFails(ctx.stranger().firestore().collection('platform_secrets').doc('notion').get());
+  });
+
+  it('write always denied', async () => {
+    await assertFails(ctx.superAdmin().firestore().collection('platform_secrets').doc('notion').set({ clientSecret: 'hack' }));
+    await assertFails(ctx.owner().firestore().collection('platform_secrets').doc('notion').set({ clientSecret: 'hack' }));
   });
 });
 

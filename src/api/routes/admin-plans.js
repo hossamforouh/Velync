@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
+const { logAdminActivity } = require('../../core/activityLog');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -92,6 +93,10 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
     }
 
     logger.info('admin-plans', `Plan "${planId}" updated`, { user: req.user.uid });
+    await logAdminActivity({
+      uid: req.user.uid, userEmail: req.user.email,
+      action: 'update', targetType: 'plan', targetId: planId, targetName: update.name || planId,
+    });
     return res.json({ success: true });
   } catch (err) {
     logger.error('admin-plans', 'Failed to update plan', { error: err.message });
@@ -130,6 +135,10 @@ router.post('/admin/plans', verifyAuth, requireSuperAdmin, [
     };
     await db.collection('plans').doc(id).set(plan);
     logger.info('admin-plans', `Plan "${id}" created`, { user: req.user.uid });
+    await logAdminActivity({
+      uid: req.user.uid, userEmail: req.user.email,
+      action: 'create', targetType: 'plan', targetId: id, targetName: plan.name,
+    });
     return res.json({ success: true, id });
   } catch (err) {
     logger.error('admin-plans', 'Failed to create plan', { error: err.message });
@@ -146,6 +155,10 @@ router.patch('/admin/plans/:planId/toggle', verifyAuth, requireSuperAdmin, async
     const newActive = !current.isActive;
     await doc.ref.update({ isActive: newActive, updatedAt: new Date().toISOString() });
     logger.info('admin-plans', `Plan "${req.params.planId}" isActive → ${newActive}`, { user: req.user.uid });
+    await logAdminActivity({
+      uid: req.user.uid, userEmail: req.user.email,
+      action: newActive ? 'activate' : 'deactivate', targetType: 'plan', targetId: req.params.planId, targetName: current.name,
+    });
     return res.json({ success: true, isActive: newActive });
   } catch (err) {
     logger.error('admin-plans', 'Failed to toggle plan', { error: err.message });

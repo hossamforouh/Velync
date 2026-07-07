@@ -8,3 +8,4 @@ archive/
 extensions/firestore-send-email.env
 .firebase/
 dashboard/dist/
+firestore-debug.log

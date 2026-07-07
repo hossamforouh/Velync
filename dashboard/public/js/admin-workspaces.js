@@ -10,6 +10,8 @@ let cursor = null;
 let rowsShown = 0;
 let loading = false;
 let hasLoaded = false;
+let searchTerm = '';
+let searchDebounce = null;
 
 export function initAdminWorkspaces(authInstance) {
   auth = authInstance;
@@ -22,6 +24,17 @@ export function initAdminWorkspaces(authInstance) {
 
   const more = document.getElementById('admin-ws-load-more');
   if (more) more.addEventListener('click', () => loadWorkspaces(false));
+
+  const search = document.getElementById('admin-ws-search');
+  if (search) {
+    search.addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        searchTerm = search.value.trim();
+        loadWorkspaces(true);
+      }, 300);
+    });
+  }
 }
 
 async function apiGet(path) {
@@ -65,13 +78,13 @@ async function loadWorkspaces(reset) {
   }
 
   try {
-    const q = cursor
-      ? `?limit=50&startAfter=${encodeURIComponent(cursor)}`
-      : '?limit=50';
-    const { items, nextCursor } = await apiGet('/api/admin/workspaces' + q);
+    const params = new URLSearchParams({ limit: '50' });
+    if (cursor) params.set('startAfter', cursor);
+    if (searchTerm) params.set('search', searchTerm);
+    const { items, nextCursor } = await apiGet('/api/admin/workspaces?' + params.toString());
 
     if (reset && items.length === 0) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-3);">No workspaces.</td></tr>';
+      if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-3);">${searchTerm ? 'No workspaces match your search.' : 'No workspaces.'}</td></tr>`;
     } else if (tbody) {
       for (const w of items) {
         const tr = document.createElement('tr');

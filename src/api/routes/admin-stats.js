@@ -30,7 +30,8 @@ router.get('/admin/workspaces', verifyAuth, requireSuperAdmin, async (req, res) 
   try {
     const limit = clampLimit(req.query.limit);
     const startAfter = req.query.startAfter || null;
-    return res.json(await listWorkspaces({ limit, startAfter }));
+    const search = (req.query.search || '').trim() || null;
+    return res.json(await listWorkspaces({ limit, startAfter, search }));
   } catch (err) {
     logger.error('admin-stats', 'Failed to list workspaces', { error: err.message });
     return res.status(500).json({ error: err.message });
