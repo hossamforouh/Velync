@@ -50,12 +50,23 @@ export async function initBilling(dbInstance, authInstance) {
           <li style="padding:4px 0;">✓ ${plan.logRetentionDays}-day log retention</li>
           <li style="padding:4px 0;">✓ Connectors: ${(plan.connectorTiers || ['basic']).join(', ')}</li>
         </ul>
-        <div style="font-size:0.85rem;color:var(--text-3);">${usage.activeConfigs} of ${plan.maxActiveConfigs} configs in use</div>
+        ${renderUsageLine(usage.activeConfigs, plan.maxActiveConfigs)}
       </div>
     `;
 
-    // Subscription info or upgrade prompt
-    if (subscription.status === 'active' && subscription.stripeSubscriptionId) {
+    // Subscription info or upgrade prompt.
+    // Show the "Manage Subscription" (portal) button whenever a Stripe
+    // customer record exists — not just when status is 'active'. A past_due
+    // subscription still has a customer/subscription on file (only a full
+    // cancellation clears stripeSubscriptionId), and those are exactly the
+    // users who most need to reach the portal to fix their payment method.
+    if (subscription.stripeCustomerId) {
+      let statusBanner = '';
+      if (subscription.status === 'past_due') {
+        statusBanner = `<p style="margin:0 0 12px;color:var(--rose);font-size:0.85rem;font-weight:600;">⚠️ Your payment is past due. Please update your billing info to avoid service interruption.</p>`;
+      } else if (subscription.status === 'canceled') {
+        statusBanner = `<p style="margin:0 0 12px;color:var(--text-2);font-size:0.85rem;">Your subscription was canceled. You're currently on the Free plan.</p>`;
+      }
       subArea.innerHTML = `
         <div class="billing-card" style="padding: 20px; border: 1px solid var(--border); border-radius: 12px;">
           <h4 style="margin:0 0 8px;">Subscription</h4>
@@ -63,24 +74,22 @@ export async function initBilling(dbInstance, authInstance) {
           <p style="margin:0 0 12px;color:var(--text-3);font-size:0.85rem;">
             ${subscription.currentPeriodEnd ? 'Current period ends: ' + new Date(subscription.currentPeriodEnd).toLocaleDateString() : ''}
           </p>
+          ${statusBanner}
           <button class="btn btn-secondary btn-sm" id="btn-manage-billing">Manage Subscription →</button>
         </div>
       `;
       document.getElementById('btn-manage-billing')?.addEventListener('click', openPortal);
-    } else if (plan.priceMonthly > 0) {
-      // Plan has a price but isn't subscribed — show checkout
-      subArea.innerHTML = `
-        <div style="color:var(--text-3);font-size:0.85rem;margin-bottom:12px;">
-          ${subscription.status === 'past_due' ? '⚠️ Your payment is past due. Please update your billing info.' : ''}
-          ${subscription.status === 'canceled' ? 'Your subscription was canceled. You are on the Free plan.' : ''}
-        </div>
-      `;
     }
 
-    // Available plans for upgrade
-    const plansSnap = await getDocs(query(collection(firestoreDb, 'plans'), orderBy('sortOrder', 'asc')));
-    const allPlans = [];
-    plansSnap.forEach(d => allPlans.push({ id: d.id, ...d.data() }));
+    // Available plans for upgrade — cached (plans change rarely and this is
+    // a full-collection read on every tab open otherwise).
+    let allPlans = window.__getViewCache ? window.__getViewCache('billing-plans') : null;
+    if (!allPlans) {
+      const plansSnap = await getDocs(query(collection(firestoreDb, 'plans'), orderBy('sortOrder', 'asc')));
+      allPlans = [];
+      plansSnap.forEach(d => allPlans.push({ id: d.id, ...d.data() }));
+      if (window.__setViewCache) window.__setViewCache('billing-plans', allPlans);
+    }
 
     const upgradePlans = allPlans.filter(p => p.id !== plan.id && p.isActive && p.priceMonthly > 0);
     if (upgradePlans.length > 0) {
@@ -143,6 +152,20 @@ async function openPortal() {
   } catch (err) {
     showToast('Failed to open billing portal: ' + err.message, 'error');
   }
+}
+
+function renderUsageLine(used, max) {
+  const ratio = max > 0 ? used / max : 0;
+  const atLimit = max > 0 && used >= max;
+  const nearLimit = !atLimit && ratio >= 0.8;
+  const color = atLimit ? 'var(--rose)' : nearLimit ? '#f59e0b' : 'var(--text-3)';
+  const weight = (atLimit || nearLimit) ? '600' : '400';
+  const suffix = atLimit
+    ? ' — limit reached, upgrade to add more'
+    : nearLimit
+      ? ' — approaching your limit'
+      : '';
+  return `<div style="font-size:0.85rem;color:${color};font-weight:${weight};">${used} of ${max} configs in use${suffix}</div>`;
 }
 
 function escHtml(str) {

@@ -71,4 +71,36 @@ async function notifySyncFailure({ workspaceId, configId, configName, error, cur
   }
 }
 
-module.exports = { getOptedInRecipientEmails, notifySyncFailure };
+/**
+ * Email every superadmin. Used for failures that would otherwise be
+ * invisible to everyone (e.g. a billing webhook handler throwing) — a log
+ * line alone means nobody finds out until a user complains.
+ */
+async function notifyAdmins(subject, text) {
+  try {
+    const superadminsSnap = await db.collection('superadmins').get();
+    const uids = superadminsSnap.docs.map(d => d.id);
+    if (uids.length === 0) return;
+
+    const emails = [];
+    for (const uid of uids) {
+      try {
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (userDoc.exists && userDoc.data().email) emails.push(userDoc.data().email);
+      } catch (err) {
+        logger.warn('notifications', `Failed to resolve superadmin "${uid}"`, { error: err.message });
+      }
+    }
+
+    for (const to of emails) {
+      await db.collection('mail').add({ to, message: { subject, text } });
+    }
+    if (emails.length > 0) {
+      logger.info('notifications', `Sent admin alert: "${subject}"`, { recipients: emails.length });
+    }
+  } catch (err) {
+    logger.error('notifications', 'Failed to send admin alert', { error: err.message, subject });
+  }
+}
+
+module.exports = { getOptedInRecipientEmails, notifySyncFailure, notifyAdmins };

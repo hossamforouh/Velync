@@ -180,4 +180,42 @@ function cronToMinutes(cronExpr) {
   }
 }
 
-module.exports = { getPlan, enforcePlanLimits, enforceTotalConfigCap, cronToMinutes };
+/**
+ * After a plan downgrade/cancellation, pause active sync_configs beyond the
+ * new plan's maxActiveConfigs — otherwise a workspace keeps every config
+ * running exactly as before and only discovers it's over-limit the next
+ * time it tries to create/edit an unrelated config.
+ *
+ * Keeps the oldest active configs (by createdAt) running and pauses the
+ * newest ones beyond the limit, on the theory that older/established syncs
+ * are more likely to be the ones a workspace actually depends on.
+ *
+ * @param {string} workspaceId
+ * @param {string} planId
+ * @returns {Promise<{pausedCount: number, pausedNames: string[]}>}
+ */
+async function reconcileActiveConfigsForPlan(workspaceId, planId) {
+  const plan = await getPlan(planId);
+  if (!plan || !plan.maxActiveConfigs) return { pausedCount: 0, pausedNames: [] };
+
+  const activeSnap = await db.collection('workspaces').doc(workspaceId)
+    .collection('sync_configs')
+    .where('status', '==', 'active')
+    .orderBy('createdAt', 'asc')
+    .get();
+
+  if (activeSnap.size <= plan.maxActiveConfigs) return { pausedCount: 0, pausedNames: [] };
+
+  const toPause = activeSnap.docs.slice(plan.maxActiveConfigs);
+  const batch = db.batch();
+  const now = new Date().toISOString();
+  toPause.forEach(d => batch.update(d.ref, { status: 'paused', updatedAt: now }));
+  await batch.commit();
+
+  return {
+    pausedCount: toPause.length,
+    pausedNames: toPause.map(d => d.data().description || d.id),
+  };
+}
+
+module.exports = { getPlan, enforcePlanLimits, enforceTotalConfigCap, reconcileActiveConfigsForPlan, cronToMinutes };

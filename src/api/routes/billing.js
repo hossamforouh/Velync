@@ -5,6 +5,8 @@ const { verifyAuth } = require('../middleware/auth');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 const config = require('../../core/config');
+const { reconcileActiveConfigsForPlan } = require('../../core/plan');
+const { notifyAdmins } = require('../../core/notifications');
 
 let stripe = null;
 try {
@@ -28,6 +30,34 @@ function requireStripe(req, res, next) {
     return res.status(503).json({ error: 'Billing is not configured. Set STRIPE_SECRET_KEY.' });
   }
   next();
+}
+
+// After a plan change, pause any active configs beyond the new plan's limit
+// and let the workspace owner know — otherwise they silently keep running
+// until an unrelated action trips enforcePlanLimits().
+async function reconcileAndNotify(workspaceId, planId, ownerId) {
+  try {
+    const { pausedCount, pausedNames } = await reconcileActiveConfigsForPlan(workspaceId, planId);
+    if (pausedCount === 0) return;
+
+    logger.warn('billing', `Paused ${pausedCount} config(s) in workspace "${workspaceId}" — over the new plan's active-config limit`);
+
+    if (ownerId) {
+      const userDoc = await db.collection('users').doc(ownerId).get();
+      const userEmail = userDoc.exists ? userDoc.data().email : null;
+      if (userEmail) {
+        await db.collection('mail').add({
+          to: userEmail,
+          message: {
+            subject: '[Velync] Some sync configs were paused',
+            text: `Your plan change means you're now over your active-config limit, so ${pausedCount} sync config(s) were automatically paused:\n\n${pausedNames.map(n => '- ' + n).join('\n')}\n\nUpgrade your plan or manually choose which to keep active at https://velync.web.app/.`,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    logger.error('billing', 'Failed to reconcile/notify paused configs', { workspaceId, error: err.message });
+  }
 }
 
 // Get current plan + subscription info for a workspace
@@ -93,6 +123,9 @@ router.post('/billing/create-checkout-session', verifyAuth, requireStripe, [
     // Get or create Stripe customer
     const wsDoc = await db.collection('workspaces').doc(workspaceId).get();
     const ws = wsDoc.data();
+    if (ws.ownerId && ws.ownerId !== req.user.uid) {
+      return res.status(403).json({ error: 'Only the workspace owner can manage billing.' });
+    }
     let stripeCustomerId = ws.stripeCustomerId;
 
     if (!stripeCustomerId) {
@@ -135,6 +168,10 @@ router.post('/billing/create-portal-session', verifyAuth, requireStripe, async (
     const wsDoc = await db.collection('workspaces').doc(workspaceId).get();
     if (!wsDoc.exists) return res.status(404).json({ error: 'Workspace not found' });
     const ws = wsDoc.data();
+
+    if (ws.ownerId && ws.ownerId !== req.user.uid) {
+      return res.status(403).json({ error: 'Only the workspace owner can manage billing.' });
+    }
 
     if (!ws.stripeCustomerId) {
       return res.status(400).json({ error: 'No Stripe customer — subscribe first' });
@@ -184,6 +221,9 @@ router.post('/billing/webhook', (req, res) => {
               currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
             });
             logger.info('billing', `Checkout completed — workspace "${workspaceId}" → ${planId}`);
+
+            const wsSnap = await wsRef.get();
+            await reconcileAndNotify(workspaceId, planId, wsSnap.data()?.ownerId);
           }
           break;
         }
@@ -223,6 +263,8 @@ router.post('/billing/webhook', (req, res) => {
               billingInterval: subscription.items.data[0]?.price?.recurring?.interval === 'year' ? 'annual' : 'monthly',
             });
             logger.info('billing', `Subscription updated — "${subscription.id}" → ${planId}`);
+
+            await reconcileAndNotify(wsRef.id, planId, wsData.ownerId);
           }
           break;
         }
@@ -260,6 +302,8 @@ router.post('/billing/webhook', (req, res) => {
                 logger.error('billing', 'Failed to send cancellation email', { error: emailErr.message });
               }
             }
+
+            await reconcileAndNotify(wsRef.id, 'free', wsData.ownerId);
           }
           break;
         }
@@ -303,6 +347,10 @@ router.post('/billing/webhook', (req, res) => {
       }
     } catch (err) {
       logger.error('billing', 'Webhook handler error', { error: err.message, type: event.type });
+      notifyAdmins(
+        '[Velync] Billing webhook handler failed',
+        `A Stripe webhook of type "${event.type}" (event ${event.id}) threw an error and was not fully processed:\n\n${err.message}\n\nA workspace's plan/subscription state may now be out of sync — check the Cloud Run logs for domain "billing".`
+      ).catch(() => {});
     }
   };
 
