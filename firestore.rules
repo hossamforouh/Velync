@@ -124,11 +124,13 @@ service cloud.firestore {
     }
 
     // ─── Mail collection (for firestore-send-email extension) ──
+    // Server-only: every email send (invites, billing, sync-failure/admin
+    // alerts) now goes through a backend route using the Admin SDK. A
+    // client-writable `to`/`message` doc with no relation to a real invite
+    // or event was an open email-relay abuse vector.
     match /mail/{mailId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.keys().hasAny(['to', 'message']);
-      allow update, delete: if false;
+      allow read: if false;
+      allow write: if false;
     }
 
     // ─── Public marketplace data ──────────────────────────────

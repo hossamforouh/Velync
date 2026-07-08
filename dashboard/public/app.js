@@ -591,6 +591,9 @@ function firestoreTimeout(ms = 15000) {
   });
 }
 
+// Shows pending workspace invites for explicit accept/decline instead of
+// silently auto-joining — a user should consciously choose to join a
+// workspace someone else invited them to, not be added invisibly on login.
 async function processPendingInvites(user) {
   try {
     const token = await user.getIdToken();
@@ -600,16 +603,87 @@ async function processPendingInvites(user) {
     if (!res.ok) return;
     const data = await res.json();
     if (!data.invites?.length) return;
-    for (const ws of data.invites) {
-      fetch('/api/workspace/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ workspaceId: ws.id })
-      }).catch(() => {});
-    }
+    showPendingInvitesModal(data.invites, token);
   } catch (e) {
     console.warn('Could not process invites:', e);
   }
+}
+
+function showPendingInvitesModal(invites, token) {
+  const existing = document.getElementById('pending-invites-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pending-invites-overlay';
+  overlay.className = 'conn-dialog-overlay';
+  overlay.style.zIndex = '10000';
+  overlay.innerHTML = `
+    <div class="conn-dialog" style="max-width:440px;">
+      <h3>Workspace Invitation${invites.length !== 1 ? 's' : ''}</h3>
+      <p style="color:var(--text-3);font-size:0.9rem;margin:0 0 16px;">You've been invited to collaborate on the following workspace${invites.length !== 1 ? 's' : ''}:</p>
+      <div id="pending-invites-list" style="display:flex;flex-direction:column;gap:12px;">
+        ${invites.map(ws => `
+          <div class="collaborator-item" data-invite-id="${escAttr(ws.id)}" style="justify-content:space-between;align-items:center;">
+            <div class="collab-info"><div class="collab-name">${escHtml(ws.name || 'Untitled Workspace')}</div></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary btn-sm decline-invite-action" data-id="${escAttr(ws.id)}">Decline</button>
+              <button class="btn btn-primary btn-sm accept-invite-action" data-id="${escAttr(ws.id)}">Accept</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  function removeRow(id) {
+    const row = overlay.querySelector(`[data-invite-id="${CSS.escape(id)}"]`);
+    if (row) row.remove();
+    if (!overlay.querySelector('[data-invite-id]')) overlay.remove();
+  }
+
+  overlay.querySelectorAll('.accept-invite-action').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Joining...';
+      try {
+        const r = await fetch('/api/workspace/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ workspaceId: btn.dataset.id })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Failed to join');
+        showToast('Joined workspace', 'success');
+        removeRow(btn.dataset.id);
+      } catch (err) {
+        showToast('Failed to join: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Accept';
+      }
+    });
+  });
+
+  overlay.querySelectorAll('.decline-invite-action').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Declining...';
+      try {
+        const r = await fetch('/api/workspace/decline-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ workspaceId: btn.dataset.id })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Failed to decline');
+        removeRow(btn.dataset.id);
+      } catch (err) {
+        showToast('Failed to decline: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Decline';
+      }
+    });
+  });
 }
 // -----------------------------------
 
@@ -1320,11 +1394,13 @@ onAuthStateChanged(auth, async (user) => {
       // Save Workspace Logic
       const btnSaveWorkspace = document.getElementById('btn-save-workspace');
       const workspaceNameInput = document.getElementById('settings-workspace-name');
+      const workspaceDescInput = document.getElementById('settings-workspace-description');
       const workspaceMsg = document.getElementById('workspace-msg');
-      
+
       if (btnSaveWorkspace && workspaceNameInput) {
         btnSaveWorkspace.addEventListener('click', async () => {
           const newName = workspaceNameInput.value.trim();
+          const newDescription = workspaceDescInput ? workspaceDescInput.value.trim() : undefined;
           if (!newName || !currentWorkspaceId) return;
           setButtonLoading(btnSaveWorkspace, true);
           try {
@@ -1332,7 +1408,7 @@ onAuthStateChanged(auth, async (user) => {
             const res = await fetch('/api/workspace/name', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ name: newName, workspaceId: currentWorkspaceId })
+              body: JSON.stringify({ name: newName, description: newDescription, workspaceId: currentWorkspaceId })
             });
             if (!res.ok) {
               const errData = await res.json();
@@ -1532,70 +1608,10 @@ onAuthStateChanged(auth, async (user) => {
               }
               throw new Error(errData.error || 'Failed to send invite');
             }
-            const inviteData = await inviteRes.json();
-            const workspaceName = inviteData.workspaceName || 'a Workspace';
-
-            // Trigger Email Extension
-            await addDoc(collection(db, 'mail'), {
-              to: [email],
-              message: {
-                subject: `Collaboration Invite: Access a Workspace on Velync`,
-                html: `
-<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background-color:#0a0819;color:#e2e8f0;font-family:'Helvetica Neue', Helvetica, Arial, sans-serif;">
-  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#0a0819;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color:#1e1b4b;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);">
-          <tr>
-            <td align="center" style="padding:40px 0 35px 0;background:linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);">
-              <h1 style="color:#ffffff;margin:0;font-size:32px;letter-spacing:1px;">Velync</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:40px 40px;">
-              <h2 style="color:#ffffff;font-size:22px;margin-top:0;margin-bottom:20px;">Hi there,</h2>
-              <p style="color:#cbd5e1;font-size:16px;line-height:24px;margin-bottom:24px;">
-                You have been invited to collaborate on <strong>${workspaceName}</strong> in Velync.
-              </p>
-              
-              <p style="color:#cbd5e1;font-size:16px;line-height:24px;margin-bottom:16px;">
-                By joining this workspace, you will be able to work together with your team to:
-              </p>
-              
-              <ul style="color:#cbd5e1;font-size:16px;line-height:26px;margin-bottom:32px;padding-left:20px;">
-                <li style="margin-bottom:10px;"><strong>Build Active Flows:</strong> Create, manage, and monitor automated sync pipelines.</li>
-                <li style="margin-bottom:10px;"><strong>Connect Platforms:</strong> Securely link third-party tools like Notion, TickTick, and Google.</li>
-                <li style="margin-bottom:10px;"><strong>Monitor Execution Logs:</strong> Track live data mapping and system operations in real time.</li>
-              </ul>
-              
-              <p style="color:#cbd5e1;font-size:16px;line-height:24px;margin-bottom:40px;">
-                Ready to align your workflows? Click the button below to accept your invitation, set up your account, and jump straight into the dashboard.
-              </p>
-              
-              <div style="text-align:center;">
-                <a href="https://velync.web.app" style="display:inline-block;padding:16px 32px;background:linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);color:#ffffff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:bold;box-shadow:0 4px 15px rgba(79,70,229,0.4);">Join the Workspace</a>
-              </div>
-            </td>
-          </tr>
-          <tr>
-            <td align="center" style="padding:24px;background-color:#161436;border-top:1px solid rgba(255,255,255,0.05);">
-              <p style="color:#64748b;font-size:13px;margin:0;">
-                © 2026 Velync. All rights reserved.<br>
-                Secure integrations for modern teams.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-                `
-              }
-            });
+            // Invite email is now sent server-side (POST /api/workspace/invite)
+            // — the mail collection is locked to Admin-SDK-only writes, since a
+            // client-writable mail collection with no relation to a real invite
+            // was an open email-relay abuse vector.
             showInviteMsg(`Invite sent to ${email}`, false);
             inviteEmailInput.value = '';
             inviteForm.style.display = 'none';
@@ -1676,7 +1692,13 @@ onAuthStateChanged(auth, async (user) => {
            if (wsInput && tenant.name) {
              wsInput.value = tenant.name;
            }
+           const wsDescInput = document.getElementById('settings-workspace-description');
+           if (wsDescInput) {
+             wsDescInput.value = tenant.description || '';
+           }
            
+           const isCurrentUserOwner = tenant.ownerId === auth.currentUser.uid;
+
            // List accepted members
            if (tenant.members) {
              for (const uid of tenant.members) {
@@ -1684,6 +1706,9 @@ onAuthStateChanged(auth, async (user) => {
                const uData = uSnap.exists() ? uSnap.data() : { email: 'Unknown' };
                const isOwner = tenant.ownerId === uid;
                const initials = uData.email ? uData.email.substring(0, 2).toUpperCase() : 'U';
+               const makeOwnerBtn = (isCurrentUserOwner && !isOwner)
+                 ? `<button class="btn btn-secondary btn-sm make-owner-btn" data-uid="${escAttr(uid)}" data-name="${escAttr(uData.name || uData.email || 'this member')}" style="margin-left:auto;">Make Owner</button>`
+                 : '';
                html += `
                  <div class="collaborator-item">
                    <div class="collab-avatar">${initials}</div>
@@ -1691,11 +1716,12 @@ onAuthStateChanged(auth, async (user) => {
                      <div class="collab-name">${escHtml(uData.name || 'Unknown User')} ${isOwner ? '(Owner)' : ''}</div>
                      <div class="collab-email">${escHtml(uData.email || '')}</div>
                    </div>
+                   ${makeOwnerBtn}
                  </div>
                `;
              }
            }
-           
+
            // List pending invites
            if (tenant.invitedEmails) {
              for (const email of tenant.invitedEmails) {
@@ -1704,9 +1730,9 @@ onAuthStateChanged(auth, async (user) => {
                    <div class="collab-avatar" style="background: transparent; border: 1px dashed var(--border); color: var(--text-2);">⏳</div>
                    <div class="collab-info" style="flex: 1;">
                      <div class="collab-name">Pending Invite</div>
-                     <div class="collab-email">${email}</div>
+                     <div class="collab-email">${escHtml(email)}</div>
                    </div>
-                   <button class="btn btn-icon delete-invite-btn" title="Remove Invite" data-email="${email}" style="color: #f43f5e; background: rgba(244, 63, 94, 0.1); padding: 6px; border: none; cursor: pointer; border-radius: 6px;">
+                   <button class="btn btn-icon delete-invite-btn" title="Remove Invite" data-email="${escAttr(email)}" style="color: #f43f5e; background: rgba(244, 63, 94, 0.1); padding: 6px; border: none; cursor: pointer; border-radius: 6px;">
                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                    </button>
                  </div>
@@ -1714,6 +1740,39 @@ onAuthStateChanged(auth, async (user) => {
              }
            }
            collabContainer.innerHTML = html;
+
+           // Bind "Make Owner" events
+           collabContainer.querySelectorAll('.make-owner-btn').forEach(btn => {
+             btn.addEventListener('click', async () => {
+               const targetUid = btn.dataset.uid;
+               const targetName = btn.dataset.name;
+               const confirmed = await confirmDialog({
+                 title: 'Transfer Ownership?',
+                 message: `Make "${targetName}" the owner of this workspace? You will remain a member, but will no longer be able to delete the workspace or manage billing.`,
+                 confirmText: 'Transfer Ownership',
+                 confirmClass: 'btn-danger'
+               });
+               if (!confirmed) return;
+               btn.disabled = true;
+               btn.textContent = 'Transferring...';
+               try {
+                 const token = await auth.currentUser.getIdToken();
+                 const res = await fetch('/api/workspace/transfer-ownership', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                   body: JSON.stringify({ workspaceId: currentWorkspaceId, newOwnerId: targetUid })
+                 });
+                 const data = await res.json();
+                 if (!res.ok) throw new Error(data.error || 'Failed to transfer ownership');
+                 showToast('Ownership transferred', 'success');
+                 loadCollaborators();
+               } catch (err) {
+                 showToast('Failed to transfer ownership: ' + err.message, 'error');
+                 btn.disabled = false;
+                 btn.textContent = 'Make Owner';
+               }
+             });
+           });
 
            // Bind delete invite events
            const deleteBtns = collabContainer.querySelectorAll('.delete-invite-btn');

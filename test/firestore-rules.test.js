@@ -635,19 +635,14 @@ describe('/platform_secrets/{platformId}', () => {
 // 17. /mail/{mailId}
 // ─────────────────────────────────────────────
 describe('/mail/{mailId}', () => {
-  it('any authed user can read', async () => {
-    await assertSucceeds(ctx.stranger().firestore().collection('mail').doc('test-mail').get());
+  it('read always denied — server-only, every send goes through a backend route', async () => {
+    await assertFails(ctx.stranger().firestore().collection('mail').doc('test-mail').get());
+    await assertFails(ctx.superAdmin().firestore().collection('mail').doc('test-mail').get());
   });
 
-  it('any authed user can create with required fields', async () => {
-    await assertSucceeds(ctx.stranger().firestore().collection('mail').add({ to: 'x@y.com', message: { subject: 'Hi' } }));
-  });
-
-  it('update denied', async () => {
+  it('write always denied client-side, even with well-formed fields', async () => {
+    await assertFails(ctx.stranger().firestore().collection('mail').add({ to: 'x@y.com', message: { subject: 'Hi' } }));
     await assertFails(ctx.superAdmin().firestore().collection('mail').doc('test-mail').update({ to: 'hack@x.com' }));
-  });
-
-  it('delete denied', async () => {
     await assertFails(ctx.superAdmin().firestore().collection('mail').doc('test-mail').delete());
   });
 });

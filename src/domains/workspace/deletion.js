@@ -24,12 +24,27 @@ const BATCH_SIZE = 100;
  * @returns {Promise<{success: boolean, summary: object, errors: string[]}>}
  */
 async function deleteWorkspace(workspaceId, options = {}) {
-  const summary = { syncConfigs: 0, locks: 0, connections: 0, credentials: 0, executionLogs: 0 };
+  const summary = { syncConfigs: 0, locks: 0, connections: 0, credentials: 0, executionLogs: 0, membersReset: 0 };
   const errors = [];
   const initiatedBy = options.initiatedBy || 'system';
 
   logger.warn('workspace-deletion',
     `Starting deletion of workspace "${workspaceId}" initiated by "${initiatedBy}"`);
+
+  // Capture owner/members BEFORE the workspace doc is deleted (step 6) — needed
+  // for the workspaceId reset in step 7, since there's nothing left to read after.
+  let memberUidsToReset = [];
+  try {
+    const wsDoc = await db.collection('workspaces').doc(workspaceId).get();
+    if (wsDoc.exists) {
+      const wsData = wsDoc.data();
+      // `members` already includes the owner (set at workspace creation),
+      // but dedupe defensively — a batch can't target the same doc twice.
+      memberUidsToReset = [...new Set([wsData.ownerId, ...(wsData.members || [])])].filter(Boolean);
+    }
+  } catch (err) {
+    logger.error('workspace-deletion', `Failed to read workspace doc before deletion: ${err.message}`);
+  }
 
   // Collect config IDs early — needed for step 2 (locks) and step 1 doesn't return IDs after recursiveDelete
   let configIds = [];
@@ -200,6 +215,27 @@ async function deleteWorkspace(workspaceId, options = {}) {
     const msg = `Step 6 — workspace document deletion failed: ${err.message}`;
     logger.error('workspace-deletion', msg);
     errors.push(msg);
+  }
+
+  // ── Step 7: Reset departed members' workspaceId back to their own uid ──
+  // Otherwise every member of a deleted shared workspace (including the
+  // owner) is left with users/{uid}.workspaceId pointing at a doc that no
+  // longer exists, with no recovery path — GET /workspace returns null
+  // forever instead of falling back to their own solo workspace.
+  if (memberUidsToReset.length > 0) {
+    try {
+      const batch = db.batch();
+      memberUidsToReset.forEach(uid => {
+        batch.update(db.collection('users').doc(uid), { workspaceId: uid });
+      });
+      await batch.commit();
+      summary.membersReset = memberUidsToReset.length;
+      logger.info('workspace-deletion', `  Reset workspaceId for ${memberUidsToReset.length} member(s) back to their own uid`);
+    } catch (err) {
+      const msg = `Step 7 — member workspaceId reset failed: ${err.message}`;
+      logger.error('workspace-deletion', msg);
+      errors.push(msg);
+    }
   }
 
   // ── Summary ────────────────────────────────────────────────────
