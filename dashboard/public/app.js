@@ -1338,6 +1338,13 @@ onAuthStateChanged(auth, async (user) => {
             currentPwInput.value = '';
             newPwInput.value = '';
             confirmPwInput.value = '';
+            // Security notification — best-effort, doesn't block the already-successful change.
+            auth.currentUser.getIdToken().then(token =>
+              fetch('/api/settings/notify-password-changed', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+              })
+            ).catch(() => {});
           } catch (err) {
             if (pwMsg) {
               if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
@@ -1930,7 +1937,7 @@ onAuthStateChanged(auth, async (user) => {
         btnDeleteAccount.addEventListener('click', async () => {
           const confirmed = await confirmDialog({
             title: 'Delete Account?',
-            message: 'This will permanently delete your account, all workspaces, sync configs, connections, and execution logs. This action cannot be undone.',
+            message: 'This will permanently delete your account, all workspaces, sync configs, connections, and execution logs. This action cannot be undone. Consider using "Export My Data" above first if you\'d like to keep a copy — there\'s no way to recover anything after deletion.',
             confirmText: 'Delete My Account',
             confirmClass: 'btn-danger'
           });

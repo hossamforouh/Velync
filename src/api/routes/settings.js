@@ -131,6 +131,31 @@ router.put('/profile', verifyAuth, [
   }
 });
 
+// Password changes happen entirely client-side via the Firebase Auth SDK (no
+// backend route touches the password itself) — this just sends the "your
+// password was changed" confirmation email afterward, a standard security
+// notification so the account owner notices immediately if it wasn't them.
+router.post('/notify-password-changed', verifyAuth, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const email = userDoc.exists ? userDoc.data().email : req.user.email;
+    if (email) {
+      await db.collection('mail').add({
+        to: email,
+        message: {
+          subject: '[Velync] Your password was changed',
+          text: 'Your Velync account password was just changed. If this wasn\'t you, please revoke your sessions and reset your password immediately from Settings > Account.',
+        },
+      });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    logger.error('settings', 'Failed to send password-change confirmation email', { error: err.message });
+    // Non-critical — the password change itself already succeeded client-side.
+    return res.json({ success: true });
+  }
+});
+
 // ─── Revoke Sessions ─────────────────────────────────────────
 
 router.post('/revoke-sessions', verifyAuth, async (req, res) => {

@@ -95,6 +95,16 @@ describe('PUT /api/settings/profile', () => {
   });
 });
 
+describe('POST /api/settings/notify-password-changed', () => {
+  it('sends a confirmation email to the user\'s own address', async () => {
+    const { status } = await apiFetch('/api/settings/notify-password-changed', { method: 'POST' });
+    assert.strictEqual(status, 200);
+    const mailSnap = await db.collection('mail').where('to', '==', `${TEST_UID}@profiletest.com`).get();
+    const passwordMail = mailSnap.docs.filter(d => d.data().message.subject.includes('password was changed'));
+    assert.strictEqual(passwordMail.length, 1);
+  });
+});
+
 describe('GET /api/settings/export-data truncation flag', () => {
   it('flags truncation when the user belongs to more than 10 workspaces', async () => {
     const wsIds = [];
