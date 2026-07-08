@@ -36,6 +36,7 @@ async function enforceTotalConfigCap(workspaceId) {
  * @returns {Promise<object|null>}
  */
 async function getPlan(planId) {
+  planId = String(planId || '').trim();
   if (planCache.time > Date.now() - PLAN_CACHE_TTL) {
     const cached = planCache.data.get(planId);
     if (cached) return cached;

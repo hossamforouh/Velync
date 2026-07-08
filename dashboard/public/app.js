@@ -1667,6 +1667,39 @@ onAuthStateChanged(auth, async (user) => {
         });
       }
 
+      async function loadWorkspaceQuota() {
+        const badge = document.getElementById('workspace-quota-badge');
+        const progress = document.getElementById('workspace-quota-progress');
+        const text = document.getElementById('workspace-quota-text');
+        if (!badge || !progress || !text) return;
+
+        try {
+          const token = await auth.currentUser.getIdToken();
+          const res = await fetch('/api/billing/plan', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load plan');
+
+          const { plan, usage } = data;
+          const used = usage.activeConfigs;
+          const max = plan.maxActiveConfigs;
+          const unlimited = !max || max <= 0;
+          const ratio = unlimited ? 0 : used / max;
+          const atLimit = !unlimited && used >= max;
+
+          badge.textContent = `${plan.name} Tier`;
+          progress.style.width = unlimited ? '0%' : `${Math.min(ratio, 1) * 100}%`;
+          progress.style.background = atLimit ? 'var(--rose)' : '';
+          text.textContent = unlimited
+            ? `${used} active flow${used !== 1 ? 's' : ''} used. Unlimited on your plan.`
+            : `${used} of ${max} active flows used.${atLimit ? ' Upgrade to add more.' : ''}`;
+        } catch (err) {
+          badge.textContent = '—';
+          text.textContent = 'Failed to load usage: ' + err.message;
+        }
+      }
+
       async function loadCollaborators() {
         const collabContainer = document.getElementById('collaborator-list-container');
         if (!collabContainer) return;
@@ -1710,7 +1743,9 @@ onAuthStateChanged(auth, async (user) => {
            if (wsDescInput) {
              wsDescInput.value = tenant.description || '';
            }
-           
+
+           loadWorkspaceQuota();
+
            const isCurrentUserOwner = tenant.ownerId === auth.currentUser.uid;
 
            // List accepted members

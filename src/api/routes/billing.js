@@ -72,15 +72,21 @@ router.get('/billing/plan', verifyAuth, async (req, res) => {
     if (!wsDoc.exists) return res.status(404).json({ error: 'Workspace not found' });
     const ws = wsDoc.data();
 
-    const planId = ws.planId || 'free';
-    if (!ws.planId) {
+    const planId = String(ws.planId || 'free').trim();
+    if (ws.planId !== planId) {
       // Workspaces are created client-side on signup and never set planId —
       // Firestore rules deliberately keep billing fields server-write-only,
-      // so nothing else backfills it. Persist the default here on first read
-      // instead of leaving it implicit everywhere planId is consumed.
-      await wsDoc.ref.set({ planId: 'free' }, { merge: true });
+      // so nothing else backfills it. Persist the (trimmed) value here on
+      // first read instead of leaving it implicit or whitespace-corrupted
+      // everywhere planId is consumed — a stray "pro\n" from a manual
+      // Firestore edit silently fails the doc(planId) lookup below and
+      // falls back to Free with no visible error.
+      await wsDoc.ref.set({ planId }, { merge: true });
     }
     const planDoc = await db.collection('plans').doc(planId).get();
+    if (!planDoc.exists) {
+      logger.warn('billing', `Workspace "${workspaceId}" references unknown planId "${planId}" — falling back to Free display`);
+    }
     const plan = planDoc.exists ? { id: planDoc.id, ...planDoc.data() } : { id: 'free', name: 'Free', priceMonthly: 0 };
 
     const activeSnap = await db.collection('workspaces').doc(workspaceId)

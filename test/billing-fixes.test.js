@@ -138,6 +138,22 @@ describe('GET /billing/plan backfills a missing planId', () => {
     const wsDoc = await db.collection('workspaces').doc(wsId).get();
     assert.strictEqual(wsDoc.data().planId, 'free');
   });
+
+  it('trims whitespace-corrupted planId (e.g. a manual Firestore edit with a trailing newline) and resolves the correct plan', async () => {
+    const uid = 'billing-test-corrupt-planid-owner';
+    const wsId = 'billing-test-corrupt-planid-ws';
+    await db.collection('users').doc(uid).set({ workspaceId: wsId, email: `${uid}@billingtest.com` });
+    await db.collection('workspaces').doc(wsId).set({ ownerId: uid, members: [uid], planId: 'pro\n' });
+
+    currentUid = uid;
+    const { status, body } = await apiFetch('/api/billing/plan');
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.plan.id, 'pro');
+    assert.strictEqual(body.plan.name, 'Pro');
+
+    const wsDoc = await db.collection('workspaces').doc(wsId).get();
+    assert.strictEqual(wsDoc.data().planId, 'pro');
+  });
 });
 
 describe('reconcileActiveConfigsForPlan', () => {
