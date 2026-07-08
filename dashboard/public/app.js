@@ -2019,6 +2019,13 @@ onAuthStateChanged(auth, async (user) => {
     if (authDivider) authDivider.style.display = 'flex';
     if (btnLogin) btnLogin.style.display = 'flex';
     if (forgotPasswordLink) forgotPasswordLink.style.display = 'block';
+    // These only get hidden again by the sign-up/sign-in toggle handler, which
+    // never runs on sign-out — without this, signing up (which shows them)
+    // then signing out leaves them visible on the "Welcome Back" sign-in form.
+    const termsGroupOnLogout = document.getElementById('auth-terms-group');
+    if (termsGroupOnLogout) termsGroupOnLogout.style.display = 'none';
+    const authStrengthOnLogout = document.getElementById('auth-password-strength');
+    if (authStrengthOnLogout) authStrengthOnLogout.style.display = 'none';
     authError.style.display = 'none';
     authError.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
     authError.style.color = '#EF4444';

@@ -3259,7 +3259,14 @@ header.legacy-header {
   color: var(--auth-label);
 }
 
-.form-group input {
+/* :not([type="checkbox"]) — without this, checkboxes inside .form-group (the
+   "Remember me" / "I agree to the Terms" boxes) inherit the text-input's
+   padding/border/background/border-radius, rendering as an oversized blob,
+   and the :focus rule's background/border transition below "flashes" every
+   time the checkbox is focused — including when the browser tab regains
+   focus (Alt+Tab back), since focus is restored to whatever was last
+   focused. */
+.form-group input:not([type="checkbox"]) {
   width: 100%;
   background: var(--auth-input-bg);
   border: 1px solid var(--auth-input-border);
@@ -3271,7 +3278,7 @@ header.legacy-header {
   font-family: inherit;
 }
 
-.form-group input:focus {
+.form-group input:not([type="checkbox"]):focus {
   outline: none;
   border-color: var(--auth-input-focus-border);
   background: var(--auth-input-focus-bg);
@@ -3279,6 +3286,29 @@ header.legacy-header {
 
 .form-group input::placeholder {
   color: var(--auth-placeholder);
+}
+
+.form-group input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.form-group input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--auth-input-focus-border);
+  outline-offset: 2px;
+}
+
+.form-group a {
+  color: #A5B4FC;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.form-group a:hover {
+  color: #C7D2FE;
 }
 
 .btn-auth {
