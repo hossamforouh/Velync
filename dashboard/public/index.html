@@ -1097,7 +1097,7 @@
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="margin: 0;">Plans &amp; Pricing</h2>
                 <div style="display:flex;gap:8px;">
-                  <button id="admin-plans-refresh-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">⟳ Refresh</button>
+                  <button id="admin-plans-refresh-btn" class="btn btn-secondary btn-sm" type="button">⟳ Refresh</button>
                 </div>
               </div>
 
@@ -1355,12 +1355,9 @@
           <button class="panel-close" id="plan-editor-close" style="position: relative; right: 0; top: 0;">✕</button>
         </div>
         <div class="panel-body" style="padding: 0; overflow-y: visible;">
+          <div id="plan-editor-id-display" style="display:none;color:var(--text-3);font-size:0.82rem;margin-bottom:16px;"></div>
           <form id="plan-editor-form">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-              <div class="form-row">
-                <label for="f-plan-id">Plan ID</label>
-                <input id="f-plan-id" type="text" class="admin-input" readonly />
-              </div>
               <div class="form-row">
                 <label for="f-plan-name">Plan Name *</label>
                 <input id="f-plan-name" type="text" class="admin-input" required />
@@ -1392,10 +1389,6 @@
               <div class="form-row">
                 <label for="f-plan-log-retention">Log Retention (days)</label>
                 <input id="f-plan-log-retention" type="number" class="admin-input" min="1" />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-sort-order">Sort Order</label>
-                <input id="f-plan-sort-order" type="number" class="admin-input" min="0" />
               </div>
               <div class="form-row">
                 <label for="f-plan-connector-tiers">Connector Tiers (comma-separated)</label>

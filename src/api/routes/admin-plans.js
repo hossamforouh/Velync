@@ -104,19 +104,48 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
   }
 });
 
-// Create a new plan (new doc ID generated)
+// Generate a stable, human-readable plan ID from its name (matches the
+// convention already used by 'free'/'pro'/'business' — unlike the Platforms
+// collection, plan IDs are referenced as literal string keys throughout the
+// codebase, so they must stay readable rather than switching to opaque
+// auto-generated Firestore IDs.
+function slugify(name) {
+  return String(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'plan';
+}
+
+async function generateUniquePlanId(name) {
+  const base = slugify(name);
+  let candidate = base;
+  let suffix = 2;
+  while ((await db.collection('plans').doc(candidate).get()).exists) {
+    candidate = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+async function nextSortOrder() {
+  const snap = await db.collection('plans').get();
+  let max = 0;
+  snap.forEach(doc => {
+    const sortOrder = doc.data().sortOrder;
+    if (typeof sortOrder === 'number' && sortOrder > max) max = sortOrder;
+  });
+  return max + 10;
+}
+
+// Create a new plan (ID auto-generated as a slug of the name)
 router.post('/admin/plans', verifyAuth, requireSuperAdmin, [
-  body('id').isString().trim().notEmpty(),
   body('name').isString().trim().notEmpty(),
 ], validate, async (req, res) => {
   try {
-    const { id, ...rest } = req.body;
-    const existing = await db.collection('plans').doc(id).get();
-    if (existing.exists) {
-      return res.status(409).json({ error: `Plan "${id}" already exists. Use PUT to update.` });
-    }
+    const rest = req.body;
+    const id = await generateUniquePlanId(rest.name);
     const plan = {
-      name: rest.name || id,
+      name: rest.name,
       description: rest.description || '',
       priceMonthly: rest.priceMonthly ?? 0,
       priceAnnual: rest.priceAnnual ?? 0,
@@ -127,7 +156,7 @@ router.post('/admin/plans', verifyAuth, requireSuperAdmin, [
       maxItemsPerRun: rest.maxItemsPerRun ?? 100,
       connectorTiers: rest.connectorTiers || ['basic'],
       logRetentionDays: rest.logRetentionDays ?? 7,
-      sortOrder: rest.sortOrder ?? 99,
+      sortOrder: await nextSortOrder(),
       isActive: rest.isActive !== undefined ? rest.isActive : true,
       isDefault: rest.isDefault === true,
       createdAt: new Date().toISOString(),

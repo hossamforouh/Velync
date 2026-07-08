@@ -24,7 +24,8 @@
     "test:config-deletion": "npx firebase emulators:exec --only firestore \"node --test test/config-deletion.test.js\"",
     "test:dispatcher": "npx firebase emulators:exec --only firestore \"node --test test/dispatcher.test.js\"",
     "test:superadmin": "npx firebase emulators:exec --only firestore \"node --test test/superadmin.test.js\"",
-    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin && npm run test:admin-platforms && npm run test:logs-fixes && npm run test:connections-fixes && npm run test:notifications && npm run test:sync-configs-fixes && npm run test:connector-resolution && npm run test:billing-fixes && npm run test:workspace-fixes && npm run test:profile-settings-fixes && npm run test:auth-fail-closed && npm run test:config-deletion && npm run test:dispatcher && npm run test:superadmin"
+    "test:admin-plans-fixes": "npx firebase emulators:exec --only firestore \"node --test test/admin-plans-fixes.test.js\"",
+    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin && npm run test:admin-platforms && npm run test:logs-fixes && npm run test:connections-fixes && npm run test:notifications && npm run test:sync-configs-fixes && npm run test:connector-resolution && npm run test:billing-fixes && npm run test:workspace-fixes && npm run test:profile-settings-fixes && npm run test:auth-fail-closed && npm run test:config-deletion && npm run test:dispatcher && npm run test:superadmin && npm run test:admin-plans-fixes"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",

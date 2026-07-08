@@ -5,7 +5,7 @@
 
 import { confirmDialog } from './confirm.js';
 
-const VIEWS = ['hub', 'flows', 'connections', 'logs', 'admin', 'integration-setup', 'admin-platform-editor'];
+const VIEWS = ['hub', 'flows', 'connections', 'logs', 'admin', 'integration-setup', 'admin-platform-editor', 'admin-plan-editor'];
 
 let currentView = 'flows';
 
