@@ -37,12 +37,27 @@ require.cache[authPath] = {
 
 // Stub the Stripe SDK so checkout/portal routes never make real network
 // calls — only the ownership-check logic ahead of those calls is under test.
+const fakeSubscriptions = new Map(); // subscriptionId -> subscription-like object
 const stripePath = require.resolve('stripe');
 function fakeStripe() {
   return {
     customers: { create: async () => ({ id: 'cus_fake' }) },
     checkout: { sessions: { create: async () => ({ url: 'https://checkout.stripe.com/fake' }) } },
     billingPortal: { sessions: { create: async () => ({ url: 'https://billing.stripe.com/fake' }) } },
+    subscriptions: {
+      retrieve: async (id) => {
+        const sub = fakeSubscriptions.get(id);
+        if (!sub) throw new Error('No such subscription: ' + id);
+        return sub;
+      },
+      update: async (id, params) => {
+        const sub = fakeSubscriptions.get(id);
+        if (!sub) throw new Error('No such subscription: ' + id);
+        if (params.items) sub.items = { data: [{ id: params.items[0].id, price: { id: params.items[0].price } }] };
+        if (params.cancel_at_period_end !== undefined) sub.cancel_at_period_end = params.cancel_at_period_end;
+        return sub;
+      },
+    },
   };
 }
 require.cache[stripePath] = { id: stripePath, filename: stripePath, loaded: true, exports: fakeStripe };
@@ -119,6 +134,105 @@ describe('billing routes restricted to the workspace owner', () => {
     const { status, body } = await apiFetch('/api/billing/create-portal-session', { method: 'POST' });
     assert.strictEqual(status, 200);
     assert.ok(body.url);
+  });
+});
+
+describe('create-checkout-session swaps price in place instead of creating a duplicate subscription', () => {
+  it('updates the existing subscription (no url, no new Checkout Session) when one is already active', async () => {
+    const uid = 'billing-test-existing-sub-owner';
+    const wsId = 'billing-test-existing-sub-ws';
+    const subId = 'sub_fake_existing';
+    await db.collection('users').doc(uid).set({ workspaceId: wsId, email: `${uid}@billingtest.com` });
+    await db.collection('workspaces').doc(wsId).set({
+      ownerId: uid, members: [uid], planId: 'pro',
+      stripeCustomerId: 'cus_existing_sub', stripeSubscriptionId: subId,
+    });
+    await db.collection('plans').doc('business').set({
+      name: 'Business', maxActiveConfigs: 25, isActive: true, stripePriceIdMonthly: 'price_business_fake',
+    });
+    fakeSubscriptions.set(subId, {
+      id: subId,
+      status: 'active',
+      cancel_at_period_end: false,
+      current_period_end: Math.floor(Date.now() / 1000) + 86400,
+      items: { data: [{ id: 'si_fake', price: { id: 'price_fake' } }] },
+    });
+
+    currentUid = uid;
+    const { status, body } = await apiFetch('/api/billing/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify({ planId: 'business', billingInterval: 'monthly' }),
+    });
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.updated, true);
+    assert.strictEqual(body.url, undefined);
+
+    const sub = fakeSubscriptions.get(subId);
+    assert.strictEqual(sub.items.data[0].price.id, 'price_business_fake');
+  });
+});
+
+describe('POST /billing/downgrade-to-free', () => {
+  const uid = 'billing-test-downgrade-owner';
+  const wsId = 'billing-test-downgrade-ws';
+  const subId = 'sub_fake_downgrade';
+
+  before(async () => {
+    await db.collection('users').doc(uid).set({ workspaceId: wsId, email: `${uid}@billingtest.com` });
+    await db.collection('workspaces').doc(wsId).set({
+      ownerId: uid, members: [uid], planId: 'pro',
+      stripeCustomerId: 'cus_downgrade', stripeSubscriptionId: subId,
+    });
+    fakeSubscriptions.set(subId, {
+      id: subId,
+      status: 'active',
+      cancel_at_period_end: false,
+      current_period_end: Math.floor(Date.now() / 1000) + 86400,
+      items: { data: [{ id: 'si_fake', price: { id: 'price_fake' } }] },
+    });
+  });
+
+  it('rejects a non-owner member', async () => {
+    const memberUid = 'billing-test-downgrade-member';
+    await db.collection('users').doc(memberUid).set({ workspaceId: wsId, email: `${memberUid}@billingtest.com` });
+    currentUid = memberUid;
+    const { status, body } = await apiFetch('/api/billing/downgrade-to-free', { method: 'POST', body: JSON.stringify({}) });
+    assert.strictEqual(status, 403);
+    assert.match(body.error, /workspace owner/);
+  });
+
+  it('schedules a cancel-at-period-end and persists cancelAtPeriodEnd on the workspace', async () => {
+    currentUid = uid;
+    const { status, body } = await apiFetch('/api/billing/downgrade-to-free', { method: 'POST', body: JSON.stringify({}) });
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.cancelAtPeriodEnd, true);
+    assert.strictEqual(fakeSubscriptions.get(subId).cancel_at_period_end, true);
+
+    const wsDoc = await db.collection('workspaces').doc(wsId).get();
+    assert.strictEqual(wsDoc.data().cancelAtPeriodEnd, true);
+  });
+
+  it('undoes the pending downgrade', async () => {
+    currentUid = uid;
+    const { status, body } = await apiFetch('/api/billing/downgrade-to-free', { method: 'POST', body: JSON.stringify({ undo: true }) });
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.cancelAtPeriodEnd, false);
+    assert.strictEqual(fakeSubscriptions.get(subId).cancel_at_period_end, false);
+
+    const wsDoc = await db.collection('workspaces').doc(wsId).get();
+    assert.strictEqual(wsDoc.data().cancelAtPeriodEnd, false);
+  });
+
+  it('rejects a workspace with no active subscription', async () => {
+    const uid2 = 'billing-test-downgrade-no-sub-owner';
+    const wsId2 = 'billing-test-downgrade-no-sub-ws';
+    await db.collection('users').doc(uid2).set({ workspaceId: wsId2, email: `${uid2}@billingtest.com` });
+    await db.collection('workspaces').doc(wsId2).set({ ownerId: uid2, members: [uid2], planId: 'free' });
+
+    currentUid = uid2;
+    const { status, body } = await apiFetch('/api/billing/downgrade-to-free', { method: 'POST', body: JSON.stringify({}) });
+    assert.strictEqual(status, 400);
+    assert.match(body.error, /No active subscription/);
   });
 });
 

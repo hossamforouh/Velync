@@ -1,5 +1,6 @@
 import { doc, getDoc, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { showToast } from './toast.js';
+import { confirmDialog } from './confirm.js';
 
 let firestoreDb = null;
 let auth = null;
@@ -51,15 +52,18 @@ export async function initBilling(dbInstance, authInstance) {
       </div>
     `;
 
-    // Subscription info or upgrade prompt.
-    // Show the "Manage Subscription" (portal) button whenever a Stripe
-    // customer record exists — not just when status is 'active'. A past_due
-    // subscription still has a customer/subscription on file (only a full
-    // cancellation clears stripeSubscriptionId), and those are exactly the
-    // users who most need to reach the portal to fix their payment method.
+    // Subscription info. Always render something here — previously this
+    // whole block was skipped for anyone without a Stripe customer record
+    // (every Free-tier user who never checked out), leaving a silent gap
+    // instead of an explicit "you have no active subscription" state.
     if (subscription.stripeCustomerId) {
       let statusBanner = '';
-      if (subscription.status === 'past_due') {
+      if (subscription.cancelAtPeriodEnd) {
+        statusBanner = `<p style="margin:0 0 12px;color:var(--rose);font-size:0.85rem;font-weight:600;">
+          Your plan will downgrade to Free on ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'the end of your current period'}.
+          <a href="#" id="btn-undo-downgrade" style="color:var(--primary);">Keep my plan</a>
+        </p>`;
+      } else if (subscription.status === 'past_due') {
         statusBanner = `<p style="margin:0 0 12px;color:var(--rose);font-size:0.85rem;font-weight:600;">⚠️ Your payment is past due. Please update your billing info to avoid service interruption.</p>`;
       } else if (subscription.status === 'canceled') {
         statusBanner = `<p style="margin:0 0 12px;color:var(--text-2);font-size:0.85rem;">Your subscription was canceled. You're currently on the Free plan.</p>`;
@@ -76,10 +80,21 @@ export async function initBilling(dbInstance, authInstance) {
         </div>
       `;
       document.getElementById('btn-manage-billing')?.addEventListener('click', openPortal);
+      document.getElementById('btn-undo-downgrade')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        setDowngrade(true);
+      });
+    } else {
+      subArea.innerHTML = `
+        <div class="billing-card" style="padding: 20px; border: 1px solid var(--border); border-radius: 12px;">
+          <h4 style="margin:0 0 8px;">Subscription</h4>
+          <p style="margin:0;color:var(--text-2);font-size:0.9rem;">You're on the Free plan — no active subscription.</p>
+        </div>
+      `;
     }
 
-    // Available plans for upgrade — cached (plans change rarely and this is
-    // a full-collection read on every tab open otherwise).
+    // Available plans — cached (plans change rarely and this is a
+    // full-collection read on every tab open otherwise).
     let allPlans = window.__getViewCache ? window.__getViewCache('billing-plans') : null;
     if (!allPlans) {
       const plansSnap = await getDocs(query(collection(firestoreDb, 'plans'), orderBy('sortOrder', 'asc')));
@@ -88,33 +103,63 @@ export async function initBilling(dbInstance, authInstance) {
       if (window.__setViewCache) window.__setViewCache('billing-plans', allPlans);
     }
 
-    const upgradePlans = allPlans.filter(p => p.id !== plan.id && p.isActive && p.priceMonthly > 0);
+    // Split by actual price relative to the current plan — plans cheaper
+    // than the current one were previously lumped into "Available Upgrades"
+    // and labeled with an "Upgrade" button, which is backwards.
+    const otherPlans = allPlans.filter(p => p.id !== plan.id && p.isActive);
+    const upgradePlans = otherPlans.filter(p => p.priceMonthly > plan.priceMonthly);
+    const downgradePlans = otherPlans.filter(p => p.priceMonthly > 0 && p.priceMonthly < plan.priceMonthly);
+    const canDowngradeToFree = plan.priceMonthly > 0;
+
+    const planCard = (p, buttonLabel) => `
+      <div class="billing-card" style="padding:16px;border:1px solid var(--border);border-radius:12px;">
+        <h4 style="margin:0 0 4px;">${escHtml(p.name)}</h4>
+        <div style="font-size:1.5rem;font-weight:700;margin-bottom:8px;">
+          ${p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}<span style="font-size:0.85rem;font-weight:400;">/mo</span>`}
+        </div>
+        <ul style="margin:0 0 12px;padding:0 0 0 16px;font-size:0.85rem;color:var(--text-2);">
+          <li>${p.maxActiveConfigs} configs</li>
+          <li>${p.minSyncIntervalMinutes} min interval</li>
+          <li>${p.maxItemsPerRun} items/run</li>
+          <li>${(p.connectorTiers || []).join(', ')} connectors</li>
+        </ul>
+        <button class="btn btn-primary btn-sm checkout-btn" data-plan="${p.id}" data-interval="monthly" style="width:100%;">${buttonLabel}</button>
+        ${p.priceAnnual > 0 ? `<button class="btn btn-secondary btn-sm checkout-btn" data-plan="${p.id}" data-interval="annual" style="width:100%;margin-top:6px;">$${p.priceAnnual}/yr</button>` : ''}
+      </div>
+    `;
+
+    let checkoutHtml = '';
     if (upgradePlans.length > 0) {
-      checkoutArea.innerHTML = `
+      checkoutHtml += `
         <h4 style="margin:0 0 12px;">Available Upgrades</h4>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
-          ${upgradePlans.map(p => `
-            <div class="billing-card upgrade-plan" style="padding:16px;border:1px solid var(--primary);border-radius:12px;background:rgba(110,86,207,0.05);">
-              <h4 style="margin:0 0 4px;">${escHtml(p.name)}</h4>
-              <div style="font-size:1.5rem;font-weight:700;margin-bottom:8px;">
-                $${p.priceMonthly}<span style="font-size:0.85rem;font-weight:400;">/mo</span>
-              </div>
-              <ul style="margin:0 0 12px;padding:0 0 0 16px;font-size:0.85rem;color:var(--text-2);">
-                <li>${p.maxActiveConfigs} configs</li>
-                <li>${p.minSyncIntervalMinutes} min interval</li>
-                <li>${p.maxItemsPerRun} items/run</li>
-                <li>${(p.connectorTiers || []).join(', ')} connectors</li>
-              </ul>
-              <button class="btn btn-primary btn-sm checkout-btn" data-plan="${p.id}" data-interval="monthly" style="width:100%;">Upgrade</button>
-              ${p.priceAnnual > 0 ? `<button class="btn btn-secondary btn-sm checkout-btn" data-plan="${p.id}" data-interval="annual" style="width:100%;margin-top:6px;">$${p.priceAnnual}/yr</button>` : ''}
-            </div>
-          `).join('')}
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:24px;">
+          ${upgradePlans.map(p => planCard(p, 'Upgrade')).join('')}
         </div>
       `;
-      checkoutArea.querySelectorAll('.checkout-btn').forEach(btn => {
-        btn.addEventListener('click', () => startCheckout(btn.dataset.plan, btn.dataset.interval));
-      });
     }
+    if (downgradePlans.length > 0 || canDowngradeToFree) {
+      checkoutHtml += `
+        <h4 style="margin:0 0 12px;">Downgrade Options</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
+          ${downgradePlans.map(p => planCard(p, 'Downgrade')).join('')}
+          ${canDowngradeToFree ? `
+            <div class="billing-card" style="padding:16px;border:1px solid var(--border);border-radius:12px;">
+              <h4 style="margin:0 0 4px;">Free</h4>
+              <div style="font-size:1.5rem;font-weight:700;margin-bottom:8px;">$0</div>
+              <p style="margin:0 0 12px;font-size:0.85rem;color:var(--text-2);">
+                You'll keep ${escHtml(plan.name)} access until ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'your current period ends'}, then switch to Free.
+              </p>
+              <button class="btn btn-secondary btn-sm" id="btn-downgrade-free" style="width:100%;">Downgrade to Free</button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+    checkoutArea.innerHTML = checkoutHtml;
+    checkoutArea.querySelectorAll('.checkout-btn').forEach(btn => {
+      btn.addEventListener('click', () => startCheckout(btn.dataset.plan, btn.dataset.interval));
+    });
+    document.getElementById('btn-downgrade-free')?.addEventListener('click', () => setDowngrade(false));
   } catch (err) {
     display.innerHTML = '<div style="color:var(--rose);font-size:0.9rem;">Error: ' + err.message + '</div>';
   }
@@ -130,9 +175,42 @@ async function startCheckout(planId, interval) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Checkout failed');
-    if (data.url) window.location.href = data.url;
+    if (data.url) {
+      window.location.href = data.url;
+    } else if (data.updated) {
+      // Existing subscription's price was swapped in place — no redirect.
+      showToast('Plan updated', 'success');
+      if (window.__setViewCache) window.__setViewCache('billing-plans', null);
+      initBilling(firestoreDb, auth);
+    }
   } catch (err) {
     showToast('Failed to start checkout: ' + err.message, 'error');
+  }
+}
+
+async function setDowngrade(undo) {
+  if (!undo) {
+    const confirmed = await confirmDialog({
+      title: 'Downgrade to Free?',
+      message: "You'll keep your current plan's access until the end of the billing period you've already paid for, then automatically switch to Free.",
+      confirmText: 'Downgrade to Free',
+      confirmClass: 'btn-danger',
+    });
+    if (!confirmed) return;
+  }
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch('/api/billing/downgrade-to-free', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ undo }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to update subscription');
+    showToast(undo ? 'Downgrade canceled — you\'re keeping your plan' : 'Scheduled downgrade to Free', 'success');
+    initBilling(firestoreDb, auth);
+  } catch (err) {
+    showToast('Failed to update subscription: ' + err.message, 'error');
   }
 }
 

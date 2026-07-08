@@ -101,6 +101,7 @@ router.get('/billing/plan', verifyAuth, async (req, res) => {
         currentPeriodEnd: ws.currentPeriodEnd || null,
         stripeCustomerId: ws.stripeCustomerId || null,
         stripeSubscriptionId: ws.stripeSubscriptionId || null,
+        cancelAtPeriodEnd: !!ws.cancelAtPeriodEnd,
       },
       usage: {
         activeConfigs: activeSnap.size,
@@ -148,6 +149,24 @@ router.post('/billing/create-checkout-session', verifyAuth, requireStripe, [
       });
       stripeCustomerId = customer.id;
       await wsDoc.ref.update({ stripeCustomerId });
+    }
+
+    // A workspace can only have one Stripe subscription. If one is already
+    // active, swap its price in place instead of creating a second Checkout
+    // Session — the latter would leave the old subscription running and
+    // double-bill the customer. customer.subscription.updated (already
+    // handled below) picks up the resulting plan change.
+    if (ws.stripeSubscriptionId) {
+      const existing = await stripe.subscriptions.retrieve(ws.stripeSubscriptionId);
+      if (existing && existing.status !== 'canceled') {
+        const itemId = existing.items.data[0]?.id;
+        await stripe.subscriptions.update(ws.stripeSubscriptionId, {
+          items: [{ id: itemId, price: priceId }],
+          proration_behavior: 'create_prorations',
+          cancel_at_period_end: false,
+        });
+        return res.json({ success: true, updated: true });
+      }
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -202,6 +221,51 @@ router.post('/billing/create-portal-session', verifyAuth, requireStripe, async (
   }
 });
 
+// Downgrade to Free — cancels the active subscription at the end of the
+// current period (not immediately), so the workspace keeps its paid-tier
+// access through what's already been paid for. customer.subscription.deleted
+// (already handled below) reverts planId to 'free' once the period actually
+// ends. Pass undo:true to reverse a pending cancellation.
+router.post('/billing/downgrade-to-free', verifyAuth, requireStripe, [
+  body('undo').optional().isBoolean(),
+], validate, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+    const workspaceId = userDoc.data().workspaceId;
+    if (!workspaceId) return res.status(404).json({ error: 'No workspace' });
+
+    const wsDoc = await db.collection('workspaces').doc(workspaceId).get();
+    if (!wsDoc.exists) return res.status(404).json({ error: 'Workspace not found' });
+    const ws = wsDoc.data();
+
+    if (ws.ownerId && ws.ownerId !== req.user.uid) {
+      return res.status(403).json({ error: 'Only the workspace owner can manage billing.' });
+    }
+
+    if (!ws.stripeSubscriptionId) {
+      return res.status(400).json({ error: 'No active subscription to downgrade.' });
+    }
+
+    const cancelAtPeriodEnd = !req.body.undo;
+    const subscription = await stripe.subscriptions.update(ws.stripeSubscriptionId, {
+      cancel_at_period_end: cancelAtPeriodEnd,
+    });
+
+    await wsDoc.ref.set({ cancelAtPeriodEnd }, { merge: true });
+    logger.info('billing', `Workspace "${workspaceId}" ${cancelAtPeriodEnd ? 'scheduled downgrade to Free at period end' : 'undid pending downgrade'}`, { user: req.user.uid });
+
+    return res.json({
+      success: true,
+      cancelAtPeriodEnd,
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+    });
+  } catch (err) {
+    logger.error('billing', 'Failed to downgrade to free', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Stripe webhook handler
 router.post('/billing/webhook', (req, res) => {
   if (!stripe) {
@@ -232,6 +296,7 @@ router.post('/billing/webhook', (req, res) => {
               subscriptionStatus: subscription.status,
               billingInterval: billingInterval || 'monthly',
               currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+              cancelAtPeriodEnd: false,
             });
             logger.info('billing', `Checkout completed — workspace "${workspaceId}" → ${planId}`);
 
@@ -274,6 +339,10 @@ router.post('/billing/webhook', (req, res) => {
               subscriptionStatus: subscription.status,
               currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
               billingInterval: subscription.items.data[0]?.price?.recurring?.interval === 'year' ? 'annual' : 'monthly',
+              // Kept in sync here too (not just our own downgrade endpoint)
+              // so a cancellation made directly in the Stripe Portal still
+              // shows the pending-downgrade banner in-app.
+              cancelAtPeriodEnd: !!subscription.cancel_at_period_end,
             });
             logger.info('billing', `Subscription updated — "${subscription.id}" → ${planId}`);
 
@@ -295,6 +364,7 @@ router.post('/billing/webhook', (req, res) => {
               stripeSubscriptionId: FieldValue.delete(),
               subscriptionStatus: 'canceled',
               currentPeriodEnd: null,
+              cancelAtPeriodEnd: false,
             });
             logger.info('billing', `Subscription deleted — "${subscription.id}" reverted to free`);
 
