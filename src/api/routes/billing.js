@@ -73,6 +73,13 @@ router.get('/billing/plan', verifyAuth, async (req, res) => {
     const ws = wsDoc.data();
 
     const planId = ws.planId || 'free';
+    if (!ws.planId) {
+      // Workspaces are created client-side on signup and never set planId —
+      // Firestore rules deliberately keep billing fields server-write-only,
+      // so nothing else backfills it. Persist the default here on first read
+      // instead of leaving it implicit everywhere planId is consumed.
+      await wsDoc.ref.set({ planId: 'free' }, { merge: true });
+    }
     const planDoc = await db.collection('plans').doc(planId).get();
     const plan = planDoc.exists ? { id: planDoc.id, ...planDoc.data() } : { id: 'free', name: 'Free', priceMonthly: 0 };
 

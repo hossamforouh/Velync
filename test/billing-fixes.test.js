@@ -122,6 +122,24 @@ describe('billing routes restricted to the workspace owner', () => {
   });
 });
 
+describe('GET /billing/plan backfills a missing planId', () => {
+  it('defaults to free and persists it when the workspace has no planId', async () => {
+    const uid = 'billing-test-no-planid-owner';
+    const wsId = 'billing-test-no-planid-ws';
+    await db.collection('users').doc(uid).set({ workspaceId: wsId, email: `${uid}@billingtest.com` });
+    // Mirrors what the client's signup flow actually writes — no planId field.
+    await db.collection('workspaces').doc(wsId).set({ ownerId: uid, members: [uid] });
+
+    currentUid = uid;
+    const { status, body } = await apiFetch('/api/billing/plan');
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.plan.id, 'free');
+
+    const wsDoc = await db.collection('workspaces').doc(wsId).get();
+    assert.strictEqual(wsDoc.data().planId, 'free');
+  });
+});
+
 describe('reconcileActiveConfigsForPlan', () => {
   it('pauses the newest active configs beyond the limit, keeps the oldest active', async () => {
     const wsId = 'billing-reconcile-ws';
