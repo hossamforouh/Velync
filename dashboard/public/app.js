@@ -1238,9 +1238,16 @@ onAuthStateChanged(auth, async (user) => {
           settingsNameInput.style.borderColor = 'var(--border)';
           setButtonLoading(btnSaveProfile, true);
           try {
-            await updateDoc(doc(db, 'users', user.uid), {
-              name: newName
+            const token = await user.getIdToken();
+            const res = await fetch('/api/settings/profile', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ name: newName })
             });
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              throw new Error(errData.error || 'Failed to save');
+            }
             if (profileMsg) {
               profileMsg.textContent = `Profile name updated to "${newName}" successfully!`;
               profileMsg.style.color = '#34d399';
@@ -1904,7 +1911,12 @@ onAuthStateChanged(auth, async (user) => {
             a.download = `velync-export-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            if (exportMsg) { exportMsg.textContent = `Exported ${Object.keys(data).length} data sections`; exportMsg.style.color = '#34d399'; }
+            if (exportMsg) {
+              exportMsg.textContent = data.executionLogsTruncated
+                ? `Exported ${Object.keys(data).length} data sections. Note: ${data.executionLogsNote}`
+                : `Exported ${Object.keys(data).length} data sections`;
+              exportMsg.style.color = data.executionLogsTruncated ? '#f59e0b' : '#34d399';
+            }
           } catch (err) {
             if (exportMsg) { exportMsg.textContent = 'Export failed: ' + err.message; exportMsg.style.color = '#f43f5e'; }
           } finally {
@@ -1940,10 +1952,11 @@ onAuthStateChanged(auth, async (user) => {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!res.ok) throw new Error(await res.text());
-            showToast('Account deleted. Redirecting...', 'info');
+            const data = await res.json();
+            showToast(data.fullyDeleted === false ? data.message : 'Account deleted. Redirecting...', data.fullyDeleted === false ? 'warning' : 'info');
             setTimeout(() => {
               signOut(auth).then(() => location.reload());
-            }, 2000);
+            }, data.fullyDeleted === false ? 4000 : 2000);
           } catch (err) {
             if (deleteAccountMsg) { deleteAccountMsg.textContent = 'Failed: ' + err.message; deleteAccountMsg.style.color = '#f43f5e'; }
             btnDeleteAccount.disabled = false;

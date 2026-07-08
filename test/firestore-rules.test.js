@@ -207,8 +207,27 @@ describe('/superadmins/{uid}', () => {
 // 3. /users/{userId}
 // ─────────────────────────────────────────────
 describe('/users/{userId}', () => {
-  it('any authed user can read', async () => {
-    await assertSucceeds(ctx.stranger().firestore().collection('users').doc('owner-uid').get());
+  it('a user in the same workspace can read another user\'s profile', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await firestore.collection('users').doc('samews-a').set({ email: 'a@test.com', workspaceId: 'shared-wsid' });
+      await firestore.collection('users').doc('samews-b').set({ email: 'b@test.com', workspaceId: 'shared-wsid' });
+    });
+    await assertSucceeds(
+      testEnv.authenticatedContext('samews-a', { email: 'a@test.com' })
+        .firestore().collection('users').doc('samews-b').get()
+    );
+  });
+
+  it('a stranger in a different workspace cannot read another user\'s profile', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().collection('users').doc('diffws-uid').set({ email: 'diff@test.com', workspaceId: 'some-other-wsid' });
+    });
+    await assertFails(ctx.stranger().firestore().collection('users').doc('diffws-uid').get());
+  });
+
+  it('superadmin can read any profile', async () => {
+    await assertSucceeds(ctx.superAdmin().firestore().collection('users').doc('samews-a').get());
   });
 
   it('can create own doc with required fields', async () => {
@@ -232,6 +251,20 @@ describe('/users/{userId}', () => {
   it('cannot update own doc with disallowed fields', async () => {
     await assertFails(ctx.owner().firestore().collection('users').doc('owner-uid').update({ admin: true }));
     await assertFails(ctx.owner().firestore().collection('users').doc('owner-uid').update({ role: 'superadmin' }));
+  });
+
+  it('cannot set authVersion or lastSessionRevokedAt directly, even on own doc — server-authoritative, only /api/settings/revoke-sessions may set them', async () => {
+    await assertFails(ctx.owner().firestore().collection('users').doc('owner-uid').update({ authVersion: 99 }));
+    await assertFails(ctx.owner().firestore().collection('users').doc('owner-uid').update({ lastSessionRevokedAt: new Date().toISOString() }));
+  });
+
+  it('can still update other allowed fields on a doc that already has authVersion/lastSessionRevokedAt set (regression: full-doc keys() check would break this)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().collection('users').doc('owner-uid').set({
+        email: 'owner@test.com', authVersion: 1, lastSessionRevokedAt: new Date().toISOString(),
+      }, { merge: true });
+    });
+    await assertSucceeds(ctx.owner().firestore().collection('users').doc('owner-uid').update({ name: 'Still Works' }));
   });
 
   it('cannot update another user doc', async () => {

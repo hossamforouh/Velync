@@ -58,12 +58,32 @@ service cloud.firestore {
 
     // ─── Users ────────────────────────────────────────────────
     match /users/{userId} {
-      allow read: if request.auth != null;
+      // Readable by the user themselves, a superadmin, or anyone who shares
+      // the same workspaceId (covers the member-list UI reading co-members'
+      // profiles) — not literally any signed-in user, which was the previous
+      // rule and let any authenticated account read anyone else's profile.
+      allow read: if isOwner(userId) || isSuperAdmin()
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('workspaceId', null) != null
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('workspaceId', null)
+               == resource.data.get('workspaceId', null));
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasAll(['email'])
         && request.resource.data.email is string;
+      // Use diff(...).affectedKeys() — NOT keys().hasOnly(...) — because on
+      // an update request.resource.data is the FULL post-update document, so
+      // a doc that already has authVersion/lastSessionRevokedAt set (by the
+      // Admin-SDK-only /api/settings/revoke-sessions route) would fail every
+      // subsequent client update if those fields were checked against the
+      // full key set. diff().affectedKeys() only looks at what THIS write
+      // actually changes, which also cleanly excludes authVersion/
+      // lastSessionRevokedAt from what a client may change (server-
+      // authoritative session-security bookkeeping) without breaking updates
+      // to documents that already carry those fields.
       allow update: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['id', 'name', 'email', 'workspaceName', 'notificationPrefs', 'workspaceId', 'authVersion', 'lastSessionRevokedAt', 'createdAt', 'updatedAt']);
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['id', 'name', 'email', 'workspaceName', 'notificationPrefs', 'workspaceId', 'createdAt', 'updatedAt']);
       allow delete: if isOwner(userId);
     }
 

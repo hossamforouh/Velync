@@ -11,7 +11,10 @@ async function verifyAuth(req, res, next) {
     const decodedToken = await getAuth().verifyIdToken(authHeader.split('Bearer ')[1]);
     req.user = decodedToken;
 
-    // authVersion check: if token was issued before last session revoke, reject
+    // Session-revocation check: if the token was issued before the user's
+    // last "revoke all sessions" action, reject it. Fails closed — if the
+    // lookup itself errors, we can't confirm the session wasn't revoked, so
+    // reject rather than silently letting a possibly-revoked token through.
     try {
       const userDoc = await db.collection('users').doc(decodedToken.uid).get();
       if (userDoc.exists) {
@@ -25,7 +28,8 @@ async function verifyAuth(req, res, next) {
         }
       }
     } catch (err) {
-      logger.warn('auth', 'authVersion check failed, proceeding anyway', { error: err.message });
+      logger.error('auth', 'Session-revocation check failed — rejecting request (fail closed)', { error: err.message });
+      return res.status(401).json({ error: 'Unable to verify session status. Please try again.' });
     }
 
     next();

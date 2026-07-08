@@ -5,6 +5,7 @@ const { getAuth } = require('firebase-admin/auth');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
 const { deleteWorkspace } = require('../../domains/workspace/deletion');
+const { notifyAdmins } = require('../../core/notifications');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -107,6 +108,29 @@ router.put('/workspace/:workspaceId', verifyAuth, [
   }
 });
 
+// ─── Profile ───────────────────────────────────────────────────
+// The display name was previously a raw, unvalidated client-side Firestore
+// write (no length/content check anywhere) — safe only because every render
+// site happens to escape it. Routing it through a validated backend call
+// closes that gap without relying on every future render site doing the
+// right thing.
+router.put('/profile', verifyAuth, [
+  body('name').isString().trim().notEmpty().isLength({ max: 100 }),
+], validate, async (req, res) => {
+  try {
+    const { name } = req.body;
+    await db.collection('users').doc(req.user.uid).set({
+      name,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    logger.info('settings', 'Profile name updated', { user: req.user.uid });
+    return res.json({ success: true });
+  } catch (err) {
+    logger.error('settings', 'Failed to update profile', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Revoke Sessions ─────────────────────────────────────────
 
 router.post('/revoke-sessions', verifyAuth, async (req, res) => {
@@ -151,11 +175,19 @@ router.get('/export-data', verifyAuth, async (req, res) => {
 
     if (exportData.workspaces.length > 0) {
       const wsIds = exportData.workspaces.map(w => w.id);
+      // Firestore's `in` clause caps at 10 values — if a user belongs to more
+      // than 10 workspaces, logs beyond the first 10 are omitted. Surface
+      // that explicitly rather than silently truncating with no indication.
+      const truncated = wsIds.length > 10;
       const logSnap = await db.collection('execution_logs')
         .where('workspaceId', 'in', wsIds.slice(0, 10))
         .get();
       exportData.executionLogs = [];
       logSnap.forEach(d => exportData.executionLogs.push({ id: d.id, ...d.data() }));
+      if (truncated) {
+        exportData.executionLogsTruncated = true;
+        exportData.executionLogsNote = `You belong to ${wsIds.length} workspaces — execution logs are only included for the first 10 due to a database query limit.`;
+      }
     }
 
     const keySnap = await db.collection('api_keys').where('userId', '==', uid).get();
@@ -211,10 +243,26 @@ router.post('/delete-account', verifyAuth, async (req, res) => {
     // Delete Firebase Auth account
     await getAuth().deleteUser(uid);
 
-    logger.info('settings', 'Account deleted', { user: uid, workspaceCount: ownedWsSnap.size, errors: totalErrors.length });
+    const fullyDeleted = totalErrors.length === 0;
+    logger.info('settings', 'Account deleted', { user: uid, workspaceCount: ownedWsSnap.size, errors: totalErrors.length, fullyDeleted });
+
+    if (!fullyDeleted) {
+      // The account/auth record is gone either way (that part always
+      // completes), but some owned-workspace data may be left behind —
+      // that's not something the user can retry themselves after their
+      // account no longer exists, so make sure an admin actually sees it.
+      notifyAdmins(
+        '[Velync] Account deletion left some data behind',
+        `Account "${uid}" was deleted, but ${totalErrors.length} error(s) occurred while cascading its owned workspace(s):\n\n${totalErrors.join('\n')}\n\nManual cleanup may be needed.`
+      ).catch(() => {});
+    }
+
     return res.json({
       success: true,
-      message: 'Account and all associated data have been permanently deleted.',
+      fullyDeleted,
+      message: fullyDeleted
+        ? 'Account and all associated data have been permanently deleted.'
+        : 'Your account has been deleted, but some associated workspace data could not be fully removed. Our team has been notified.',
       workspaceDeletions: ownedWsSnap.size,
       errors: totalErrors.length > 0 ? totalErrors : undefined,
     });
