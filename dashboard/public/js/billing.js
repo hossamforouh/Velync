@@ -3,13 +3,10 @@ import { showToast } from './toast.js';
 
 let firestoreDb = null;
 let auth = null;
-let initialized = false;
 
 export async function initBilling(dbInstance, authInstance) {
-  if (initialized) return;
   firestoreDb = dbInstance;
   auth = authInstance;
-  initialized = true;
 
   const display = document.getElementById('billing-plan-display');
   const subArea = document.getElementById('billing-subscription-area');
