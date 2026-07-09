@@ -176,7 +176,7 @@ router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy,
 
     return res.json({ success: true, url });
   } catch (err) {
-    logger.error('billing', 'Failed to create checkout', { error: err.message });
+    logger.error('billing', 'Failed to create checkout', { error: err.message, details: err.response?.data });
     return res.status(500).json({ error: err.message });
   }
 });

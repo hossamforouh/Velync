@@ -29,11 +29,16 @@ http.interceptors.request.use((req) => {
  * actual user's name.
  */
 async function createCheckout({ variantId, email, name, custom, redirectUrl }) {
+  const checkoutData = { email, custom };
+  // Lemon Squeezy's checkout_data.name expects a non-empty string — passing
+  // null/'' (e.g. for accounts with no display name on file) causes a 422,
+  // so only include it when there's an actual value.
+  if (name) checkoutData.name = name;
   const { data } = await http.post('/checkouts', {
     data: {
       type: 'checkouts',
       attributes: {
-        checkout_data: { email, name, custom },
+        checkout_data: checkoutData,
         product_options: { redirect_url: redirectUrl },
       },
       relationships: {
