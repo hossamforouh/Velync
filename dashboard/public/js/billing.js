@@ -71,7 +71,7 @@ export async function initBilling(dbInstance, authInstance) {
       subArea.innerHTML = `
         <div class="billing-card" style="padding: 20px; border: 1px solid var(--border); border-radius: 12px;">
           <h4 style="margin:0 0 8px;">Subscription</h4>
-          <p style="margin:0 0 4px;color:var(--text-2);">Status: <strong>${escHtml(subscription.status)}</strong> · ${escHtml(subscription.billingInterval)}</p>
+          <p style="margin:0 0 4px;color:var(--text-2);">Status: <strong>${escHtml(subscription.status)}</strong></p>
           <p style="margin:0 0 12px;color:var(--text-3);font-size:0.85rem;">
             ${subscription.currentPeriodEnd ? 'Current period ends: ' + new Date(subscription.currentPeriodEnd).toLocaleDateString() : ''}
           </p>
@@ -141,8 +141,7 @@ export async function initBilling(dbInstance, authInstance) {
           <li>${p.maxItemsPerRun} items/run</li>
           <li>${(p.connectorTiers || []).join(', ')} connectors</li>
         </ul>
-        ${p.lsVariantIdMonthly ? `<button class="btn btn-primary btn-sm checkout-btn" data-plan="${p.id}" data-interval="monthly" style="width:100%;">${buttonLabel}</button>` : ''}
-        ${p.priceAnnual > 0 && p.lsVariantIdAnnual ? `<button class="btn btn-secondary btn-sm checkout-btn" data-plan="${p.id}" data-interval="annual" style="width:100%;margin-top:6px;">$${p.priceAnnual}/yr</button>` : ''}
+        ${p.lsVariantIdMonthly ? `<button class="btn btn-primary btn-sm checkout-btn" data-plan="${p.id}" style="width:100%;">${buttonLabel}</button>` : ''}
       </div>
     `;
 
@@ -175,7 +174,7 @@ export async function initBilling(dbInstance, authInstance) {
     }
     checkoutArea.innerHTML = checkoutHtml;
     checkoutArea.querySelectorAll('.checkout-btn').forEach(btn => {
-      btn.addEventListener('click', () => startCheckout(btn.dataset.plan, btn.dataset.interval));
+      btn.addEventListener('click', () => startCheckout(btn.dataset.plan));
     });
     document.getElementById('btn-downgrade-free')?.addEventListener('click', () => setDowngrade(false));
   } catch (err) {
@@ -183,13 +182,13 @@ export async function initBilling(dbInstance, authInstance) {
   }
 }
 
-async function startCheckout(planId, interval) {
+async function startCheckout(planId) {
   try {
     const token = await auth.currentUser.getIdToken();
     const res = await fetch('/api/billing/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ planId, billingInterval: interval }),
+      body: JSON.stringify({ planId }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Checkout failed');

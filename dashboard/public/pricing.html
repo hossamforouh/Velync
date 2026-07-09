@@ -121,7 +121,6 @@
 
         container.innerHTML = '<div class="plans">' + data.plans.map(p => {
           const monthly = p.priceMonthly > 0 ? '$' + p.priceMonthly : 'Free';
-          const annualNote = p.priceAnnual > 0 ? '$' + p.priceAnnual + '/yr' : '';
           const features = [
             p.maxActiveConfigs + ' active config' + (p.maxActiveConfigs !== 1 ? 's' : ''),
             p.minSyncIntervalMinutes + '-min sync interval',
@@ -139,7 +138,6 @@
             `<h3>${escHtml(p.name)}</h3>` +
             (p.description ? `<p class="desc">${escHtml(p.description)}</p>` : '') +
             `<div class="price">${monthly}<span>${p.priceMonthly > 0 ? '/mo' : ''}</span></div>` +
-            (annualNote ? `<div class="interval">or ${annualNote} (save ${Math.round((1 - p.priceAnnual / (p.priceMonthly * 12)) * 100)}%)</div>` : '') +
             '<ul>' + features.map(f => `<li>${escHtml(f)}</li>`).join('') + '</ul>' +
             btn +
             '</div>';

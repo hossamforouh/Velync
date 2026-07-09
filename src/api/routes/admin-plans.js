@@ -53,7 +53,6 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
   body('name').optional().isString().trim().isLength({ min: 1 }),
   body('description').optional().isString(),
   body('priceMonthly').optional().isFloat({ min: 0 }),
-  body('priceAnnual').optional().isFloat({ min: 0 }),
   body('maxActiveConfigs').optional().isInt({ min: 1 }),
   body('minSyncIntervalMinutes').optional().isInt({ min: 1 }),
   body('maxItemsPerRun').optional().isInt({ min: 1 }),
@@ -63,15 +62,14 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
   body('isActive').optional().isBoolean(),
   body('isDefault').optional().isBoolean(),
   body('lsVariantIdMonthly').optional().isString(),
-  body('lsVariantIdAnnual').optional().isString(),
 ], validate, async (req, res) => {
   try {
     const { planId } = req.params;
     const allowed = [
-      'name', 'description', 'priceMonthly', 'priceAnnual',
+      'name', 'description', 'priceMonthly',
       'maxActiveConfigs', 'minSyncIntervalMinutes', 'maxItemsPerRun',
       'connectorTiers', 'logRetentionDays', 'sortOrder',
-      'isActive', 'isDefault', 'lsVariantIdMonthly', 'lsVariantIdAnnual',
+      'isActive', 'isDefault', 'lsVariantIdMonthly',
     ];
     const update = { updatedAt: new Date().toISOString() };
     for (const key of allowed) {
@@ -148,9 +146,7 @@ router.post('/admin/plans', verifyAuth, requireSuperAdmin, [
       name: rest.name,
       description: rest.description || '',
       priceMonthly: rest.priceMonthly ?? 0,
-      priceAnnual: rest.priceAnnual ?? 0,
       lsVariantIdMonthly: rest.lsVariantIdMonthly || '',
-      lsVariantIdAnnual: rest.lsVariantIdAnnual || '',
       maxActiveConfigs: rest.maxActiveConfigs ?? 1,
       minSyncIntervalMinutes: rest.minSyncIntervalMinutes ?? 30,
       maxItemsPerRun: rest.maxItemsPerRun ?? 100,

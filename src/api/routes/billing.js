@@ -36,13 +36,12 @@ function normalizeStatus(lsStatus) {
   return lsStatus || 'active';
 }
 
-// Find which plan + billing interval a Lemon Squeezy variant belongs to.
+// Find which plan a Lemon Squeezy variant belongs to. Monthly-only — there's
+// no annual/yearly billing option anywhere in the app.
 async function resolvePlanFromVariant(variantId) {
   if (!variantId) return null;
-  const monthlySnap = await db.collection('plans').where('lsVariantIdMonthly', '==', String(variantId)).get();
-  if (!monthlySnap.empty) return { planId: monthlySnap.docs[0].id, billingInterval: 'monthly' };
-  const annualSnap = await db.collection('plans').where('lsVariantIdAnnual', '==', String(variantId)).get();
-  if (!annualSnap.empty) return { planId: annualSnap.docs[0].id, billingInterval: 'annual' };
+  const snap = await db.collection('plans').where('lsVariantIdMonthly', '==', String(variantId)).get();
+  if (!snap.empty) return { planId: snap.docs[0].id };
   return null;
 }
 
@@ -111,7 +110,6 @@ router.get('/billing/plan', verifyAuth, async (req, res) => {
       plan,
       subscription: {
         status: ws.subscriptionStatus || 'active',
-        billingInterval: ws.billingInterval || 'monthly',
         currentPeriodEnd: ws.currentPeriodEnd || null,
         lsCustomerId: ws.lsCustomerId || null,
         lsSubscriptionId: ws.lsSubscriptionId || null,
@@ -131,18 +129,17 @@ router.get('/billing/plan', verifyAuth, async (req, res) => {
 // on an existing subscription if the workspace already has one.
 router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy, [
   body('planId').isString().trim().notEmpty(),
-  body('billingInterval').isIn(['monthly', 'annual']),
 ], validate, async (req, res) => {
   try {
-    const { planId, billingInterval } = req.body;
+    const { planId } = req.body;
 
     const planDoc = await db.collection('plans').doc(planId).get();
     if (!planDoc.exists) return res.status(404).json({ error: 'Plan not found' });
     const plan = planDoc.data();
     if (!plan.isActive) return res.status(400).json({ error: 'Plan is not available for new subscriptions' });
 
-    const variantId = billingInterval === 'annual' ? plan.lsVariantIdAnnual : plan.lsVariantIdMonthly;
-    if (!variantId) return res.status(400).json({ error: `No Lemon Squeezy Variant ID configured for ${planId} (${billingInterval})` });
+    const variantId = plan.lsVariantIdMonthly;
+    if (!variantId) return res.status(400).json({ error: `No Lemon Squeezy Variant ID configured for ${planId}` });
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const userEmail = userDoc.exists ? userDoc.data().email : null;
@@ -171,7 +168,7 @@ router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy,
     const url = await ls.createCheckout({
       variantId,
       email: userEmail,
-      custom: { workspace_id: workspaceId, plan_id: planId, billing_interval: billingInterval },
+      custom: { workspace_id: workspaceId, plan_id: planId },
       redirectUrl: `${config.appBaseUrl || 'https://velync.web.app'}/settings?billing=success`,
     });
 
@@ -293,7 +290,6 @@ router.post('/billing/webhook', (req, res) => {
               lsCustomerId: String(sub.customer_id),
               lsSubscriptionId: String(event.data.id),
               subscriptionStatus: normalizeStatus(sub.status),
-              billingInterval: resolved ? resolved.billingInterval : (event.meta.custom_data.billing_interval || 'monthly'),
               currentPeriodEnd: sub.renews_at || null,
               cancelAtPeriodEnd: false,
             }, { merge: true });
@@ -323,7 +319,6 @@ router.post('/billing/webhook', (req, res) => {
               planId,
               subscriptionStatus: normalizeStatus(sub.status),
               currentPeriodEnd: sub.ends_at || sub.renews_at || null,
-              billingInterval: resolved ? resolved.billingInterval : wsData.billingInterval,
               cancelAtPeriodEnd: !!sub.cancelled && sub.status !== 'expired',
             });
             logger.info('billing', `Subscription updated — "${event.data.id}" → ${planId}`);

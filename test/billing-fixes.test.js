@@ -7,9 +7,14 @@
  *     in place instead of creating a second (duplicate-billing) subscription.
  *  3. POST /billing/downgrade-to-free schedules/undoes a cancel-at-period-end.
  *  4. GET /billing/plan backfills a missing or whitespace-corrupted planId.
- *  5. reconcileActiveConfigsForPlan() pauses the newest active configs
+ *  5. Lemon Squeezy webhooks keep the DB in sync: subscription_created sets
+ *     planId/lsCustomerId/lsSubscriptionId; subscription_expired (a lapsed,
+ *     un-renewed subscription) reverts to Free and emails the owner;
+ *     subscription_payment_failed marks past_due WITHOUT touching planId
+ *     yet (still entitled until it actually expires).
+ *  6. reconcileActiveConfigsForPlan() pauses the newest active configs
  *     beyond a plan's maxActiveConfigs, keeping the oldest ones running.
- *  6. notifyAdmins() emails every superadmin.
+ *  7. notifyAdmins() emails every superadmin.
  *
  * Lemon Squeezy itself is stubbed (require.cache injection on
  * src/core/lemonSqueezy.js) since these tests only need to verify
@@ -27,6 +32,7 @@ const assert = require('node:assert');
 // project has hit before: see profile-settings-fixes.test.js's comment).
 process.env.LEMONSQUEEZY_API_KEY = 'ls_fake_for_tests';
 process.env.LEMONSQUEEZY_STORE_ID = '1';
+process.env.LEMONSQUEEZY_WEBHOOK_SECRET = 'ls_webhook_secret_fake_for_tests';
 
 const OWNER_UID = 'billing-test-owner';
 const MEMBER_UID = 'billing-test-member';
@@ -130,7 +136,7 @@ describe('billing routes restricted to the workspace owner', () => {
     currentUid = OWNER_UID;
     const { status, body } = await apiFetch('/api/billing/create-checkout-session', {
       method: 'POST',
-      body: JSON.stringify({ planId: 'pro', billingInterval: 'monthly' }),
+      body: JSON.stringify({ planId: 'pro' }),
     });
     assert.strictEqual(status, 200);
     assert.ok(body.url);
@@ -140,7 +146,7 @@ describe('billing routes restricted to the workspace owner', () => {
     currentUid = MEMBER_UID;
     const { status, body } = await apiFetch('/api/billing/create-checkout-session', {
       method: 'POST',
-      body: JSON.stringify({ planId: 'pro', billingInterval: 'monthly' }),
+      body: JSON.stringify({ planId: 'pro' }),
     });
     assert.strictEqual(status, 403);
     assert.match(body.error, /workspace owner/);
@@ -188,7 +194,7 @@ describe('create-checkout-session swaps variant in place instead of creating a d
     currentUid = uid;
     const { status, body } = await apiFetch('/api/billing/create-checkout-session', {
       method: 'POST',
-      body: JSON.stringify({ planId: 'business', billingInterval: 'monthly' }),
+      body: JSON.stringify({ planId: 'business' }),
     });
     assert.strictEqual(status, 200);
     assert.strictEqual(body.updated, true);
@@ -291,6 +297,95 @@ describe('GET /billing/plan backfills a missing planId', () => {
 
     const wsDoc = await db.collection('workspaces').doc(wsId).get();
     assert.strictEqual(wsDoc.data().planId, 'pro');
+  });
+});
+
+async function postWebhook(eventName, data, customData) {
+  const event = { meta: { event_name: eventName, custom_data: customData }, data };
+  const { status } = await apiFetch('/api/billing/webhook', {
+    method: 'POST',
+    headers: { 'x-signature': 'fake' },
+    body: JSON.stringify(event),
+  });
+  // The route processes the event asynchronously (fire-and-forget) so it can
+  // respond to Lemon Squeezy immediately — give the DB write a moment to land.
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  return status;
+}
+
+describe('Lemon Squeezy webhook — subscribing updates the DB (use case: after checkout)', () => {
+  it('subscription_created sets planId/lsCustomerId/lsSubscriptionId from the matching variant', async () => {
+    const wsId = 'billing-webhook-created-ws';
+    const ownerUid = 'billing-webhook-created-owner';
+    await db.collection('users').doc(ownerUid).set({ email: `${ownerUid}@billingtest.com` });
+    await db.collection('workspaces').doc(wsId).set({ ownerId: ownerUid, members: [ownerUid], planId: 'free' });
+
+    const status = await postWebhook(
+      'subscription_created',
+      {
+        id: 'sub_webhook_created',
+        attributes: {
+          status: 'active', cancelled: false, variant_id: 1001, customer_id: 9001,
+          renews_at: '2026-08-01T00:00:00.000Z',
+        },
+      },
+      { workspace_id: wsId, plan_id: 'pro' },
+    );
+    assert.strictEqual(status, 200);
+
+    const wsDoc = await db.collection('workspaces').doc(wsId).get();
+    assert.strictEqual(wsDoc.data().planId, 'pro');
+    assert.strictEqual(wsDoc.data().lsCustomerId, '9001');
+    assert.strictEqual(wsDoc.data().lsSubscriptionId, 'sub_webhook_created');
+    assert.strictEqual(wsDoc.data().subscriptionStatus, 'active');
+    assert.strictEqual(wsDoc.data().currentPeriodEnd, '2026-08-01T00:00:00.000Z');
+  });
+});
+
+describe('Lemon Squeezy webhook — non-renewal reverts to Free (use case: subscription lapses)', () => {
+  it('subscription_expired reverts planId to free, clears lsSubscriptionId, emails the owner', async () => {
+    const wsId = 'billing-webhook-expired-ws';
+    const ownerUid = 'billing-webhook-expired-owner';
+    const subId = 'sub_webhook_expired';
+    await db.collection('users').doc(ownerUid).set({ email: `${ownerUid}@billingtest.com` });
+    await db.collection('workspaces').doc(wsId).set({
+      ownerId: ownerUid, members: [ownerUid], planId: 'pro',
+      lsCustomerId: 'cust_expired', lsSubscriptionId: subId, subscriptionStatus: 'past_due',
+    });
+
+    const status = await postWebhook('subscription_expired', { id: subId, attributes: { status: 'expired' } });
+    assert.strictEqual(status, 200);
+
+    const wsDoc = await db.collection('workspaces').doc(wsId).get();
+    assert.strictEqual(wsDoc.data().planId, 'free');
+    assert.strictEqual(wsDoc.data().lsSubscriptionId, undefined);
+    assert.strictEqual(wsDoc.data().subscriptionStatus, 'canceled');
+
+    const mailSnap = await db.collection('mail').where('to', '==', `${ownerUid}@billingtest.com`).get();
+    assert.strictEqual(mailSnap.size, 1);
+    assert.match(mailSnap.docs[0].data().message.subject, /Subscription ended/);
+  });
+
+  it('subscription_payment_failed marks the workspace past_due and emails a dunning notice, without touching planId yet', async () => {
+    const wsId = 'billing-webhook-failed-ws';
+    const ownerUid = 'billing-webhook-failed-owner';
+    const subId = 'sub_webhook_failed';
+    await db.collection('users').doc(ownerUid).set({ email: `${ownerUid}@billingtest.com` });
+    await db.collection('workspaces').doc(wsId).set({
+      ownerId: ownerUid, members: [ownerUid], planId: 'pro',
+      lsCustomerId: 'cust_failed', lsSubscriptionId: subId, subscriptionStatus: 'active',
+    });
+
+    const status = await postWebhook('subscription_payment_failed', { id: subId, attributes: {} });
+    assert.strictEqual(status, 200);
+
+    const wsDoc = await db.collection('workspaces').doc(wsId).get();
+    assert.strictEqual(wsDoc.data().planId, 'pro', 'still entitled to Pro until it actually expires');
+    assert.strictEqual(wsDoc.data().subscriptionStatus, 'past_due');
+
+    const mailSnap = await db.collection('mail').where('to', '==', `${ownerUid}@billingtest.com`).get();
+    assert.strictEqual(mailSnap.size, 1);
+    assert.match(mailSnap.docs[0].data().message.subject, /Payment failed/);
   });
 });
 

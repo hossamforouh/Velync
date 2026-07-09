@@ -20,7 +20,6 @@ router.get('/plans', async (req, res) => {
         name: d.name,
         description: d.description || '',
         priceMonthly: d.priceMonthly || 0,
-        priceAnnual: d.priceAnnual || 0,
         maxActiveConfigs: d.maxActiveConfigs,
         minSyncIntervalMinutes: d.minSyncIntervalMinutes,
         maxItemsPerRun: d.maxItemsPerRun,

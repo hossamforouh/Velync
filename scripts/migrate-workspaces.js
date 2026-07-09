@@ -58,7 +58,6 @@ async function migrate() {
     const updateFields = {
       planId: assignedPlanId,
       subscriptionStatus: 'active',
-      billingInterval: 'monthly',
       currentPeriodEnd: null,
     };
 

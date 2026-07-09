@@ -77,7 +77,7 @@ function renderPlans() {
     tr.innerHTML = `
       <td data-label="ID"><code style="font-size:0.85rem;">${escHtml(p.id)}</code></td>
       <td data-label="Name"><strong>${escHtml(p.name)}</strong></td>
-      <td data-label="Price">${p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}/mo · $${p.priceAnnual}/yr`}</td>
+      <td data-label="Price">${p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}/mo`}</td>
       <td data-label="Configs">${p.maxActiveConfigs}</td>
       <td data-label="Interval">${p.minSyncIntervalMinutes} min</td>
       <td data-label="Items">${p.maxItemsPerRun}</td>
@@ -117,9 +117,7 @@ function openPlanEditor(plan) {
   document.getElementById('f-plan-name').value = plan ? plan.name : '';
   document.getElementById('f-plan-desc').value = plan ? (plan.description || '') : '';
   document.getElementById('f-plan-price-monthly').value = plan ? plan.priceMonthly : 0;
-  document.getElementById('f-plan-price-annual').value = plan ? plan.priceAnnual : 0;
   document.getElementById('f-plan-ls-monthly').value = plan ? (plan.lsVariantIdMonthly || '') : '';
-  document.getElementById('f-plan-ls-annual').value = plan ? (plan.lsVariantIdAnnual || '') : '';
   document.getElementById('f-plan-max-configs').value = plan ? plan.maxActiveConfigs : 1;
   document.getElementById('f-plan-min-interval').value = plan ? plan.minSyncIntervalMinutes : 30;
   document.getElementById('f-plan-max-items').value = plan ? plan.maxItemsPerRun : 100;
@@ -145,9 +143,7 @@ async function onSavePlan(e) {
     name: document.getElementById('f-plan-name').value.trim(),
     description: document.getElementById('f-plan-desc').value.trim(),
     priceMonthly: parseFloat(document.getElementById('f-plan-price-monthly').value) || 0,
-    priceAnnual: parseFloat(document.getElementById('f-plan-price-annual').value) || 0,
     lsVariantIdMonthly: document.getElementById('f-plan-ls-monthly').value.trim(),
-    lsVariantIdAnnual: document.getElementById('f-plan-ls-annual').value.trim(),
     maxActiveConfigs: parseInt(document.getElementById('f-plan-max-configs').value) || 1,
     minSyncIntervalMinutes: parseInt(document.getElementById('f-plan-min-interval').value) || 30,
     maxItemsPerRun: parseInt(document.getElementById('f-plan-max-items').value) || 100,
