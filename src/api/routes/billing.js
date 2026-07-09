@@ -143,6 +143,7 @@ router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy,
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const userEmail = userDoc.exists ? userDoc.data().email : null;
+    const userName = userDoc.exists ? userDoc.data().name : null;
     const workspaceId = userDoc.exists ? userDoc.data().workspaceId : null;
     if (!workspaceId) return res.status(400).json({ error: 'No workspace found' });
 
@@ -168,6 +169,7 @@ router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy,
     const url = await ls.createCheckout({
       variantId,
       email: userEmail,
+      name: userName,
       custom: { workspace_id: workspaceId, plan_id: planId },
       redirectUrl: `${config.appBaseUrl || 'https://velync.web.app'}/settings?billing=success`,
     });

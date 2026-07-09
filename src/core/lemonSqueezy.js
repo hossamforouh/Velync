@@ -24,13 +24,16 @@ http.interceptors.request.use((req) => {
  * Create a hosted Checkout for a given variant, returning its URL.
  * custom (object of strings) is echoed back in the webhook payload's
  * meta.custom_data — used to carry workspaceId/planId through checkout.
+ * name pre-fills the customer's name on the checkout — without it, Lemon
+ * Squeezy leaves the customer record's name blank/generic instead of the
+ * actual user's name.
  */
-async function createCheckout({ variantId, email, custom, redirectUrl }) {
+async function createCheckout({ variantId, email, name, custom, redirectUrl }) {
   const { data } = await http.post('/checkouts', {
     data: {
       type: 'checkouts',
       attributes: {
-        checkout_data: { email, custom },
+        checkout_data: { email, name, custom },
         product_options: { redirect_url: redirectUrl },
       },
       relationships: {

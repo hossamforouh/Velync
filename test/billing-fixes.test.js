@@ -58,13 +58,17 @@ require.cache[authPath] = {
 // ahead of/after those calls is under test. fakeSubscriptions mirrors the
 // shape of Lemon Squeezy's JSON:API subscription resource (`data.attributes`).
 const fakeSubscriptions = new Map(); // subscriptionId -> { id, attributes: {...} }
+let lastCreateCheckoutArgs = null;
 const lsPath = require.resolve('../src/core/lemonSqueezy');
 require.cache[lsPath] = {
   id: lsPath,
   filename: lsPath,
   loaded: true,
   exports: {
-    createCheckout: async () => 'https://checkout.lemonsqueezy.com/fake',
+    createCheckout: async (args) => {
+      lastCreateCheckoutArgs = args;
+      return 'https://checkout.lemonsqueezy.com/fake';
+    },
     getSubscription: async (id) => {
       const sub = fakeSubscriptions.get(id);
       if (!sub) throw new Error('No such subscription: ' + id);
@@ -104,7 +108,7 @@ let server;
 let baseUrl;
 
 before(async () => {
-  await db.collection('users').doc(OWNER_UID).set({ workspaceId: WORKSPACE_ID, email: `${OWNER_UID}@billingtest.com` });
+  await db.collection('users').doc(OWNER_UID).set({ workspaceId: WORKSPACE_ID, email: `${OWNER_UID}@billingtest.com`, name: 'Owner Name' });
   await db.collection('users').doc(MEMBER_UID).set({ workspaceId: WORKSPACE_ID, email: `${MEMBER_UID}@billingtest.com` });
   await db.collection('workspaces').doc(WORKSPACE_ID).set({ ownerId: OWNER_UID, members: [MEMBER_UID], planId: 'free' });
   await db.collection('plans').doc('pro').set({ name: 'Pro', maxActiveConfigs: 2, isActive: true, lsVariantIdMonthly: '1001' });
@@ -130,6 +134,21 @@ async function apiFetch(path, options = {}) {
   const body = await res.json().catch(() => ({}));
   return { status: res.status, body };
 }
+
+describe('create-checkout-session sends the customer\'s real name to Lemon Squeezy', () => {
+  it('passes the user\'s Firestore display name, not just email', async () => {
+    currentUid = OWNER_UID;
+    lastCreateCheckoutArgs = null;
+    const { status } = await apiFetch('/api/billing/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify({ planId: 'pro' }),
+    });
+    assert.strictEqual(status, 200);
+    assert.ok(lastCreateCheckoutArgs, 'createCheckout should have been called');
+    assert.strictEqual(lastCreateCheckoutArgs.name, 'Owner Name');
+    assert.strictEqual(lastCreateCheckoutArgs.email, `${OWNER_UID}@billingtest.com`);
+  });
+});
 
 describe('billing routes restricted to the workspace owner', () => {
   it('owner can create a checkout session', async () => {
