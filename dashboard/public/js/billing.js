@@ -84,11 +84,24 @@ export async function initBilling(dbInstance, authInstance) {
         e.preventDefault();
         setDowngrade(true);
       });
-    } else {
+    } else if (plan.priceMonthly === 0) {
       subArea.innerHTML = `
         <div class="billing-card" style="padding: 20px; border: 1px solid var(--border); border-radius: 12px;">
           <h4 style="margin:0 0 8px;">Subscription</h4>
           <p style="margin:0;color:var(--text-2);font-size:0.9rem;">You're on the Free plan — no active subscription.</p>
+        </div>
+      `;
+    } else {
+      // A paid planId with no Stripe customer on file — the plan was
+      // granted without ever going through checkout (e.g. set directly in
+      // Firestore). Don't claim they're on Free when the plan card above
+      // correctly shows otherwise; billing just isn't linked to Stripe.
+      subArea.innerHTML = `
+        <div class="billing-card" style="padding: 20px; border: 1px solid var(--border); border-radius: 12px;">
+          <h4 style="margin:0 0 8px;">Subscription</h4>
+          <p style="margin:0;color:var(--text-2);font-size:0.9rem;">
+            You're on the ${escHtml(plan.name)} plan, but no billing subscription is on file — this plan was set up outside of checkout. Contact support if this seems wrong.
+          </p>
         </div>
       `;
     }
@@ -109,7 +122,12 @@ export async function initBilling(dbInstance, authInstance) {
     const otherPlans = allPlans.filter(p => p.id !== plan.id && p.isActive);
     const upgradePlans = otherPlans.filter(p => p.priceMonthly > plan.priceMonthly);
     const downgradePlans = otherPlans.filter(p => p.priceMonthly > 0 && p.priceMonthly < plan.priceMonthly);
-    const canDowngradeToFree = plan.priceMonthly > 0;
+    // Only offer an actionable "Downgrade to Free" when there's a real
+    // subscription to cancel. A paid planId with no stripeSubscriptionId
+    // (plan granted outside checkout) has nothing for the backend to
+    // downgrade — that combination is flagged informationally instead, in
+    // the Subscription card above.
+    const canDowngradeToFree = plan.priceMonthly > 0 && !!subscription.stripeSubscriptionId;
 
     const planCard = (p, buttonLabel) => `
       <div class="billing-card" style="padding:16px;border:1px solid var(--border);border-radius:12px;">
