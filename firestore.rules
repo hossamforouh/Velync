@@ -90,8 +90,20 @@ service cloud.firestore {
     // ─── Workspaces ───────────────────────────────────────────
     match /workspaces/{workspaceId} {
       allow read: if isSuperAdmin() || isWorkspaceMember(workspaceId) || isPendingInvite(workspaceId);
+      // Previously only checked hasAny(['name']) — no allowlist and no value
+      // validation, so a client could set planId to 'pro'/'business' (or
+      // forge lsCustomerId/lsSubscriptionId/etc.) directly on creation and
+      // grant itself a paid plan for free, or claim ownership/membership on
+      // another user's behalf. Locked down to exactly the fields the
+      // client's own signup flow writes (see ensureWorkspaceDoc() in
+      // app.js), with planId pinned to 'free' — any other plan can only be
+      // reached through the real billing flow (server-side, Admin SDK).
       allow create: if request.auth != null
-        && request.resource.data.keys().hasAny(['name']);
+        && request.resource.data.keys().hasOnly(['id', 'name', 'ownerId', 'members', 'invitedEmails', 'planId'])
+        && request.resource.data.keys().hasAny(['name'])
+        && request.auth.uid == request.resource.data.ownerId
+        && request.resource.data.members == [request.auth.uid]
+        && (!('planId' in request.resource.data) || request.resource.data.planId == 'free');
       // Owner may edit only these fields. Use affectedKeys().hasOnly(...) — NOT keys().hasAny(...) —
       // because on an update request.resource.data is the full post-update doc, so hasAny would
       // always pass (name/ownerId always present) and let billing fields like planId/lsCustomerId

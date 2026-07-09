@@ -1043,7 +1043,8 @@ onAuthStateChanged(auth, async (user) => {
             name: workspaceName,
             ownerId: user.uid,
             members: [user.uid],
-            invitedEmails: []
+            invitedEmails: [],
+            planId: 'free'
           });
         }
       };

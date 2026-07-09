@@ -319,8 +319,44 @@ describe('/workspaces/{workspaceId}', () => {
     await assertSucceeds(ctx.invited().firestore().collection('workspaces').doc('owner-wsid').get());
   });
 
-  it('any authed user can create a workspace', async () => {
-    await assertSucceeds(ctx.stranger().firestore().collection('workspaces').add({ name: 'New WS' }));
+  it('any authed user can create a workspace matching the real signup payload', async () => {
+    await assertSucceeds(ctx.stranger().firestore().collection('workspaces').doc('stranger-new-wsid').set({
+      id: 'stranger-new-wsid', name: 'New WS', ownerId: 'stranger-uid', members: ['stranger-uid'], invitedEmails: [], planId: 'free',
+    }));
+  });
+
+  it('create without planId still succeeds (field is optional)', async () => {
+    await assertSucceeds(ctx.stranger().firestore().collection('workspaces').doc('stranger-no-plan-wsid').set({
+      name: 'New WS', ownerId: 'stranger-uid', members: ['stranger-uid'],
+    }));
+  });
+
+  // Regression: the create rule used to only check hasAny(['name']) with no
+  // allowlist or value validation — a client could set planId to a paid
+  // tier directly at creation and get a free upgrade, bypassing billing
+  // entirely. See the rule's own comment for the full explanation.
+  it('cannot create a workspace with a non-free planId', async () => {
+    await assertFails(ctx.stranger().firestore().collection('workspaces').doc('stranger-hack-wsid').set({
+      name: 'Hacked WS', ownerId: 'stranger-uid', members: ['stranger-uid'], planId: 'business',
+    }));
+  });
+
+  it('cannot create a workspace claiming a different ownerId than yourself', async () => {
+    await assertFails(ctx.stranger().firestore().collection('workspaces').doc('stranger-spoof-wsid').set({
+      name: 'Spoofed WS', ownerId: 'owner-uid', members: ['stranger-uid'],
+    }));
+  });
+
+  it('cannot create a workspace with members including someone else', async () => {
+    await assertFails(ctx.stranger().firestore().collection('workspaces').doc('stranger-addmember-wsid').set({
+      name: 'WS', ownerId: 'stranger-uid', members: ['stranger-uid', 'owner-uid'],
+    }));
+  });
+
+  it('cannot create a workspace with a disallowed field (e.g. lsCustomerId)', async () => {
+    await assertFails(ctx.stranger().firestore().collection('workspaces').doc('stranger-extra-field-wsid').set({
+      name: 'WS', ownerId: 'stranger-uid', members: ['stranger-uid'], lsCustomerId: 'cus_hack',
+    }));
   });
 
   it('owner can update with allowed field', async () => {
