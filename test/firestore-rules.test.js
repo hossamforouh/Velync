@@ -715,3 +715,29 @@ describe('/mail/{mailId}', () => {
     await assertFails(ctx.superAdmin().firestore().collection('mail').doc('test-mail').delete());
   });
 });
+
+// ─────────────────────────────────────────────
+// 18. /usage_events, /usage_summaries, /usage_meta
+// ─────────────────────────────────────────────
+describe('usage tracking collections (usage_events / usage_summaries / usage_meta)', () => {
+  it('usage_events: read and write always denied — admin-sdk-only', async () => {
+    await assertFails(ctx.owner().firestore().collection('usage_events').doc('evt1').get());
+    await assertFails(ctx.superAdmin().firestore().collection('usage_events').doc('evt1').get());
+    await assertFails(ctx.owner().firestore().collection('usage_events').add({
+      userId: 'owner-uid', activityType: 'sync_execution', units: 999999, estimatedCostUsd: 0,
+    }));
+  });
+
+  it('usage_summaries: a user cannot read or forge their own monthly totals', async () => {
+    await assertFails(ctx.owner().firestore().collection('usage_summaries').doc('owner-uid_2026-07').get());
+    await assertFails(ctx.owner().firestore().collection('usage_summaries').doc('owner-uid_2026-07').set({
+      userId: 'owner-uid', yearMonth: '2026-07', grandTotalCostUsd: 0,
+    }));
+    await assertFails(ctx.superAdmin().firestore().collection('usage_summaries').doc('owner-uid_2026-07').get());
+  });
+
+  it('usage_meta: read and write always denied', async () => {
+    await assertFails(ctx.stranger().firestore().collection('usage_meta').doc('write_failures').get());
+    await assertFails(ctx.superAdmin().firestore().collection('usage_meta').doc('write_failures').set({ count: 0 }));
+  });
+});

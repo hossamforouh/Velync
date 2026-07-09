@@ -938,6 +938,23 @@ if (avatarBtn && avatarDrop) {
   avatarDrop.addEventListener('click', (e) => e.stopPropagation());
 }
 
+// Report a client-originated usage-intensity event (login / workspace creation)
+// to the backend usage tracker. Fire-and-forget: tracking must never block or
+// break the sign-in flow, but failures still get logged (and the server keeps
+// its own admin-visible failure counter for anything that reaches it).
+function reportUsageEvent(user, activityType) {
+  user.getIdToken()
+    .then(token => fetch(`${window.VELYNC_CONFIG.apiBase}/api/usage/event`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activityType }),
+    }))
+    .then(res => {
+      if (res && !res.ok) console.error(`Usage event "${activityType}" rejected: HTTP ${res.status}`);
+    })
+    .catch(err => console.error(`Failed to report usage event "${activityType}":`, err));
+}
+
 // ─── Auth Flow ────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
   const globalLoader = document.getElementById('global-loader');
@@ -1046,8 +1063,16 @@ onAuthStateChanged(auth, async (user) => {
             invitedEmails: [],
             planId: 'free'
           });
+          reportUsageEvent(user, 'workspace_created');
         }
       };
+
+      // Usage-intensity tracking: onAuthStateChanged fires on every page load,
+      // so dedupe to one 'user_login' per browser session via sessionStorage.
+      if (!sessionStorage.getItem('velyncLoginLogged')) {
+        sessionStorage.setItem('velyncLoginLogged', '1');
+        reportUsageEvent(user, 'user_login');
+      }
 
       // These four are independent of each other (different docs/endpoints,
       // no cross-references) — run them concurrently instead of stacking
@@ -1079,18 +1104,21 @@ onAuthStateChanged(auth, async (user) => {
           { initAdminPlans },
           { initAdminWorkspaces },
           { initAdminSyncHealth },
+          { initAdminUsage },
         ] = await Promise.all([
           import('./js/admin-integrations.js'),
           import('./js/admin-platforms.js'),
           import('./js/admin-plans.js'),
           import('./js/admin-workspaces.js'),
           import('./js/admin-sync-health.js'),
+          import('./js/admin-usage.js'),
         ]);
         initAdminIntegrations(db, auth);
         initAdminPlatforms(db, auth);
         initAdminPlans(db, auth);
         initAdminWorkspaces(auth);
         initAdminSyncHealth(auth);
+        initAdminUsage(auth);
       }
     }
 

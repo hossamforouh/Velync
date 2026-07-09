@@ -10,6 +10,7 @@ const { resolveAuthorizedWorkspaceId } = require('../../core/workspaceAuth');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 const config = require('../../core/config');
+const { logUsageEvent } = require('../../domains/usage');
 
 const router = Router();
 
@@ -130,6 +131,8 @@ router.post('/oauth/exchange', verifyAuth, oauthExchangeLimiter, [
     }, { merge: true });
 
     logger.info('oauth', `Connection "${connRef.id}" created for ${platformId}`, { workspaceId: resolvedWsId });
+
+    await logUsageEvent(uid, resolvedWsId, 'platform_connected', { connectorType: platformId });
 
     res.json({ success: true, message: 'OAuth successful. Credentials securely stored.', connectionId: connRef.id });
   } catch (err) {

@@ -216,5 +216,22 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+
+    // ─── Usage tracking (server-side only via Admin SDK) ──────
+    // Cost/usage data feeds pricing decisions — a client-writable path here
+    // would let users forge their own usage records; reads are admin-panel
+    // concerns served through /api/admin/usage.
+    match /usage_events/{eventId} {
+      allow read: if false;
+      allow write: if false;
+    }
+    match /usage_summaries/{summaryId} {
+      allow read: if false;
+      allow write: if false;
+    }
+    match /usage_meta/{documentId} {
+      allow read: if false;
+      allow write: if false;
+    }
   }
 }

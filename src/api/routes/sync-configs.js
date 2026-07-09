@@ -12,6 +12,7 @@ const { deleteSyncConfig } = require('../../domains/sync/config-deletion');
 const { runSync } = require('../../domains/sync/engine');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
+const { logUsageEvent } = require('../../domains/usage');
 
 /** Per-user rate limiter for suggest-mappings (Gemini-backed, costly) */
 const suggestLimiter = rateLimit({
@@ -171,6 +172,8 @@ router.post('/sync-configs', verifyAuth, [
 
     logger.info('sync-configs', `Config created "${ref.id}" in workspace "${ctx.workspaceId}"`, { status });
 
+    await logUsageEvent(uid, ctx.workspaceId, 'flow_created');
+
     return res.status(201).json({ success: true, id: ref.id });
   } catch (err) {
     logger.error('sync-configs', 'Failed to create config', { error: err.message });
@@ -246,6 +249,11 @@ router.put('/sync-configs/:configId', verifyAuth, [
     await configRef.set(merged, { merge: true });
 
     logger.info('sync-configs', `Config updated "${configId}" in workspace "${ctx.workspaceId}"`);
+
+    if (req.body.fieldMappings !== undefined
+        && JSON.stringify(req.body.fieldMappings) !== JSON.stringify(existingData.fieldMappings || [])) {
+      await logUsageEvent(uid, ctx.workspaceId, 'field_mapping_changed');
+    }
 
     return res.json({ success: true, id: configId });
   } catch (err) {

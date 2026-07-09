@@ -8,6 +8,7 @@ const { getPlan } = require('../../core/plan');
 const { resolveConnectorKey } = require('../../core/platform');
 const { acquireLease, releaseLease } = require('../../core/lock');
 const { notifySyncFailure } = require('../../core/notifications');
+const { createUsageCollector, instrumentConnector } = require('../usage');
 
 const runningConfigs = new Set();
 
@@ -86,6 +87,14 @@ async function runSync(config, configId) {
   }
   runningConfigs.add(configId);
 
+  // Cost attribution: every run is attributed to the config's owner (falling
+  // back to the workspaceId, which for solo workspaces IS the owner's uid).
+  const usage = createUsageCollector({
+    userId: config.ownerId || config.workspaceId,
+    workspaceId: config.workspaceId,
+  });
+  const runStartedAt = Date.now();
+
   // Resolve workspace's plan limits
   let plan = null;
   try {
@@ -123,6 +132,10 @@ async function runSync(config, configId) {
     configId, configName: config.description || configId, workspaceId: config.workspaceId,
     startTime: new Date().toISOString(), status: 'running',
   }).catch(() => null);
+  // The sync_config doc read (by the scheduler/dispatcher to invoke this run)
+  // plus the execution_logs write above.
+  usage.firestoreRead(1);
+  if (logRef) usage.firestoreWrite(1);
 
   let synced = 0, deleted = 0, failed = 0;
   // Whether this run performs full deletion reconciliation (decided below). Declared
@@ -158,6 +171,8 @@ async function runSync(config, configId) {
 
     const sourceCreds = sourceConnId ? { ...await resolveCredentials(null, sourceConnId), ...p1Settings } : { ...p1Settings };
     const destCreds = destConnId ? { ...await resolveCredentials(null, destConnId), databaseId: p2Settings.database, ...p2Settings } : { databaseId: p2Settings.database, ...p2Settings };
+    // Each resolveCredentials reads the connected_accounts doc + the credentials doc.
+    usage.firestoreRead((sourceConnId ? 2 : 0) + (destConnId ? 2 : 0));
 
     // Platform docs get auto-generated Firestore IDs, not necessarily the
     // connector registry key — resolveConnectorKey() handles that mapping
@@ -167,8 +182,10 @@ async function runSync(config, configId) {
 
     const SourceConn = getConnector(resolvedSourcePlatform);
     const DestConn = getConnector(resolvedDestPlatform);
-    const source = new SourceConn(sourceCreds);
-    const dest = new DestConn(destCreds);
+    // instrumentConnector wraps at the connector-contract level (platform-agnostic),
+    // counting one api_call per contract method invocation on the third-party API.
+    const source = instrumentConnector(new SourceConn(sourceCreds), usage, resolvedSourcePlatform);
+    const dest = instrumentConnector(new DestConn(destCreds), usage, resolvedDestPlatform);
 
     // ModifiedSince-filtered fetch for create/update processing
     const sourceItems = (await source.fetch(entityType, filter, fetchOptions)).slice(0, MAX_ITEMS_PER_RUN);
@@ -200,6 +217,8 @@ async function runSync(config, configId) {
     const mappingDocs = doReconcile
       ? (await mappingsCol.get()).docs
       : await loadMappingsForItems(mappingsCol, sourceItems, destItems);
+    // Firestore bills a minimum of 1 read per query, even when it returns nothing.
+    usage.firestoreRead(Math.max(mappingDocs.length, 1));
 
     const sourceToMapping = new Map();
     const destToMapping = new Map();
@@ -221,10 +240,13 @@ async function runSync(config, configId) {
       for (const op of operations) {
         if (op.type === 'set') {
           batch.set(mappingsRef.doc(op.id), op.data);
+          usage.firestoreWrite(1);
         } else if (op.type === 'update') {
           batch.update(mappingsRef.doc(op.id), op.data);
+          usage.firestoreWrite(1);
         } else if (op.type === 'delete') {
           batch.delete(mappingsRef.doc(op.id));
+          usage.firestoreDelete(1);
         }
       }
       await batch.commit();
@@ -362,6 +384,9 @@ async function runSync(config, configId) {
       error: err.message,
       currentLogId: logRef?.id,
     }).catch(() => {});
+    // Failed runs still consumed compute and API calls — record them.
+    if (logRef) usage.firestoreWrite(1);
+    await usage.flush({ durationMs: Date.now() - runStartedAt });
     throw err;
   } finally {
     runningConfigs.delete(configId);
@@ -373,6 +398,9 @@ async function runSync(config, configId) {
   const configUpdate = { lastRunAt: now, lastSuccessfulSyncAt: now };
   if (doReconcile) configUpdate.lastReconcileAt = now;
   await db.collection('workspaces').doc(config.workspaceId).collection('sync_configs').doc(configId).update(configUpdate).catch(() => {});
+  // Final execution_logs update + sync_config lastRun update.
+  usage.firestoreWrite((logRef ? 1 : 0) + 1);
+  await usage.flush({ durationMs: Date.now() - runStartedAt });
   logger.info('sync', `Completed "${configId}" — synced:${synced} deleted:${deleted} failed:${failed}`);
   return { synced, deleted, failed };
 }

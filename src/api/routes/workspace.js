@@ -5,6 +5,7 @@ const { verifyAuth } = require('../middleware/auth');
 const { deleteWorkspace } = require('../../domains/workspace/deletion');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
+const { logUsageEvent } = require('../../domains/usage');
 
 const router = Router();
 
@@ -133,6 +134,12 @@ router.post('/workspace/invite', verifyAuth, [
       invitedEmails: FieldValue.arrayUnion(email)
     });
     logger.info('workspace', `Invite sent to ${email} for workspace ${workspaceId} by ${req.user.uid}`);
+
+    // A superadmin inviting into someone else's workspace is an admin-panel
+    // action — recorded but excluded from any regular user's usage totals.
+    await logUsageEvent(req.user.uid, workspaceId, 'member_invited', {
+      actor: (isOwner || isMember) ? 'user' : 'admin',
+    });
 
     const workspaceName = data.name || 'Organization';
     try {
