@@ -329,6 +329,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       document.getElementById('f-plat-name').value = platform.name || '';
       document.getElementById('f-plat-logo').value = platform.logo || '';
       document.getElementById('f-plat-connector-key').value = platform.connectorKey || '';
+      document.getElementById('f-plat-tier').value = platform.tier || 'basic';
       document.getElementById('f-plat-auth-type').value = platform.authType || 'manual';
       document.getElementById('f-plat-auth-url').value = platform.authUrl || '';
       document.getElementById('f-plat-token-url').value = platform.tokenUrl || '';
@@ -357,6 +358,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       document.getElementById('f-plat-name').value = '';
       document.getElementById('f-plat-logo').value = '';
       document.getElementById('f-plat-connector-key').value = '';
+      document.getElementById('f-plat-tier').value = 'basic';
       document.getElementById('f-plat-auth-type').value = 'manual';
       document.getElementById('f-plat-auth-url').value = '';
       document.getElementById('f-plat-token-url').value = '';
@@ -439,6 +441,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
         name: document.getElementById('f-plat-name').value.trim(),
         logo: document.getElementById('f-plat-logo').value.trim(),
         connectorKey: document.getElementById('f-plat-connector-key').value,
+        tier: document.getElementById('f-plat-tier').value,
         authType: document.getElementById('f-plat-auth-type').value,
         authUrl: document.getElementById('f-plat-auth-url').value.trim(),
         tokenUrl: document.getElementById('f-plat-token-url').value.trim(),
@@ -538,7 +541,7 @@ async function loadPlatformsPage(reset = false) {
     console.warn('[admin-platforms] Load error:', err);
     if (!navigator.onLine) return;
     showToast('Failed to load platforms', 'error');
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--rose);">Failed to load. <a href="#" onclick="location.reload()" style="color:var(--violet);">Reload</a></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--rose);">Failed to load. <a href="#" onclick="location.reload()" style="color:var(--violet);">Reload</a></td></tr>';
   } finally {
     platLoading = false;
   }
@@ -700,6 +703,7 @@ function renderPlatformTable() {
       case 'key': aVal = a.key || a.id || ''; bVal = b.key || b.id || ''; break;
       case 'name': aVal = a.name || ''; bVal = b.name || ''; break;
       case 'authType': aVal = a.authType || ''; bVal = b.authType || ''; break;
+      case 'tier': aVal = a.tier || 'basic'; bVal = b.tier || 'basic'; break;
       case 'integrationCount':
         aVal = integrationCountByPlatform[a.id] || 0;
         bVal = integrationCountByPlatform[b.id] || 0;
@@ -717,7 +721,7 @@ function renderPlatformTable() {
     const msg = platSearchTerm
       ? `No platforms match "${escHtml(platSearchTerm)}"`
       : 'No platforms found.';
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;">${msg}</td></tr>`;
     const loadMoreWrap = document.getElementById('admin-plat-load-more-wrap');
     if (loadMoreWrap) loadMoreWrap.style.display = 'none';
     const countEl = document.getElementById('admin-plat-count');
@@ -730,6 +734,10 @@ function renderPlatformTable() {
     const authTypeDisplay = p.authType === 'oauth' ? 'OAuth 2.0' : (p.authType === 'manual' ? 'Manual' : '<span style="color:var(--text-3)">None</span>');
     const badgeHtml = `<span class="conn-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">${escHtml(p.name)}</span>`;
     const intCount = integrationCountByPlatform[p.id] || 0;
+    const tier = p.tier || 'basic';
+    const tierHtml = tier === 'premium'
+      ? `<span class="badge badge-info">Premium</span>`
+      : `<span class="badge">Basic</span>`;
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -737,6 +745,7 @@ function renderPlatformTable() {
       <td data-label="ID" style="font-weight:500;">${escHtml(p.key || p.id)}</td>
       <td data-label="Name">${badgeHtml}</td>
       <td data-label="Auth Type" style="font-size:0.9rem;color:var(--text-2);">${authTypeDisplay}</td>
+      <td data-label="Tier">${tierHtml}</td>
       <td data-label="Integrations" style="text-align:center;">${intCount}</td>
       <td data-label="Actions" class="col-actions">
         <div class="row-actions-group">

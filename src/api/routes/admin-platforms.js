@@ -29,7 +29,7 @@ const requireSuperAdmin = async (req, res, next) => {
 // since `platforms` is readable by any authenticated user for the connect-flow UI.
 const PLATFORM_FIELDS = [
   'name', 'logo', 'authType', 'authUrl', 'tokenUrl', 'clientId',
-  'guideUrl', 'attributes', 'configSchema', 'connectorKey',
+  'guideUrl', 'attributes', 'configSchema', 'connectorKey', 'tier',
 ];
 
 function pickPlatformFields(body) {
@@ -67,9 +67,11 @@ router.get('/admin/connector-keys', verifyAuth, requireSuperAdmin, async (req, r
 router.post('/admin/platforms', verifyAuth, requireSuperAdmin, [
   body('name').isString().trim().notEmpty(),
   body('connectorKey').optional().isString().trim(),
+  body('tier').optional().isIn(['basic', 'premium']),
 ], validate, async (req, res) => {
   try {
     const data = pickPlatformFields(req.body);
+    if (!data.tier) data.tier = 'basic';
     const docRef = db.collection('platforms').doc();
     data.key = docRef.id;
     await docRef.set(data);
@@ -93,6 +95,7 @@ router.post('/admin/platforms', verifyAuth, requireSuperAdmin, [
 router.put('/admin/platforms/:platformId', verifyAuth, requireSuperAdmin, [
   body('name').optional().isString().trim().isLength({ min: 1 }),
   body('connectorKey').optional().isString().trim(),
+  body('tier').optional().isIn(['basic', 'premium']),
 ], validate, async (req, res) => {
   try {
     const { platformId } = req.params;

@@ -119,6 +119,45 @@ describe('POST/PUT/DELETE /api/admin/platforms', () => {
   });
 });
 
+describe('platform tier (connectorTiers gating)', () => {
+  it('defaults to "basic" when not supplied', async () => {
+    const { status, body } = await apiFetch('/api/admin/platforms', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'DefaultTierPlatform' }),
+    });
+    assert.strictEqual(status, 200);
+    const doc = await db.collection('platforms').doc(body.id).get();
+    assert.strictEqual(doc.data().tier, 'basic');
+  });
+
+  it('accepts an explicit "premium" tier on create, and can be changed via update', async () => {
+    const { status, body } = await apiFetch('/api/admin/platforms', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'PremiumPlatform', tier: 'premium' }),
+    });
+    assert.strictEqual(status, 200);
+    let doc = await db.collection('platforms').doc(body.id).get();
+    assert.strictEqual(doc.data().tier, 'premium');
+
+    const update = await apiFetch(`/api/admin/platforms/${body.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ tier: 'basic' }),
+    });
+    assert.strictEqual(update.status, 200);
+    doc = await db.collection('platforms').doc(body.id).get();
+    assert.strictEqual(doc.data().tier, 'basic');
+  });
+
+  it('rejects an invalid tier value', async () => {
+    const { status, body } = await apiFetch('/api/admin/platforms', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'BadTierPlatform', tier: 'enterprise' }),
+    });
+    assert.strictEqual(status, 400);
+    assert.match(body.error, /Validation failed/);
+  });
+});
+
 describe('POST/PUT/DELETE /api/admin/integrations', () => {
   let integrationId;
 

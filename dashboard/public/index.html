@@ -1074,13 +1074,14 @@
                       <th data-sort="key">ID</th>
                       <th data-sort="name">Name</th>
                       <th data-sort="authType">Auth Type</th>
+                      <th data-sort="tier">Tier</th>
                       <th data-sort="integrationCount">Integrations</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="admin-platforms-tbody">
                     <tr>
-                      <td colspan="6" style="text-align:center; padding: 20px;">Loading...</td>
+                      <td colspan="7" style="text-align:center; padding: 20px;">Loading...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1272,6 +1273,14 @@
                       <option value="">— No connector (config only) —</option>
                     </select>
                     <small class="form-row-hint">Which backend connector code actually powers syncs for this platform. Required for real syncing/entity-fetching to work — leave blank only for a purely informational entry.</small>
+                  </div>
+                  <div class="form-row">
+                    <label for="f-plat-tier">Plan Tier *</label>
+                    <select id="f-plat-tier" required>
+                      <option value="basic">Basic</option>
+                      <option value="premium">Premium</option>
+                    </select>
+                    <small class="form-row-hint">Which plans can use this connector — a workspace can only connect to it if their plan's "Connector Tiers" (Admin → Plans) includes this tier.</small>
                   </div>
                 </div>
 
