@@ -6,6 +6,11 @@ import { getSkeletonTableHTML, setButtonLoading } from './loading-components.js'
 let firestoreDb = null;
 let auth = null;
 
+// openModal is defined inside initAdminPlatforms (it closes over that scope's
+// form/cache state), but renderPlatformTable is a top-level sibling function
+// that needs to call it from the row-level Edit button — expose it here.
+let openModalRef = null;
+
 // Pagination state
 const PLAT_PAGE_SIZE = 50;
 let platLastVisible = null;
@@ -287,6 +292,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       cachedConnectorKeys.map(k => `<option value="${escAttr(k)}">${escHtml(k)}</option>`).join('');
   }
 
+  openModalRef = openModal;
   async function openModal(platform = null) {
     const panelBody = document.querySelector('#view-admin-platform-editor .panel-body');
     const form = document.getElementById('platform-form');
@@ -758,7 +764,7 @@ function renderPlatformTable() {
 
     tr.querySelector('.edit-plat-btn').addEventListener('click', () => {
       const plat = allPlatformsCache.find(x => x.id === p.id);
-      if (plat) openModal(plat);
+      if (plat) openModalRef(plat);
     });
 
     tr.querySelector('.del-plat-btn').addEventListener('click', () => {
