@@ -12,6 +12,7 @@ let loading = false;
 let hasLoaded = false;
 let searchTerm = '';
 let searchDebounce = null;
+let plansCache = null;
 
 export function initAdminWorkspaces(authInstance) {
   auth = authInstance;
@@ -45,6 +46,58 @@ async function apiGet(path) {
     throw new Error(e.error || `Request failed (${res.status})`);
   }
   return res.json();
+}
+
+async function apiPatch(path, body) {
+  const token = auth && auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const res = await fetch(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+async function openPlanEditor(tr, workspace) {
+  const cell = tr.querySelector('.plan-display')?.closest('td');
+  if (!cell) return;
+  const originalHtml = cell.innerHTML;
+
+  cell.innerHTML = `<span style="color:var(--text-3);font-size:0.82rem;">Loading…</span>`;
+  try {
+    if (!plansCache) plansCache = await apiGet('/api/admin/plans');
+  } catch (err) {
+    showToast('Failed to load plans: ' + err.message, 'error');
+    cell.innerHTML = originalHtml;
+    return;
+  }
+
+  cell.innerHTML = `
+    <div style="display:flex;align-items:center;gap:4px;">
+      <select class="admin-input plan-select" style="padding:4px 6px;font-size:0.82rem;">
+        ${plansCache.map(p => `<option value="${p.id}" ${p.id === workspace.planId ? 'selected' : ''}>${p.name}</option>`).join('')}
+      </select>
+      <button class="row-action-btn btn-confirm-plan" type="button" title="Save">✓</button>
+      <button class="row-action-btn btn-cancel-plan" type="button" title="Cancel">✕</button>
+    </div>
+  `;
+
+  cell.querySelector('.btn-cancel-plan').addEventListener('click', () => { cell.innerHTML = originalHtml; });
+  cell.querySelector('.btn-confirm-plan').addEventListener('click', async () => {
+    const newPlanId = cell.querySelector('.plan-select').value;
+    if (newPlanId === workspace.planId) { cell.innerHTML = originalHtml; return; }
+    try {
+      await apiPatch(`/api/admin/workspaces/${workspace.id}/plan`, { planId: newPlanId });
+      workspace.planId = newPlanId;
+      cell.innerHTML = `<span class="badge badge-info plan-display">${esc(newPlanId)}</span>`;
+      showToast(`Workspace moved to "${newPlanId}"`, 'success');
+    } catch (err) {
+      showToast('Failed to change plan: ' + err.message, 'error');
+      cell.innerHTML = originalHtml;
+    }
+  });
 }
 
 async function loadAll() {
@@ -84,17 +137,21 @@ async function loadWorkspaces(reset) {
     const { items, nextCursor } = await apiGet('/api/admin/workspaces?' + params.toString());
 
     if (reset && items.length === 0) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-3);">${searchTerm ? 'No workspaces match your search.' : 'No workspaces.'}</td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">${searchTerm ? 'No workspaces match your search.' : 'No workspaces.'}</td></tr>`;
     } else if (tbody) {
       for (const w of items) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td data-label="Name"><strong>${esc(w.name || '—')}</strong></td>
           <td data-label="Owner"><code style="font-size:0.82rem;">${esc(w.ownerId || '—')}</code></td>
-          <td data-label="Plan"><span class="badge badge-info">${esc(w.planId)}</span></td>
+          <td data-label="Plan"><span class="badge badge-info plan-display">${esc(w.planId)}</span></td>
           <td data-label="Members">${Number(w.memberCount) || 0}</td>
-          <td data-label="ID"><code style="font-size:0.82rem;">${esc(w.id)}</code></td>`;
+          <td data-label="ID"><code style="font-size:0.82rem;">${esc(w.id)}</code></td>
+          <td data-label="Actions"><button class="row-action-btn btn-change-plan" type="button" title="Change Plan">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+          </button></td>`;
         tbody.appendChild(tr);
+        tr.querySelector('.btn-change-plan').addEventListener('click', () => openPlanEditor(tr, w));
       }
       rowsShown += items.length;
     }
