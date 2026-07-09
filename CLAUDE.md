@@ -17,7 +17,10 @@ continuously.
 
 **Stack:** Node.js/Express backend, vanilla JS SPA frontend (no build step, 
 no framework), Google Cloud Firestore, Cloud Run hosting, Gemini 2.5 Flash 
-(via Vertex AI) for AI-assisted field mapping suggestions, Stripe for billing.
+(via Vertex AI) for AI-assisted field mapping suggestions, Lemon Squeezy for 
+billing (switched from Stripe — see history item 8 below; Stripe doesn't 
+support payout accounts for Egypt-based sellers, which is where this project 
+is run from).
 
 ---
 
@@ -117,6 +120,28 @@ overwrite each other's tokens.
 7. **Started on the broader pre-launch checklist** (staging validation, 
    pricing page, onboarding flow, monitoring scripts) — see "Outstanding 
    work" below for what's actually done vs. still pending.
+
+8. **Migrated billing from Stripe to Lemon Squeezy.** Stripe does not let 
+   Egypt-based businesses open a payout-receiving account, which is where 
+   this project is run from — Lemon Squeezy (a Merchant of Record with 
+   broader seller-country support) was chosen instead. `src/core/lemonSqueezy.js` 
+   is a thin REST client (Lemon Squeezy has no official Node SDK in active 
+   use here); `src/api/routes/billing.js` was rewritten against it end to 
+   end (checkout, in-place plan swap on an existing subscription instead of 
+   creating a duplicate, portal URL — sourced directly from the subscription 
+   resource rather than a separate "create session" call like Stripe's, 
+   downgrade-at-period-end via soft-cancel/resume, webhook handling). Plan 
+   docs now store `lsVariantIdMonthly`/`lsVariantIdAnnual` instead of Stripe 
+   Price IDs (admin-editable via the Plans tab). Workspace docs now store 
+   `lsCustomerId`/`lsSubscriptionId` instead of the Stripe equivalents. 
+   **Not yet verified against the real Lemon Squeezy API** — implemented 
+   from documented API shape, not exercised against a live account yet (no 
+   credentials were available at the time). Verify the exact webhook event 
+   names/payload shape (`meta.event_name`, `data.attributes.*`) and the 
+   checkout/subscription endpoint request/response shapes against Lemon 
+   Squeezy's current docs or a real test-mode call before trusting this in 
+   production — this is exactly the kind of "looked correct on paper" gap 
+   this project's history (see "Working style" below) warns about.
 
 ---
 

@@ -63,11 +63,11 @@ async function migrate() {
     };
 
     // Only delete these if they don't exist (may have stale demo data)
-    if (!data.stripeCustomerId) {
-      updateFields.stripeCustomerId = FieldValue.delete();
+    if (!data.lsCustomerId) {
+      updateFields.lsCustomerId = FieldValue.delete();
     }
-    if (!data.stripeSubscriptionId) {
-      updateFields.stripeSubscriptionId = FieldValue.delete();
+    if (!data.lsSubscriptionId) {
+      updateFields.lsSubscriptionId = FieldValue.delete();
     }
 
     await doc.ref.set(updateFields, { merge: true });

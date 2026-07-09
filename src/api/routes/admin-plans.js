@@ -62,8 +62,8 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
   body('sortOrder').optional().isInt({ min: 0 }),
   body('isActive').optional().isBoolean(),
   body('isDefault').optional().isBoolean(),
-  body('stripePriceIdMonthly').optional().isString(),
-  body('stripePriceIdAnnual').optional().isString(),
+  body('lsVariantIdMonthly').optional().isString(),
+  body('lsVariantIdAnnual').optional().isString(),
 ], validate, async (req, res) => {
   try {
     const { planId } = req.params;
@@ -71,7 +71,7 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
       'name', 'description', 'priceMonthly', 'priceAnnual',
       'maxActiveConfigs', 'minSyncIntervalMinutes', 'maxItemsPerRun',
       'connectorTiers', 'logRetentionDays', 'sortOrder',
-      'isActive', 'isDefault', 'stripePriceIdMonthly', 'stripePriceIdAnnual',
+      'isActive', 'isDefault', 'lsVariantIdMonthly', 'lsVariantIdAnnual',
     ];
     const update = { updatedAt: new Date().toISOString() };
     for (const key of allowed) {
@@ -149,8 +149,8 @@ router.post('/admin/plans', verifyAuth, requireSuperAdmin, [
       description: rest.description || '',
       priceMonthly: rest.priceMonthly ?? 0,
       priceAnnual: rest.priceAnnual ?? 0,
-      stripePriceIdMonthly: rest.stripePriceIdMonthly || '',
-      stripePriceIdAnnual: rest.stripePriceIdAnnual || '',
+      lsVariantIdMonthly: rest.lsVariantIdMonthly || '',
+      lsVariantIdAnnual: rest.lsVariantIdAnnual || '',
       maxActiveConfigs: rest.maxActiveConfigs ?? 1,
       minSyncIntervalMinutes: rest.minSyncIntervalMinutes ?? 30,
       maxItemsPerRun: rest.maxItemsPerRun ?? 100,

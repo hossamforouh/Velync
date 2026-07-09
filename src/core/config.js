@@ -21,8 +21,9 @@ const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   externalApiTimeout: parseInt(process.env.EXTERNAL_API_TIMEOUT, 10) || 30000,
   maxRequestBodySize: process.env.MAX_REQUEST_BODY_SIZE || '1mb',
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
-  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+  lemonSqueezyApiKey: process.env.LEMONSQUEEZY_API_KEY || '',
+  lemonSqueezyStoreId: process.env.LEMONSQUEEZY_STORE_ID || '',
+  lemonSqueezyWebhookSecret: process.env.LEMONSQUEEZY_WEBHOOK_SECRET || '',
   appBaseUrl: process.env.APP_BASE_URL || 'https://velync.web.app',
   // Scheduler: 'internal' = in-process node-cron (default, needs an always-on instance);
   // 'external' = driven by Cloud Scheduler hitting POST /api/internal/scheduler/tick.

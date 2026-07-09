@@ -53,10 +53,10 @@ export async function initBilling(dbInstance, authInstance) {
     `;
 
     // Subscription info. Always render something here — previously this
-    // whole block was skipped for anyone without a Stripe customer record
-    // (every Free-tier user who never checked out), leaving a silent gap
-    // instead of an explicit "you have no active subscription" state.
-    if (subscription.stripeCustomerId) {
+    // whole block was skipped for anyone without a Lemon Squeezy customer
+    // record (every Free-tier user who never checked out), leaving a silent
+    // gap instead of an explicit "you have no active subscription" state.
+    if (subscription.lsCustomerId) {
       let statusBanner = '';
       if (subscription.cancelAtPeriodEnd) {
         statusBanner = `<p style="margin:0 0 12px;color:var(--rose);font-size:0.85rem;font-weight:600;">
@@ -92,10 +92,10 @@ export async function initBilling(dbInstance, authInstance) {
         </div>
       `;
     } else {
-      // A paid planId with no Stripe customer on file — the plan was
+      // A paid planId with no Lemon Squeezy customer on file — the plan was
       // granted without ever going through checkout (e.g. set directly in
       // Firestore). Don't claim they're on Free when the plan card above
-      // correctly shows otherwise; billing just isn't linked to Stripe.
+      // correctly shows otherwise; billing just isn't linked to a subscription.
       subArea.innerHTML = `
         <div class="billing-card" style="padding: 20px; border: 1px solid var(--border); border-radius: 12px;">
           <h4 style="margin:0 0 8px;">Subscription</h4>
@@ -123,11 +123,11 @@ export async function initBilling(dbInstance, authInstance) {
     const upgradePlans = otherPlans.filter(p => p.priceMonthly > plan.priceMonthly);
     const downgradePlans = otherPlans.filter(p => p.priceMonthly > 0 && p.priceMonthly < plan.priceMonthly);
     // Only offer an actionable "Downgrade to Free" when there's a real
-    // subscription to cancel. A paid planId with no stripeSubscriptionId
-    // (plan granted outside checkout) has nothing for the backend to
-    // downgrade — that combination is flagged informationally instead, in
-    // the Subscription card above.
-    const canDowngradeToFree = plan.priceMonthly > 0 && !!subscription.stripeSubscriptionId;
+    // subscription to cancel. A paid planId with no lsSubscriptionId (plan
+    // granted outside checkout) has nothing for the backend to downgrade —
+    // that combination is flagged informationally instead, in the
+    // Subscription card above.
+    const canDowngradeToFree = plan.priceMonthly > 0 && !!subscription.lsSubscriptionId;
 
     const planCard = (p, buttonLabel) => `
       <div class="billing-card" style="padding:16px;border:1px solid var(--border);border-radius:12px;">

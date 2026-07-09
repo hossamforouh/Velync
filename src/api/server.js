@@ -65,10 +65,10 @@ function createApp() {
     next();
   });
 
-  // Body parser with size limit — skip for Stripe webhook (needs raw body)
+  // Body parser with size limit — skip for the billing webhook (needs raw body)
   app.use('/api/billing/webhook', express.raw({ type: 'application/json', limit: config.maxRequestBodySize }));
   // Must NOT run express.json() on the webhook path or it will consume the raw body stream,
-  // causing stripe.webhooks.constructEvent to fail signature verification.
+  // causing the HMAC signature check in lemonSqueezy.js to fail.
   app.use((req, res, next) => {
     if (req.path === '/api/billing/webhook') return next();
     express.json({ limit: config.maxRequestBodySize })(req, res, next);

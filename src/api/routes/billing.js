@@ -5,15 +5,9 @@ const { verifyAuth } = require('../middleware/auth');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 const config = require('../../core/config');
+const ls = require('../../core/lemonSqueezy');
 const { reconcileActiveConfigsForPlan } = require('../../core/plan');
 const { notifyAdmins } = require('../../core/notifications');
-
-let stripe = null;
-try {
-  stripe = require('stripe')(config.stripeSecretKey);
-} catch (e) {
-  logger.warn('billing', 'Stripe not configured — billing endpoints will return 503');
-}
 
 const router = Router();
 
@@ -25,11 +19,31 @@ const validate = (req, res, next) => {
   next();
 };
 
-function requireStripe(req, res, next) {
-  if (!stripe) {
-    return res.status(503).json({ error: 'Billing is not configured. Set STRIPE_SECRET_KEY.' });
+function requireLemonSqueezy(req, res, next) {
+  if (!config.lemonSqueezyApiKey || !config.lemonSqueezyStoreId) {
+    return res.status(503).json({ error: 'Billing is not configured. Set LEMONSQUEEZY_API_KEY and LEMONSQUEEZY_STORE_ID.' });
   }
   next();
+}
+
+// Lemon Squeezy subscription statuses ('on_trial', 'active', 'paused',
+// 'past_due', 'unpaid', 'cancelled', 'expired') vs. the single-L 'canceled'
+// this app has always used internally (frontend checks `status === 'canceled'`)
+// — normalize once here rather than touching every consumer.
+function normalizeStatus(lsStatus) {
+  if (lsStatus === 'cancelled' || lsStatus === 'expired') return 'canceled';
+  if (lsStatus === 'unpaid') return 'past_due';
+  return lsStatus || 'active';
+}
+
+// Find which plan + billing interval a Lemon Squeezy variant belongs to.
+async function resolvePlanFromVariant(variantId) {
+  if (!variantId) return null;
+  const monthlySnap = await db.collection('plans').where('lsVariantIdMonthly', '==', String(variantId)).get();
+  if (!monthlySnap.empty) return { planId: monthlySnap.docs[0].id, billingInterval: 'monthly' };
+  const annualSnap = await db.collection('plans').where('lsVariantIdAnnual', '==', String(variantId)).get();
+  if (!annualSnap.empty) return { planId: annualSnap.docs[0].id, billingInterval: 'annual' };
+  return null;
 }
 
 // After a plan change, pause any active configs beyond the new plan's limit
@@ -99,8 +113,8 @@ router.get('/billing/plan', verifyAuth, async (req, res) => {
         status: ws.subscriptionStatus || 'active',
         billingInterval: ws.billingInterval || 'monthly',
         currentPeriodEnd: ws.currentPeriodEnd || null,
-        stripeCustomerId: ws.stripeCustomerId || null,
-        stripeSubscriptionId: ws.stripeSubscriptionId || null,
+        lsCustomerId: ws.lsCustomerId || null,
+        lsSubscriptionId: ws.lsSubscriptionId || null,
         cancelAtPeriodEnd: !!ws.cancelAtPeriodEnd,
       },
       usage: {
@@ -113,8 +127,9 @@ router.get('/billing/plan', verifyAuth, async (req, res) => {
   }
 });
 
-// Create a Stripe Checkout Session
-router.post('/billing/create-checkout-session', verifyAuth, requireStripe, [
+// Create a Lemon Squeezy Checkout for a plan, or swap the variant in place
+// on an existing subscription if the workspace already has one.
+router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy, [
   body('planId').isString().trim().notEmpty(),
   body('billingInterval').isIn(['monthly', 'annual']),
 ], validate, async (req, res) => {
@@ -126,71 +141,51 @@ router.post('/billing/create-checkout-session', verifyAuth, requireStripe, [
     const plan = planDoc.data();
     if (!plan.isActive) return res.status(400).json({ error: 'Plan is not available for new subscriptions' });
 
-    const priceId = billingInterval === 'annual' ? plan.stripePriceIdAnnual : plan.stripePriceIdMonthly;
-    if (!priceId) return res.status(400).json({ error: `No Stripe Price ID configured for ${planId} (${billingInterval})` });
+    const variantId = billingInterval === 'annual' ? plan.lsVariantIdAnnual : plan.lsVariantIdMonthly;
+    if (!variantId) return res.status(400).json({ error: `No Lemon Squeezy Variant ID configured for ${planId} (${billingInterval})` });
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const userEmail = userDoc.exists ? userDoc.data().email : null;
     const workspaceId = userDoc.exists ? userDoc.data().workspaceId : null;
     if (!workspaceId) return res.status(400).json({ error: 'No workspace found' });
 
-    // Get or create Stripe customer
     const wsDoc = await db.collection('workspaces').doc(workspaceId).get();
     const ws = wsDoc.data();
     if (ws.ownerId && ws.ownerId !== req.user.uid) {
       return res.status(403).json({ error: 'Only the workspace owner can manage billing.' });
     }
-    let stripeCustomerId = ws.stripeCustomerId;
 
-    if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: userEmail,
-        metadata: { workspaceId, userId: req.user.uid },
-      });
-      stripeCustomerId = customer.id;
-      await wsDoc.ref.update({ stripeCustomerId });
-    }
-
-    // A workspace can only have one Stripe subscription. If one is already
-    // active, swap its price in place instead of creating a second Checkout
-    // Session — the latter would leave the old subscription running and
-    // double-bill the customer. customer.subscription.updated (already
-    // handled below) picks up the resulting plan change.
-    if (ws.stripeSubscriptionId) {
-      const existing = await stripe.subscriptions.retrieve(ws.stripeSubscriptionId);
-      if (existing && existing.status !== 'canceled') {
-        const itemId = existing.items.data[0]?.id;
-        await stripe.subscriptions.update(ws.stripeSubscriptionId, {
-          items: [{ id: itemId, price: priceId }],
-          proration_behavior: 'create_prorations',
-          cancel_at_period_end: false,
-        });
+    // A workspace can only have one Lemon Squeezy subscription. If one is
+    // already active, swap its variant in place instead of creating a second
+    // Checkout — the latter would leave the old subscription running and
+    // double-bill the customer. The subscription_updated webhook (handled
+    // below) picks up the resulting plan change.
+    if (ws.lsSubscriptionId) {
+      const existing = await ls.getSubscription(ws.lsSubscriptionId);
+      if (existing && existing.attributes.status !== 'expired' && existing.attributes.status !== 'cancelled') {
+        await ls.updateSubscriptionVariant(ws.lsSubscriptionId, variantId);
         return res.json({ success: true, updated: true });
       }
     }
 
-    const session = await stripe.checkout.sessions.create({
-      customer: stripeCustomerId,
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${config.appBaseUrl || 'https://velync.web.app'}/settings?billing=success`,
-      cancel_url: `${config.appBaseUrl || 'https://velync.web.app'}/settings?billing=cancel`,
-      metadata: {
-        workspaceId,
-        planId,
-        billingInterval,
-      },
+    const url = await ls.createCheckout({
+      variantId,
+      email: userEmail,
+      custom: { workspace_id: workspaceId, plan_id: planId, billing_interval: billingInterval },
+      redirectUrl: `${config.appBaseUrl || 'https://velync.web.app'}/settings?billing=success`,
     });
 
-    return res.json({ success: true, url: session.url });
+    return res.json({ success: true, url });
   } catch (err) {
-    logger.error('billing', 'Failed to create checkout session', { error: err.message });
+    logger.error('billing', 'Failed to create checkout', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });
 
-// Create Stripe Billing Portal session
-router.post('/billing/create-portal-session', verifyAuth, requireStripe, async (req, res) => {
+// Return the customer's billing-management URL. Lemon Squeezy exposes this
+// directly on the subscription resource — there's no separate "create a
+// portal session" call the way Stripe requires.
+router.post('/billing/create-portal-session', verifyAuth, requireLemonSqueezy, async (req, res) => {
   try {
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
@@ -205,28 +200,27 @@ router.post('/billing/create-portal-session', verifyAuth, requireStripe, async (
       return res.status(403).json({ error: 'Only the workspace owner can manage billing.' });
     }
 
-    if (!ws.stripeCustomerId) {
-      return res.status(400).json({ error: 'No Stripe customer — subscribe first' });
+    if (!ws.lsSubscriptionId) {
+      return res.status(400).json({ error: 'No subscription on file — subscribe first' });
     }
 
-    const session = await stripe.billingPortal.sessions.create({
-      customer: ws.stripeCustomerId,
-      return_url: `${config.appBaseUrl || 'https://velync.web.app'}/settings`,
-    });
+    const subscription = await ls.getSubscription(ws.lsSubscriptionId);
+    const url = subscription.attributes.urls?.customer_portal;
+    if (!url) return res.status(500).json({ error: 'Lemon Squeezy did not return a customer portal URL' });
 
-    return res.json({ success: true, url: session.url });
+    return res.json({ success: true, url });
   } catch (err) {
-    logger.error('billing', 'Failed to create portal session', { error: err.message });
+    logger.error('billing', 'Failed to get portal URL', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });
 
 // Downgrade to Free — cancels the active subscription at the end of the
 // current period (not immediately), so the workspace keeps its paid-tier
-// access through what's already been paid for. customer.subscription.deleted
-// (already handled below) reverts planId to 'free' once the period actually
+// access through what's already been paid for. The subscription_expired
+// webhook (handled below) reverts planId to 'free' once the period actually
 // ends. Pass undo:true to reverse a pending cancellation.
-router.post('/billing/downgrade-to-free', verifyAuth, requireStripe, [
+router.post('/billing/downgrade-to-free', verifyAuth, requireLemonSqueezy, [
   body('undo').optional().isBoolean(),
 ], validate, async (req, res) => {
   try {
@@ -243,130 +237,117 @@ router.post('/billing/downgrade-to-free', verifyAuth, requireStripe, [
       return res.status(403).json({ error: 'Only the workspace owner can manage billing.' });
     }
 
-    if (!ws.stripeSubscriptionId) {
+    if (!ws.lsSubscriptionId) {
       return res.status(400).json({ error: 'No active subscription to downgrade.' });
     }
 
     const cancelAtPeriodEnd = !req.body.undo;
-    const subscription = await stripe.subscriptions.update(ws.stripeSubscriptionId, {
-      cancel_at_period_end: cancelAtPeriodEnd,
-    });
+    const subscription = cancelAtPeriodEnd
+      ? await ls.cancelSubscription(ws.lsSubscriptionId)
+      : await ls.resumeSubscription(ws.lsSubscriptionId);
 
-    await wsDoc.ref.set({ cancelAtPeriodEnd }, { merge: true });
+    const currentPeriodEnd = subscription.attributes.ends_at || subscription.attributes.renews_at || null;
+    await wsDoc.ref.set({ cancelAtPeriodEnd, currentPeriodEnd }, { merge: true });
     logger.info('billing', `Workspace "${workspaceId}" ${cancelAtPeriodEnd ? 'scheduled downgrade to Free at period end' : 'undid pending downgrade'}`, { user: req.user.uid });
 
-    return res.json({
-      success: true,
-      cancelAtPeriodEnd,
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-    });
+    return res.json({ success: true, cancelAtPeriodEnd, currentPeriodEnd });
   } catch (err) {
     logger.error('billing', 'Failed to downgrade to free', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });
 
-// Stripe webhook handler
+// Lemon Squeezy webhook handler
 router.post('/billing/webhook', (req, res) => {
-  if (!stripe) {
+  if (!config.lemonSqueezyWebhookSecret) {
     return res.status(503).json({ error: 'Billing not configured' });
   }
 
-  const sig = req.headers['stripe-signature'];
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, config.stripeWebhookSecret);
-  } catch (err) {
-    logger.error('billing', 'Webhook signature verification failed', { error: err.message });
+  const signature = req.headers['x-signature'];
+  if (!ls.verifyWebhookSignature(req.body, signature, config.lemonSqueezyWebhookSecret)) {
+    logger.error('billing', 'Webhook signature verification failed');
     return res.status(400).json({ error: 'Invalid signature' });
   }
 
+  let event;
+  try {
+    event = JSON.parse(req.body.toString('utf8'));
+  } catch (err) {
+    logger.error('billing', 'Webhook payload was not valid JSON', { error: err.message });
+    return res.status(400).json({ error: 'Invalid payload' });
+  }
+
+  const eventName = event.meta?.event_name;
+
   const handleEvent = async () => {
     try {
-      switch (event.type) {
-        case 'checkout.session.completed': {
-          const session = event.data.object;
-          const { workspaceId, planId, billingInterval } = session.metadata || {};
-          if (workspaceId && planId) {
-            const subscription = await stripe.subscriptions.retrieve(session.subscription);
+      switch (eventName) {
+        case 'subscription_created': {
+          const sub = event.data.attributes;
+          const { workspace_id: workspaceId } = event.meta.custom_data || {};
+          if (workspaceId) {
+            const resolved = await resolvePlanFromVariant(sub.variant_id);
             const wsRef = db.collection('workspaces').doc(workspaceId);
-            await wsRef.update({
-              planId,
-              stripeSubscriptionId: session.subscription,
-              subscriptionStatus: subscription.status,
-              billingInterval: billingInterval || 'monthly',
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+            await wsRef.set({
+              planId: resolved ? resolved.planId : (event.meta.custom_data.plan_id || 'free'),
+              lsCustomerId: String(sub.customer_id),
+              lsSubscriptionId: String(event.data.id),
+              subscriptionStatus: normalizeStatus(sub.status),
+              billingInterval: resolved ? resolved.billingInterval : (event.meta.custom_data.billing_interval || 'monthly'),
+              currentPeriodEnd: sub.renews_at || null,
               cancelAtPeriodEnd: false,
-            });
-            logger.info('billing', `Checkout completed — workspace "${workspaceId}" → ${planId}`);
+            }, { merge: true });
+            logger.info('billing', `Subscription created — workspace "${workspaceId}" → ${resolved ? resolved.planId : '?'}`);
 
             const wsSnap = await wsRef.get();
-            await reconcileAndNotify(workspaceId, planId, wsSnap.data()?.ownerId);
+            await reconcileAndNotify(workspaceId, wsSnap.data().planId, wsSnap.data().ownerId);
+          } else {
+            logger.warn('billing', `subscription_created webhook had no custom_data.workspace_id (subscription ${event.data.id})`);
           }
           break;
         }
 
-        case 'customer.subscription.updated': {
-          const subscription = event.data.object;
+        case 'subscription_updated': {
+          const sub = event.data.attributes;
           const wsSnap = await db.collection('workspaces')
-            .where('stripeSubscriptionId', '==', subscription.id)
+            .where('lsSubscriptionId', '==', String(event.data.id))
             .get();
           if (!wsSnap.empty) {
             const wsRef = wsSnap.docs[0].ref;
             const wsData = wsSnap.docs[0].data();
 
-            // Reverse-lookup planId from the subscription's Price ID
-            const priceId = subscription.items.data[0]?.price?.id;
-            let planId = wsData.planId;
-            if (priceId) {
-              const plansSnap = await db.collection('plans')
-                .where('stripePriceIdMonthly', '==', priceId)
-                .get();
-              if (!plansSnap.empty) {
-                planId = plansSnap.docs[0].id;
-              } else {
-                const annualSnap = await db.collection('plans')
-                  .where('stripePriceIdAnnual', '==', priceId)
-                  .get();
-                if (!annualSnap.empty) {
-                  planId = annualSnap.docs[0].id;
-                }
-              }
-            }
+            const resolved = await resolvePlanFromVariant(sub.variant_id);
+            const planId = resolved ? resolved.planId : wsData.planId;
 
             await wsRef.update({
               planId,
-              subscriptionStatus: subscription.status,
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-              billingInterval: subscription.items.data[0]?.price?.recurring?.interval === 'year' ? 'annual' : 'monthly',
-              // Kept in sync here too (not just our own downgrade endpoint)
-              // so a cancellation made directly in the Stripe Portal still
-              // shows the pending-downgrade banner in-app.
-              cancelAtPeriodEnd: !!subscription.cancel_at_period_end,
+              subscriptionStatus: normalizeStatus(sub.status),
+              currentPeriodEnd: sub.ends_at || sub.renews_at || null,
+              billingInterval: resolved ? resolved.billingInterval : wsData.billingInterval,
+              cancelAtPeriodEnd: !!sub.cancelled && sub.status !== 'expired',
             });
-            logger.info('billing', `Subscription updated — "${subscription.id}" → ${planId}`);
+            logger.info('billing', `Subscription updated — "${event.data.id}" → ${planId}`);
 
             await reconcileAndNotify(wsRef.id, planId, wsData.ownerId);
           }
           break;
         }
 
-        case 'customer.subscription.deleted': {
-          const subscription = event.data.object;
+        case 'subscription_expired': {
           const wsSnap = await db.collection('workspaces')
-            .where('stripeSubscriptionId', '==', subscription.id)
+            .where('lsSubscriptionId', '==', String(event.data.id))
             .get();
           if (!wsSnap.empty) {
             const wsRef = wsSnap.docs[0].ref;
             const wsData = wsSnap.docs[0].data();
             await wsRef.update({
               planId: 'free',
-              stripeSubscriptionId: FieldValue.delete(),
+              lsSubscriptionId: FieldValue.delete(),
               subscriptionStatus: 'canceled',
               currentPeriodEnd: null,
               cancelAtPeriodEnd: false,
             });
-            logger.info('billing', `Subscription deleted — "${subscription.id}" reverted to free`);
+            logger.info('billing', `Subscription expired — "${event.data.id}" reverted to free`);
 
             if (wsData.ownerId) {
               try {
@@ -376,8 +357,8 @@ router.post('/billing/webhook', (req, res) => {
                   await db.collection('mail').add({
                     to: userEmail,
                     message: {
-                      subject: '[Velync] Subscription canceled',
-                      text: 'Your Velync subscription has been canceled after repeated payment failures. Your workspace has been reverted to the Free plan. You can resubscribe anytime at https://velync.web.app/settings.',
+                      subject: '[Velync] Subscription ended',
+                      text: 'Your Velync subscription has ended and your workspace has been reverted to the Free plan. You can resubscribe anytime at https://velync.web.app/settings.',
                     },
                   });
                 }
@@ -391,37 +372,33 @@ router.post('/billing/webhook', (req, res) => {
           break;
         }
 
-        case 'invoice.payment_failed': {
-          const invoice = event.data.object;
-          const subscriptionId = invoice.subscription;
-          if (subscriptionId) {
-            const wsSnap = await db.collection('workspaces')
-              .where('stripeSubscriptionId', '==', subscriptionId)
-              .get();
-            if (!wsSnap.empty) {
-              const wsRef = wsSnap.docs[0].ref;
-              const wsData = wsSnap.docs[0].data();
-              await wsRef.update({ subscriptionStatus: 'past_due' });
-              logger.warn('billing', `Payment failed for subscription "${subscriptionId}"`);
+        case 'subscription_payment_failed': {
+          const wsSnap = await db.collection('workspaces')
+            .where('lsSubscriptionId', '==', String(event.data.id))
+            .get();
+          if (!wsSnap.empty) {
+            const wsRef = wsSnap.docs[0].ref;
+            const wsData = wsSnap.docs[0].data();
+            await wsRef.update({ subscriptionStatus: 'past_due' });
+            logger.warn('billing', `Payment failed for subscription "${event.data.id}"`);
 
-              const ownerIds = [wsData.ownerId, ...(wsData.members || [])];
-              const uniqueOwners = [...new Set(ownerIds)].slice(0, 3);
-              for (const uid of uniqueOwners) {
-                try {
-                  const userDoc = await db.collection('users').doc(uid).get();
-                  const userEmail = userDoc.exists ? userDoc.data().email : null;
-                  if (userEmail) {
-                    await db.collection('mail').add({
-                      to: userEmail,
-                      message: {
-                        subject: '[Velync] Payment failed — action required',
-                        text: 'Your Velync subscription payment failed. Please update your billing details at https://velync.web.app/settings to avoid service interruption.',
-                      },
-                    });
-                  }
-                } catch (emailErr) {
-                  logger.error('billing', 'Failed to send dunning email', { uid, error: emailErr.message });
+            const ownerIds = [wsData.ownerId, ...(wsData.members || [])];
+            const uniqueOwners = [...new Set(ownerIds)].slice(0, 3);
+            for (const uid of uniqueOwners) {
+              try {
+                const userDoc = await db.collection('users').doc(uid).get();
+                const userEmail = userDoc.exists ? userDoc.data().email : null;
+                if (userEmail) {
+                  await db.collection('mail').add({
+                    to: userEmail,
+                    message: {
+                      subject: '[Velync] Payment failed — action required',
+                      text: 'Your Velync subscription payment failed. Please update your billing details at https://velync.web.app/settings to avoid service interruption.',
+                    },
+                  });
                 }
+              } catch (emailErr) {
+                logger.error('billing', 'Failed to send dunning email', { uid, error: emailErr.message });
               }
             }
           }
@@ -429,10 +406,10 @@ router.post('/billing/webhook', (req, res) => {
         }
       }
     } catch (err) {
-      logger.error('billing', 'Webhook handler error', { error: err.message, type: event.type });
+      logger.error('billing', 'Webhook handler error', { error: err.message, eventName });
       notifyAdmins(
         '[Velync] Billing webhook handler failed',
-        `A Stripe webhook of type "${event.type}" (event ${event.id}) threw an error and was not fully processed:\n\n${err.message}\n\nA workspace's plan/subscription state may now be out of sync — check the Cloud Run logs for domain "billing".`
+        `A Lemon Squeezy webhook of type "${eventName}" threw an error and was not fully processed:\n\n${err.message}\n\nA workspace's plan/subscription state may now be out of sync — check the Cloud Run logs for domain "billing".`
       ).catch(() => {});
     }
   };

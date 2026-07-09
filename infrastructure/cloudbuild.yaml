@@ -43,7 +43,7 @@ steps:
       - --cpu=1
       - --memory=512Mi
       - --timeout=300
-      - --set-secrets=/etc/secrets/stripe-secret-key=stripe-secret-key:latest,/etc/secrets/stripe-webhook-secret=stripe-webhook-secret:latest
+      - --set-secrets=/etc/secrets/lemonsqueezy-api-key=lemonsqueezy-api-key:latest,/etc/secrets/lemonsqueezy-webhook-secret=lemonsqueezy-webhook-secret:latest
       - --update-env-vars=LOG_LEVEL=info,EXTERNAL_API_TIMEOUT=15000,PORT=8080
 
 substitutions:

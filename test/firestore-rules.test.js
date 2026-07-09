@@ -331,8 +331,8 @@ describe('/workspaces/{workspaceId}', () => {
     await assertFails(ctx.owner().firestore().collection('workspaces').doc('owner-wsid').update({ planId: 'pro' }));
   });
 
-  it('owner cannot update with disallowed field (stripeCustomerId)', async () => {
-    await assertFails(ctx.owner().firestore().collection('workspaces').doc('owner-wsid').update({ stripeCustomerId: 'cus_hack' }));
+  it('owner cannot update with disallowed field (lsCustomerId)', async () => {
+    await assertFails(ctx.owner().firestore().collection('workspaces').doc('owner-wsid').update({ lsCustomerId: 'cus_hack' }));
   });
 
   it('member cannot update workspace', async () => {

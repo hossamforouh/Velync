@@ -3,18 +3,30 @@
  *
  * Covers:
  *  1. Checkout/portal routes now reject non-owner workspace members (403).
- *  2. reconcileActiveConfigsForPlan() pauses the newest active configs
+ *  2. create-checkout-session swaps the variant on an existing subscription
+ *     in place instead of creating a second (duplicate-billing) subscription.
+ *  3. POST /billing/downgrade-to-free schedules/undoes a cancel-at-period-end.
+ *  4. GET /billing/plan backfills a missing or whitespace-corrupted planId.
+ *  5. reconcileActiveConfigsForPlan() pauses the newest active configs
  *     beyond a plan's maxActiveConfigs, keeping the oldest ones running.
- *  3. notifyAdmins() emails every superadmin.
+ *  6. notifyAdmins() emails every superadmin.
  *
- * Stripe itself is stubbed (require.cache injection) since these tests only
- * need to verify authorization/reconciliation logic, not real Stripe calls.
+ * Lemon Squeezy itself is stubbed (require.cache injection on
+ * src/core/lemonSqueezy.js) since these tests only need to verify
+ * authorization/reconciliation/webhook-effect logic, not real network calls.
  *
  * Run:  npm run test:billing-fixes
  */
 
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
+
+// Must be set before anything require()s src/api/server.js — config.js reads
+// these from process.env at require-time, not lazily, so setting them inside
+// before() would be too late (the same class of stub-timing bug this
+// project has hit before: see profile-settings-fixes.test.js's comment).
+process.env.LEMONSQUEEZY_API_KEY = 'ls_fake_for_tests';
+process.env.LEMONSQUEEZY_STORE_ID = '1';
 
 const OWNER_UID = 'billing-test-owner';
 const MEMBER_UID = 'billing-test-member';
@@ -35,32 +47,47 @@ require.cache[authPath] = {
   },
 };
 
-// Stub the Stripe SDK so checkout/portal routes never make real network
-// calls — only the ownership-check logic ahead of those calls is under test.
-const fakeSubscriptions = new Map(); // subscriptionId -> subscription-like object
-const stripePath = require.resolve('stripe');
-function fakeStripe() {
-  return {
-    customers: { create: async () => ({ id: 'cus_fake' }) },
-    checkout: { sessions: { create: async () => ({ url: 'https://checkout.stripe.com/fake' }) } },
-    billingPortal: { sessions: { create: async () => ({ url: 'https://billing.stripe.com/fake' }) } },
-    subscriptions: {
-      retrieve: async (id) => {
-        const sub = fakeSubscriptions.get(id);
-        if (!sub) throw new Error('No such subscription: ' + id);
-        return sub;
-      },
-      update: async (id, params) => {
-        const sub = fakeSubscriptions.get(id);
-        if (!sub) throw new Error('No such subscription: ' + id);
-        if (params.items) sub.items = { data: [{ id: params.items[0].id, price: { id: params.items[0].price } }] };
-        if (params.cancel_at_period_end !== undefined) sub.cancel_at_period_end = params.cancel_at_period_end;
-        return sub;
-      },
+// Stub src/core/lemonSqueezy.js so checkout/portal/webhook routes never make
+// real network calls — only the ownership-check and Firestore-side logic
+// ahead of/after those calls is under test. fakeSubscriptions mirrors the
+// shape of Lemon Squeezy's JSON:API subscription resource (`data.attributes`).
+const fakeSubscriptions = new Map(); // subscriptionId -> { id, attributes: {...} }
+const lsPath = require.resolve('../src/core/lemonSqueezy');
+require.cache[lsPath] = {
+  id: lsPath,
+  filename: lsPath,
+  loaded: true,
+  exports: {
+    createCheckout: async () => 'https://checkout.lemonsqueezy.com/fake',
+    getSubscription: async (id) => {
+      const sub = fakeSubscriptions.get(id);
+      if (!sub) throw new Error('No such subscription: ' + id);
+      return sub;
     },
-  };
-}
-require.cache[stripePath] = { id: stripePath, filename: stripePath, loaded: true, exports: fakeStripe };
+    updateSubscriptionVariant: async (id, variantId) => {
+      const sub = fakeSubscriptions.get(id);
+      if (!sub) throw new Error('No such subscription: ' + id);
+      sub.attributes.variant_id = Number(variantId);
+      return sub;
+    },
+    resumeSubscription: async (id) => {
+      const sub = fakeSubscriptions.get(id);
+      if (!sub) throw new Error('No such subscription: ' + id);
+      sub.attributes.cancelled = false;
+      sub.attributes.status = 'active';
+      sub.attributes.ends_at = null;
+      return sub;
+    },
+    cancelSubscription: async (id) => {
+      const sub = fakeSubscriptions.get(id);
+      if (!sub) throw new Error('No such subscription: ' + id);
+      sub.attributes.cancelled = true;
+      sub.attributes.ends_at = sub.attributes.renews_at;
+      return sub;
+    },
+    verifyWebhookSignature: () => true,
+  },
+};
 
 const db = require('../src/core/db');
 const { createApp } = require('../src/api/server');
@@ -74,9 +101,7 @@ before(async () => {
   await db.collection('users').doc(OWNER_UID).set({ workspaceId: WORKSPACE_ID, email: `${OWNER_UID}@billingtest.com` });
   await db.collection('users').doc(MEMBER_UID).set({ workspaceId: WORKSPACE_ID, email: `${MEMBER_UID}@billingtest.com` });
   await db.collection('workspaces').doc(WORKSPACE_ID).set({ ownerId: OWNER_UID, members: [MEMBER_UID], planId: 'free' });
-  await db.collection('plans').doc('pro').set({ name: 'Pro', maxActiveConfigs: 2, isActive: true, stripePriceIdMonthly: 'price_fake' });
-
-  process.env.STRIPE_SECRET_KEY = 'sk_fake_for_tests';
+  await db.collection('plans').doc('pro').set({ name: 'Pro', maxActiveConfigs: 2, isActive: true, lsVariantIdMonthly: '1001' });
 
   const app = createApp();
   await new Promise((resolve) => {
@@ -123,7 +148,12 @@ describe('billing routes restricted to the workspace owner', () => {
 
   it('non-owner member is rejected from opening the billing portal', async () => {
     currentUid = MEMBER_UID;
-    await db.collection('workspaces').doc(WORKSPACE_ID).update({ stripeCustomerId: 'cus_existing' });
+    const subId = 'sub_fake_portal';
+    fakeSubscriptions.set(subId, {
+      id: subId,
+      attributes: { status: 'active', cancelled: false, variant_id: 1001, renews_at: new Date(Date.now() + 86400000).toISOString(), ends_at: null, customer_id: 5001, urls: { customer_portal: 'https://portal.lemonsqueezy.com/fake' } },
+    });
+    await db.collection('workspaces').doc(WORKSPACE_ID).update({ lsCustomerId: '5001', lsSubscriptionId: subId });
     const { status, body } = await apiFetch('/api/billing/create-portal-session', { method: 'POST' });
     assert.strictEqual(status, 403);
     assert.match(body.error, /workspace owner/);
@@ -137,25 +167,22 @@ describe('billing routes restricted to the workspace owner', () => {
   });
 });
 
-describe('create-checkout-session swaps price in place instead of creating a duplicate subscription', () => {
-  it('updates the existing subscription (no url, no new Checkout Session) when one is already active', async () => {
+describe('create-checkout-session swaps variant in place instead of creating a duplicate subscription', () => {
+  it('updates the existing subscription (no url, no new Checkout) when one is already active', async () => {
     const uid = 'billing-test-existing-sub-owner';
     const wsId = 'billing-test-existing-sub-ws';
     const subId = 'sub_fake_existing';
     await db.collection('users').doc(uid).set({ workspaceId: wsId, email: `${uid}@billingtest.com` });
     await db.collection('workspaces').doc(wsId).set({
       ownerId: uid, members: [uid], planId: 'pro',
-      stripeCustomerId: 'cus_existing_sub', stripeSubscriptionId: subId,
+      lsCustomerId: 'cust_existing_sub', lsSubscriptionId: subId,
     });
     await db.collection('plans').doc('business').set({
-      name: 'Business', maxActiveConfigs: 25, isActive: true, stripePriceIdMonthly: 'price_business_fake',
+      name: 'Business', maxActiveConfigs: 25, isActive: true, lsVariantIdMonthly: '1002',
     });
     fakeSubscriptions.set(subId, {
       id: subId,
-      status: 'active',
-      cancel_at_period_end: false,
-      current_period_end: Math.floor(Date.now() / 1000) + 86400,
-      items: { data: [{ id: 'si_fake', price: { id: 'price_fake' } }] },
+      attributes: { status: 'active', cancelled: false, variant_id: 1001, renews_at: new Date(Date.now() + 86400000).toISOString(), ends_at: null, customer_id: 5002, urls: {} },
     });
 
     currentUid = uid;
@@ -168,7 +195,7 @@ describe('create-checkout-session swaps price in place instead of creating a dup
     assert.strictEqual(body.url, undefined);
 
     const sub = fakeSubscriptions.get(subId);
-    assert.strictEqual(sub.items.data[0].price.id, 'price_business_fake');
+    assert.strictEqual(sub.attributes.variant_id, 1002);
   });
 });
 
@@ -181,14 +208,11 @@ describe('POST /billing/downgrade-to-free', () => {
     await db.collection('users').doc(uid).set({ workspaceId: wsId, email: `${uid}@billingtest.com` });
     await db.collection('workspaces').doc(wsId).set({
       ownerId: uid, members: [uid], planId: 'pro',
-      stripeCustomerId: 'cus_downgrade', stripeSubscriptionId: subId,
+      lsCustomerId: 'cust_downgrade', lsSubscriptionId: subId,
     });
     fakeSubscriptions.set(subId, {
       id: subId,
-      status: 'active',
-      cancel_at_period_end: false,
-      current_period_end: Math.floor(Date.now() / 1000) + 86400,
-      items: { data: [{ id: 'si_fake', price: { id: 'price_fake' } }] },
+      attributes: { status: 'active', cancelled: false, variant_id: 1001, renews_at: new Date(Date.now() + 86400000).toISOString(), ends_at: null, customer_id: 5003, urls: {} },
     });
   });
 
@@ -206,7 +230,7 @@ describe('POST /billing/downgrade-to-free', () => {
     const { status, body } = await apiFetch('/api/billing/downgrade-to-free', { method: 'POST', body: JSON.stringify({}) });
     assert.strictEqual(status, 200);
     assert.strictEqual(body.cancelAtPeriodEnd, true);
-    assert.strictEqual(fakeSubscriptions.get(subId).cancel_at_period_end, true);
+    assert.strictEqual(fakeSubscriptions.get(subId).attributes.cancelled, true);
 
     const wsDoc = await db.collection('workspaces').doc(wsId).get();
     assert.strictEqual(wsDoc.data().cancelAtPeriodEnd, true);
@@ -217,7 +241,7 @@ describe('POST /billing/downgrade-to-free', () => {
     const { status, body } = await apiFetch('/api/billing/downgrade-to-free', { method: 'POST', body: JSON.stringify({ undo: true }) });
     assert.strictEqual(status, 200);
     assert.strictEqual(body.cancelAtPeriodEnd, false);
-    assert.strictEqual(fakeSubscriptions.get(subId).cancel_at_period_end, false);
+    assert.strictEqual(fakeSubscriptions.get(subId).attributes.cancelled, false);
 
     const wsDoc = await db.collection('workspaces').doc(wsId).get();
     assert.strictEqual(wsDoc.data().cancelAtPeriodEnd, false);

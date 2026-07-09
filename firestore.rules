@@ -94,7 +94,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasAny(['name']);
       // Owner may edit only these fields. Use affectedKeys().hasOnly(...) — NOT keys().hasAny(...) —
       // because on an update request.resource.data is the full post-update doc, so hasAny would
-      // always pass (name/ownerId always present) and let billing fields like planId/stripeCustomerId
+      // always pass (name/ownerId always present) and let billing fields like planId/lsCustomerId
       // through. Billing fields are written server-side (Admin SDK) only.
       allow update: if isSuperAdmin() || (
         request.auth.uid == resource.data.ownerId
