@@ -141,8 +141,8 @@ export async function initBilling(dbInstance, authInstance) {
           <li>${p.maxItemsPerRun} items/run</li>
           <li>${(p.connectorTiers || []).join(', ')} connectors</li>
         </ul>
-        <button class="btn btn-primary btn-sm checkout-btn" data-plan="${p.id}" data-interval="monthly" style="width:100%;">${buttonLabel}</button>
-        ${p.priceAnnual > 0 ? `<button class="btn btn-secondary btn-sm checkout-btn" data-plan="${p.id}" data-interval="annual" style="width:100%;margin-top:6px;">$${p.priceAnnual}/yr</button>` : ''}
+        ${p.lsVariantIdMonthly ? `<button class="btn btn-primary btn-sm checkout-btn" data-plan="${p.id}" data-interval="monthly" style="width:100%;">${buttonLabel}</button>` : ''}
+        ${p.priceAnnual > 0 && p.lsVariantIdAnnual ? `<button class="btn btn-secondary btn-sm checkout-btn" data-plan="${p.id}" data-interval="annual" style="width:100%;margin-top:6px;">$${p.priceAnnual}/yr</button>` : ''}
       </div>
     `;
 
