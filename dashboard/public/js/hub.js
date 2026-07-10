@@ -4,9 +4,20 @@
    refresh, and re-render on navigation.
    ============================================================= */
 
-import { collection, doc, getDoc, getDocs, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getAuth } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js';
+import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
 import { getSkeletonCardGridHTML } from './loading-components.js';
 import { showToast } from './toast.js';
+
+async function apiGet(path) {
+  const user = getAuth(getApp()).currentUser;
+  const token = user ? await user.getIdToken() : null;
+  const res = await fetch(path, { headers: { 'Authorization': `Bearer ${token}` } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
 
 // ─── State ──────────────────────────────────────────────────
 let allIntegrations = [];
@@ -79,39 +90,33 @@ export async function renderHubView(db, onNavigate) {
   }
 
   try {
-    const [pSnap, iSnap] = await Promise.all([
-      getDocs(query(collection(db, 'platforms'))),
-      getDocs(query(collection(db, 'integrations'), orderBy('name')))
+    const [platformsData, integrationsData] = await Promise.all([
+      apiGet('/api/platforms'),
+      apiGet('/api/integrations'),
     ]);
 
     platformsMap = {};
-    pSnap.forEach(doc => {
-      const data = doc.data();
-      if (data.logo) data.logo = sanitizeLogoHtml(data.logo);
-      platformsMap[doc.id] = data;
+    platformsData.platforms.forEach(p => {
+      if (p.logo) p.logo = sanitizeLogoHtml(p.logo);
+      platformsMap[p.id] = p;
     });
 
     // Mark platforms outside the workspace plan's connectorTiers as gated —
     // kept in platformsMap (so name/logo still render) but flagged so the UI
     // can show a clear "Upgrade to Connect" state instead of silently
     // swapping in a generic placeholder logo with no explanation.
+    // GET /workspace/:id/plan (not GET /billing/plan) since
+    // window.currentWorkspaceId can be a workspace other than the caller's
+    // own (the "God Mode" workspace switcher for superadmins).
     gatedPlatformIds = new Set();
     if (window.currentWorkspaceId) {
       try {
-        const wsSnap = await getDoc(doc(db, 'workspaces', window.currentWorkspaceId));
-        if (wsSnap.exists()) {
-          const wsData = wsSnap.data();
-          const planId = wsData.planId || 'free';
-          const planSnap = await getDoc(doc(db, 'plans', planId));
-          if (planSnap.exists()) {
-            const planData = planSnap.data();
-            const allowedTiers = planData.connectorTiers || ['basic'];
-            for (const [pid, pData] of Object.entries(platformsMap)) {
-              const pTier = pData.tier || 'basic';
-              if (!allowedTiers.includes(pTier)) {
-                gatedPlatformIds.add(pid);
-              }
-            }
+        const { plan: planData } = await apiGet(`/api/workspace/${window.currentWorkspaceId}/plan`);
+        const allowedTiers = planData.connectorTiers || ['basic'];
+        for (const [pid, pData] of Object.entries(platformsMap)) {
+          const pTier = pData.tier || 'basic';
+          if (!allowedTiers.includes(pTier)) {
+            gatedPlatformIds.add(pid);
           }
         }
       } catch (pfErr) {
@@ -120,10 +125,7 @@ export async function renderHubView(db, onNavigate) {
       }
     }
 
-    allIntegrations = [];
-    iSnap.forEach(doc => {
-      allIntegrations.push({ id: doc.id, ...doc.data() });
-    });
+    allIntegrations = integrationsData.integrations;
 
     // Check which integrations have active configs in this workspace
     connectedIds = new Set();

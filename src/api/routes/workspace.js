@@ -6,6 +6,7 @@ const { deleteWorkspace } = require('../../domains/workspace/deletion');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 const { logUsageEvent } = require('../../domains/usage');
+const { getPlan } = require('../../core/plan');
 
 const router = Router();
 
@@ -281,6 +282,34 @@ router.get('/workspace/:id', verifyAuth, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
     res.json({ success: true, workspace: { id: ws.id, ...data } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Resolve a specific workspace's plan (mainly its connectorTiers), for the
+// "gate platforms outside my plan" UI in hub.js/connections.js. Deliberately
+// keyed by :id rather than reusing GET /billing/plan (which only ever
+// resolves the CALLER's own workspace) — a superadmin using the "God Mode"
+// workspace switcher can be viewing a workspace that isn't their own, and a
+// shared-workspace member's window.currentWorkspaceId isn't always their
+// users/{uid}.workspaceId either. Same auth check as GET /workspace/:id.
+router.get('/workspace/:id/plan', verifyAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const wsRef = db.collection('workspaces').doc(id);
+    const ws = await wsRef.get();
+    if (!ws.exists) return res.status(404).json({ success: false, error: 'Workspace not found' });
+    const data = ws.data();
+    const isOwner = data.ownerId === req.user.uid;
+    const isMember = data.members?.includes(req.user.uid);
+    const { isSuperAdmin } = require('../../core/superadmin');
+    if (!isOwner && !isMember && !(await isSuperAdmin(req.user.uid))) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    const planId = data.planId || 'free';
+    const plan = await getPlan(planId);
+    res.json({ success: true, plan: plan ? { id: planId, ...plan } : { id: 'free', connectorTiers: ['basic'] } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -1,4 +1,3 @@
-import { doc, getDoc, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
 import { updatePlanBadge } from './plan-badge.js';
@@ -125,9 +124,9 @@ export async function initBilling(dbInstance, authInstance) {
     // full-collection read on every tab open otherwise).
     let allPlans = window.__getViewCache ? window.__getViewCache('billing-plans') : null;
     if (!allPlans) {
-      const plansSnap = await getDocs(query(collection(firestoreDb, 'plans'), orderBy('sortOrder', 'asc')));
-      allPlans = [];
-      plansSnap.forEach(d => allPlans.push({ id: d.id, ...d.data() }));
+      const plansRes = await fetch('/api/plans');
+      const plansData = await plansRes.json();
+      allPlans = plansRes.ok && plansData.success ? plansData.plans : [];
       if (window.__setViewCache) window.__setViewCache('billing-plans', allPlans);
     }
 

@@ -4,7 +4,7 @@
    renders the Connections view panel.
    ============================================================= */
 
-import { getFirestore, collection, getDocs, getDoc, doc, query, where, orderBy, limit, startAfter }
+import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter }
   from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
@@ -21,8 +21,13 @@ export let connections = [];
 /** Cached platform details (id → { name, color, bg }) for badge rendering */
 let platformDetails = {};
 
-/** Shared cache for full platform documents — avoids redundant Firestore reads */
+/** Shared cache of platform docs (plain array of {id, ...data}) — avoids
+ * redundant GET /api/platforms calls across the page's lifetime. */
 let _platformsCache = null;
+async function fetchPlatformsCached() {
+  if (!_platformsCache) _platformsCache = await apiRequest('/api/platforms').then(d => d.platforms);
+  return _platformsCache;
+}
 
 /** Pagination state */
 let lastVisible = null;
@@ -78,7 +83,7 @@ export async function loadConnections(reset = false) {
       connections = [];
     }
 
-    const [connSnap, platSnap] = await Promise.all([
+    const [connSnap, platforms] = await Promise.all([
       getDocs(query(
         collection(getDb(), 'connected_accounts'),
         where('workspaceId', '==', window.currentWorkspaceId),
@@ -86,19 +91,16 @@ export async function loadConnections(reset = false) {
         limit(PAGE_SIZE),
         ...(reset || !lastVisible ? [] : [startAfter(lastVisible)])
       )),
-      _platformsCache || getDocs(collection(getDb(), 'platforms'))
+      fetchPlatformsCached(),
     ]);
-
-    if (!_platformsCache) _platformsCache = platSnap;
 
     platformDetails = {};
     let colorIdx = 0;
-    platSnap.forEach(d => {
-      const p = d.data();
+    platforms.forEach(p => {
       const fallback = FALLBACK_COLORS[colorIdx % FALLBACK_COLORS.length];
       colorIdx++;
-      platformDetails[d.id] = {
-        name: p.name || d.id,
+      platformDetails[p.id] = {
+        name: p.name || p.id,
         color: p.badgeColor || fallback.color,
         bg: p.badgeBg || fallback.bg,
       };
@@ -573,33 +575,20 @@ window.addEventListener('open-add-connection', (e) => {
 });
 
 async function fetchPlatformSchemas() {
-  const db = getDb();
-  const snapshot = _platformsCache || await getDocs(collection(db, 'platforms'));
-  if (!_platformsCache) _platformsCache = snapshot;
-  const platforms = [];
-  snapshot.forEach(docSnap => {
-    const data = docSnap.data();
-    data.id = docSnap.id;
-    platforms.push(data);
-  });
+  const platforms = (await fetchPlatformsCached()).map(p => ({ ...p }));
 
-  // Filter by workspace plan's connector tiers
+  // Filter by workspace plan's connector tiers. GET /workspace/:id/plan
+  // (not GET /billing/plan) since window.currentWorkspaceId can be a
+  // workspace other than the caller's own (the "God Mode" workspace
+  // switcher for superadmins).
   if (window.currentWorkspaceId) {
     try {
-      const wsSnap = await getDoc(doc(db, 'workspaces', window.currentWorkspaceId));
-      if (wsSnap.exists()) {
-        const wsData = wsSnap.data();
-        const planId = wsData.planId || 'free';
-        const planSnap = await getDoc(doc(db, 'plans', planId));
-        if (planSnap.exists()) {
-          const planData = planSnap.data();
-          const allowedTiers = planData.connectorTiers || ['basic'];
-          for (let i = platforms.length - 1; i >= 0; i--) {
-            const pTier = platforms[i].tier || 'basic';
-            if (!allowedTiers.includes(pTier)) {
-              platforms.splice(i, 1);
-            }
-          }
+      const planData = await apiRequest(`/api/workspace/${window.currentWorkspaceId}/plan`).then(d => d.plan);
+      const allowedTiers = planData.connectorTiers || ['basic'];
+      for (let i = platforms.length - 1; i >= 0; i--) {
+        const pTier = platforms[i].tier || 'basic';
+        if (!allowedTiers.includes(pTier)) {
+          platforms.splice(i, 1);
         }
       }
     } catch (pfErr) {

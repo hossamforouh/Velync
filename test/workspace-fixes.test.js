@@ -226,3 +226,36 @@ describe('deleteWorkspace resets member workspaceId references', () => {
     assert.strictEqual(wsDoc.exists, false);
   });
 });
+
+describe('GET /workspace/:id/plan', () => {
+  it('a member can resolve their own workspace\'s plan connectorTiers', async () => {
+    await db.collection('plans').doc('pro').set({ name: 'Pro', connectorTiers: ['basic', 'premium'] });
+    await db.collection('workspaces').doc(WORKSPACE_ID).set({ planId: 'pro' }, { merge: true });
+    asUser(MEMBER_UID, `${MEMBER_UID}@wstest.com`);
+    const { status, body } = await apiFetch(`/api/workspace/${WORKSPACE_ID}/plan`);
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.plan.id, 'pro');
+    assert.deepStrictEqual(body.plan.connectorTiers, ['basic', 'premium']);
+  });
+
+  it('defaults to free/basic when the workspace has no planId', async () => {
+    const noPlanWs = 'ws-test-no-plan';
+    await db.collection('workspaces').doc(noPlanWs).set({ ownerId: OWNER_UID, members: [OWNER_UID] });
+    asUser(OWNER_UID, `${OWNER_UID}@wstest.com`);
+    const { status, body } = await apiFetch(`/api/workspace/${noPlanWs}/plan`);
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.plan.id, 'free');
+  });
+
+  it('a stranger (non-member, non-superadmin) is rejected', async () => {
+    asUser('ws-test-stranger', 'stranger@wstest.com');
+    const { status } = await apiFetch(`/api/workspace/${WORKSPACE_ID}/plan`);
+    assert.strictEqual(status, 403);
+  });
+
+  it('404s for a nonexistent workspace', async () => {
+    asUser(OWNER_UID, `${OWNER_UID}@wstest.com`);
+    const { status } = await apiFetch('/api/workspace/does-not-exist/plan');
+    assert.strictEqual(status, 404);
+  });
+});

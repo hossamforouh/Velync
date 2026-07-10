@@ -2,7 +2,6 @@
  * Onboarding wizard — guides new users through first config creation.
  * Replaces the simple "No Flows Found" empty state with a step-by-step flow.
  */
-import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { initiateDirectOAuthFlow, connections } from './connections.js';
 
 let currentStep = 1;
@@ -93,16 +92,15 @@ function renderStep1() {
   `;
 }
 
-// The `platforms` collection is directly Firestore-readable by any
-// authenticated user (see firestore.rules) — there is no
-// `GET /api/platforms` backend route, and there never has been one; every
-// other page that lists platforms (e.g. connections.js) already reads
-// Firestore directly instead of going through a REST call.
-async function loadPlatforms(db) {
+// GET /api/platforms — same server-mediated endpoint every other page's
+// platform list now goes through, instead of a page-local Firestore read.
+async function loadPlatforms(auth) {
   if (cachedPlatforms.length) return cachedPlatforms;
-  const snap = await getDocs(collection(db, 'platforms'));
-  cachedPlatforms = [];
-  snap.forEach(d => cachedPlatforms.push({ id: d.id, ...d.data() }));
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch('/api/platforms', { headers: { 'Authorization': `Bearer ${token}` } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  cachedPlatforms = data.platforms;
   return cachedPlatforms;
 }
 
@@ -112,7 +110,7 @@ async function bindStep1(db, auth, onComplete) {
   if (!list) return;
 
   try {
-    const platforms = await loadPlatforms(db);
+    const platforms = await loadPlatforms(auth);
     const active = platforms.filter(p => p.isActive !== false);
 
     list.innerHTML = active.map(p => `
@@ -170,7 +168,7 @@ async function bindStep2(db, auth, onComplete) {
   if (!list) return;
 
   try {
-    const platforms = await loadPlatforms(db);
+    const platforms = await loadPlatforms(auth);
     const filtered = platforms.filter(p => p.id !== onboardState.p1 && p.isActive !== false);
 
     list.innerHTML = filtered.map(p => `

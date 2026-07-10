@@ -202,21 +202,33 @@ async function clientTickTickAllTags(conn) {
 }
 
 
+// GET /api/platforms — same server-mediated endpoint every other page's
+// platform list goes through. window.cachedPlatforms is the shared cache
+// (also cleared at line ~4849 after platform CRUD in the admin panel).
+async function ensureCachedPlatforms() {
+  if (window.cachedPlatforms) return window.cachedPlatforms;
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch('/api/platforms', { headers: { 'Authorization': `Bearer ${token}` } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  window.cachedPlatforms = data.platforms;
+  return window.cachedPlatforms;
+}
+
 window.renderSchemaForPlatform = async function(platformId, containerId, prefix, existingData = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
-  
+
   if (!window.cachedPlatforms) {
     try {
-      const snap = await getDocs(collection(db, 'platforms'));
-      window.cachedPlatforms = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      await ensureCachedPlatforms();
     } catch (e) {
       console.warn("Could not load platforms", e);
       showToast('Failed to load platform schemas', 'error');
     }
   }
-  
+
   const plat = window.cachedPlatforms?.find(p => p.id === platformId || p.key === platformId);
   if (!plat || !plat.configSchema) return;
   
@@ -2977,10 +2989,7 @@ async function loadConfigs(silent = false) {
   }
 
   try {
-    if (!window.cachedPlatforms) {
-      const pSnap = await getDocs(collection(db, 'platforms'));
-      window.cachedPlatforms = pSnap.docs.map(d => ({id: d.id, ...d.data()}));
-    }
+    await ensureCachedPlatforms();
     if (typeof loadConnections === 'function' && (!_connectionsCache || _connectionsCache.length === 0)) {
       _connectionsCache = await loadConnections(true);
     }
@@ -3064,8 +3073,7 @@ async function openPanel(id = null) {
   // can correctly resolve dynamic platform IDs.
   if (!window.cachedPlatforms) {
     try {
-      const snap = await getDocs(collection(db, 'platforms'));
-      window.cachedPlatforms = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      await ensureCachedPlatforms();
     } catch(err) {
       console.warn('Failed to load platforms in openPanel', err);
       if (navigator.onLine) showToast('Failed to load platforms', 'error');
