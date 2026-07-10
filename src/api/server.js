@@ -87,14 +87,6 @@ function createApp() {
   });
   app.use(globalLimiter);
 
-  const authLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'Too many authentication attempts, please try again later.' },
-  });
-
   app.get('/', (req, res) => {
     res.send('Velync Integration Platform is running.');
   });
@@ -116,7 +108,7 @@ function createApp() {
 
   // Routes
   app.use(authRoutes);
-  app.use('/api', authLimiter, platformRoutes);
+  app.use('/api', platformRoutes);
   app.use('/api', schemaRoutes);
   app.use('/api', workspaceRoutes);
   app.use('/api', connectionsRoutes);

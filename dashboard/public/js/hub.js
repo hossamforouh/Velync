@@ -4,7 +4,6 @@
    refresh, and re-render on navigation.
    ============================================================= */
 
-import { collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { getAuth } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
 import { getSkeletonCardGridHTML } from './loading-components.js';
@@ -130,12 +129,8 @@ export async function renderHubView(db, onNavigate) {
     // Check which integrations have active configs in this workspace
     connectedIds = new Set();
     if (window.currentWorkspaceId) {
-      const cSnap = await getDocs(query(
-        collection(db, 'workspaces', window.currentWorkspaceId, 'sync_configs'),
-        where('status', '==', 'active')
-      ));
-      cSnap.forEach(doc => {
-        const data = doc.data();
+      const { items } = await apiGet('/api/sync-configs?status=active');
+      items.forEach(data => {
         if (data.integrationId) {
           connectedIds.add(data.integrationId);
         }

@@ -116,30 +116,48 @@ router.post('/suggest-mappings', verifyAuth, suggestLimiter, [
 });
 
 // ─── List sync configs for the caller's workspace ──────────────
-// Was previously a raw client-side Firestore read from both the Flows page
-// (app.js's loadConfigs) and the Marketplace view (hub.js) — consolidated
-// here so both go through one server-mediated path instead of duplicating
-// the same collection read (and so it can be tightened/paginated later
-// without touching two separate frontend files). ?status= mirrors hub.js's
-// existing filtered query (it only wants status=='active' for its
-// "already connected" check).
+// Was previously a raw client-side Firestore read from the Flows page
+// (app.js's loadConfigs), the Marketplace view (hub.js), and saveConfig's
+// marketplace-draft lookup — consolidated here so all three go through one
+// server-mediated path instead of duplicating the same collection read (and
+// so it can be tightened/paginated later without touching three separate
+// frontend files). ?status= mirrors hub.js's existing filtered query (it
+// only wants status=='active' for its "already connected" check).
+// ?integrationId= mirrors saveConfig's marketplace-draft lookup.
 router.get('/sync-configs', verifyAuth, async (req, res) => {
   try {
     const uid = req.user.uid;
     const ctx = await resolveWorkspacePlan(uid);
     if (ctx.error) return res.status(404).json({ error: ctx.error });
 
-    let query = db.collection('workspaces').doc(ctx.workspaceId).collection('sync_configs');
-    const { status } = req.query;
-    if (status) {
-      if (!['draft', 'active', 'paused'].includes(status)) {
-        return res.status(400).json({ error: 'Invalid status filter' });
-      }
-      query = query.where('status', '==', status);
+    const configsRef = db.collection('workspaces').doc(ctx.workspaceId).collection('sync_configs');
+    const { status, integrationId, connectionId } = req.query;
+    if (status && !['draft', 'active', 'paused'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status filter' });
     }
 
-    const snap = await query.get();
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let base = configsRef;
+    if (status) base = base.where('status', '==', status);
+    if (integrationId) base = base.where('integrationId', '==', integrationId);
+
+    let items;
+    if (connectionId) {
+      // A config references a connection via either of two fields —
+      // Firestore can't OR across two different fields in one query, so this
+      // mirrors what the frontend previously did client-side (two queries,
+      // merged by doc id) rather than adding a composite/array-contains field.
+      const [snap1, snap2] = await Promise.all([
+        base.where('platform1ConnectionId', '==', connectionId).get(),
+        base.where('platform2ConnectionId', '==', connectionId).get(),
+      ]);
+      const byId = new Map();
+      for (const d of [...snap1.docs, ...snap2.docs]) byId.set(d.id, { id: d.id, ...d.data() });
+      items = Array.from(byId.values());
+    } else {
+      const snap = await base.get();
+      items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
     return res.json({ success: true, items });
   } catch (err) {
     logger.error('sync-configs', 'Failed to list configs', { error: err.message });

@@ -215,6 +215,32 @@ async function ensureCachedPlatforms() {
   return window.cachedPlatforms;
 }
 
+// GET /api/sync-configs/:configId — single-config fetch, replacing a direct
+// Firestore getDoc(). Returns null (not throw) for a 404 so callers can
+// treat "doesn't exist" the same way `snap.exists()` used to.
+async function fetchSyncConfig(configId) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch(`/api/sync-configs/${encodeURIComponent(configId)}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (res.status === 404) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data.item;
+}
+
+// GET /api/sync-configs?integrationId=... — replacing a direct Firestore
+// query(collection(...), where('integrationId','==',integrationId)).
+async function fetchSyncConfigsByIntegrationId(integrationId) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch(`/api/sync-configs?integrationId=${encodeURIComponent(integrationId)}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data.items;
+}
+
 window.renderSchemaForPlatform = async function(platformId, containerId, prefix, existingData = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -2994,12 +3020,14 @@ async function loadConfigs(silent = false) {
       _connectionsCache = await loadConnections(true);
     }
 
-    const q = collection(db, "workspaces", currentWorkspaceId, "sync_configs");
-    const querySnapshot = await Promise.race([
-      getDocs(q),
+    const token = await auth.currentUser.getIdToken();
+    const res = await Promise.race([
+      fetch('/api/sync-configs', { headers: { 'Authorization': `Bearer ${token}` } }),
       firestoreTimeout(15000)
     ]);
-    configs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    configs = data.items;
     renderCards();
   } catch (err) {
     tableBody.innerHTML = `
@@ -3092,13 +3120,13 @@ async function openPanel(id = null) {
     let cfg = configs.find(c => c.id === id);
     if (!cfg) {
       try {
-        const snap = await getDoc(doc(db, 'workspaces', currentWorkspaceId, 'sync_configs', id));
-        if (snap.exists()) {
-          cfg = { id: snap.id, ...snap.data() };
+        const fetched = await fetchSyncConfig(id);
+        if (fetched) {
+          cfg = fetched;
           configs.push(cfg);
         }
       } catch(err) {
-        console.warn('[openPanel] Direct Firestore fetch failed:', err);
+        console.warn('[openPanel] Config fetch failed:', err);
         showToast('Failed to load config data', 'error');
       }
     }
@@ -4137,14 +4165,10 @@ async function saveConfig(e, isSubmit = false) {
       const integrationId = document.getElementById('f-integration-id')?.value?.trim();
 
       if (isInlineMode && integrationId && currentWorkspaceId) {
-        // Directly query Firestore for an existing draft for this integration
-        const q = query(
-          collection(db, 'workspaces', currentWorkspaceId, 'sync_configs'),
-          where('integrationId', '==', integrationId)
-        );
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const sortedDocs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+        // Query for an existing draft for this integration
+        const matches = await fetchSyncConfigsByIntegrationId(integrationId);
+        if (matches.length > 0) {
+          const sortedDocs = matches.sort((a, b) => {
             const tA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : (new Date(a.updatedAt || 0).getTime());
             const tB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : (new Date(b.updatedAt || 0).getTime());
             if (tA !== tB) return tB - tA; // Descending
@@ -4167,9 +4191,8 @@ async function saveConfig(e, isSubmit = false) {
       document.getElementById('form-id').value = resolvedId;
 
       // Enforce marketplace protection immediately before saving
-      const existingSnap = await getDoc(doc(db, 'workspaces', currentWorkspaceId, 'sync_configs', resolvedId));
-      if (existingSnap.exists()) {
-        const existingData = existingSnap.data();
+      const existingData = await fetchSyncConfig(resolvedId);
+      if (existingData) {
         if (existingData.creationSource === 'marketplace') {
            payload.platform1ConnectionId = existingData.platform1ConnectionId || payload.platform1ConnectionId;
            payload.platform2ConnectionId = existingData.platform2ConnectionId || payload.platform2ConnectionId;

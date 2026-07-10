@@ -159,27 +159,13 @@ export async function deleteConnection(id) {
 // having actually verified that, which is the wrong failure mode for a
 // destructive action.
 export async function isConnectionInUse(connId) {
-  const snap = await getDocs(query(
-    collection(getDb(), 'workspaces', window.currentWorkspaceId, 'sync_configs'),
-    where('platform1ConnectionId', '==', connId)
-  ));
+  const { items } = await apiRequest(`/api/sync-configs?connectionId=${encodeURIComponent(connId)}`);
   let names = [];
-  snap.forEach(d => {
-    const data = d.data();
-    if (data.status !== 'draft') names.push(data.description || data.id);
-  });
-
-  const snap2 = await getDocs(query(
-    collection(getDb(), 'workspaces', window.currentWorkspaceId, 'sync_configs'),
-    where('platform2ConnectionId', '==', connId)
-  ));
-  snap2.forEach(d => {
-    const data = d.data();
+  items.forEach(data => {
     if (data.status !== 'draft' && !names.includes(data.description || data.id)) {
       names.push(data.description || data.id);
     }
   });
-
   return names;
 }
 

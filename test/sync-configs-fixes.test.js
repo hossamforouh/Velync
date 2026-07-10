@@ -258,6 +258,40 @@ describe('GET /sync-configs (list) and GET /sync-configs/:id (single)', () => {
     assert.ok(body.error);
   });
 
+  it('list supports ?integrationId= filtering (matches saveConfig\'s marketplace-draft lookup)', async () => {
+    // Reuses configs already created by earlier tests in this describe block
+    // (none of which set integrationId) as the "must be excluded" control,
+    // instead of an extra POST — this file runs close to the global
+    // rate limiter's ceiling (200 req/min across the whole suite).
+    currentUid = TEST_UID;
+    const withIntegration = await apiFetch('/api/sync-configs', {
+      method: 'POST',
+      body: JSON.stringify({ platform1: 'notion', platform2: 'ticktick', platform1ConnectionId: 'c1', platform2ConnectionId: 'c2', status: 'draft', integrationId: 'int-abc' }),
+    });
+    const { status, body } = await apiFetch('/api/sync-configs?integrationId=int-abc');
+    assert.strictEqual(status, 200);
+    assert.ok(body.items.every(c => c.integrationId === 'int-abc'));
+    assert.ok(body.items.some(c => c.id === withIntegration.body.id));
+  });
+
+  it('list supports ?connectionId= filtering, matching either platform1ConnectionId or platform2ConnectionId (isConnectionInUse)', async () => {
+    currentUid = TEST_UID;
+    const asSource = await apiFetch('/api/sync-configs', {
+      method: 'POST',
+      body: JSON.stringify({ platform1: 'notion', platform2: 'ticktick', platform1ConnectionId: 'conn-target', platform2ConnectionId: 'c2', status: 'draft' }),
+    });
+    const asDest = await apiFetch('/api/sync-configs', {
+      method: 'POST',
+      body: JSON.stringify({ platform1: 'notion', platform2: 'ticktick', platform1ConnectionId: 'c1', platform2ConnectionId: 'conn-target', status: 'draft' }),
+    });
+    const { status, body } = await apiFetch('/api/sync-configs?connectionId=conn-target');
+    assert.strictEqual(status, 200);
+    const ids = body.items.map(c => c.id);
+    assert.ok(ids.includes(asSource.body.id));
+    assert.ok(ids.includes(asDest.body.id));
+    assert.ok(body.items.every(c => c.platform1ConnectionId === 'conn-target' || c.platform2ConnectionId === 'conn-target'));
+  });
+
   it('single fetch returns the config for its own workspace', async () => {
     currentUid = TEST_UID;
     const created = await apiFetch('/api/sync-configs', {

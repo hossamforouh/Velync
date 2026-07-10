@@ -28,7 +28,8 @@
     "test:admin-workspace-plan": "npx firebase emulators:exec --only firestore \"node --test test/admin-workspace-plan.test.js\"",
     "test:usage": "npx firebase emulators:exec --only firestore \"node --test test/usage.test.js\"",
     "test:public-marketplace": "npx firebase emulators:exec --only firestore \"node --test test/public-marketplace.test.js\"",
-    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin && npm run test:admin-platforms && npm run test:logs-fixes && npm run test:connections-fixes && npm run test:notifications && npm run test:sync-configs-fixes && npm run test:connector-resolution && npm run test:billing-fixes && npm run test:workspace-fixes && npm run test:profile-settings-fixes && npm run test:auth-fail-closed && npm run test:config-deletion && npm run test:dispatcher && npm run test:superadmin && npm run test:admin-plans-fixes && npm run test:admin-workspace-plan && npm run test:usage && npm run test:public-marketplace"
+    "test:rate-limit-scoping": "npx firebase emulators:exec --only firestore \"node --test test/rate-limit-scoping.test.js\"",
+    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin && npm run test:admin-platforms && npm run test:logs-fixes && npm run test:connections-fixes && npm run test:notifications && npm run test:sync-configs-fixes && npm run test:connector-resolution && npm run test:billing-fixes && npm run test:workspace-fixes && npm run test:profile-settings-fixes && npm run test:auth-fail-closed && npm run test:config-deletion && npm run test:dispatcher && npm run test:superadmin && npm run test:admin-plans-fixes && npm run test:admin-workspace-plan && npm run test:usage && npm run test:public-marketplace && npm run test:rate-limit-scoping"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",

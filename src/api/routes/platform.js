@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
 const { getConnector } = require('../../domains/connector/registry');
@@ -9,6 +10,19 @@ const logger = require('../../core/logger');
 
 const router = Router();
 
+// Was previously mounted at the top-level `app.use('/api', authLimiter, platformRoutes)`
+// in server.js — but since Express's app.use(path, ...) prefix-matches, that made
+// this limiter count EVERY /api/* request in the whole app (any request reaching
+// this middleware, whether or not platformRoutes actually had a matching
+// sub-route), not just the two routes below. Scoped directly to them here instead.
+const platformLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -17,7 +31,7 @@ const validate = (req, res, next) => {
   next();
 };
 
-router.get('/data-sources', verifyAuth, async (req, res) => {
+router.get('/data-sources', verifyAuth, platformLimiter, async (req, res) => {
   try {
     const platformsSnap = await db.collection('platforms').get();
     const sources = [];
@@ -47,7 +61,7 @@ const DATA_SOURCE_ALIASES = {
   'google_contacts_fetch_groups': 'contactGroups',
 };
 
-router.post('/platform-entities', verifyAuth, [
+router.post('/platform-entities', verifyAuth, platformLimiter, [
   body('connectionId').isString().trim().notEmpty(),
   body('dataSourceId').optional().isString(),
   body('providerName').optional().isString(),
