@@ -1108,21 +1108,32 @@ onAuthStateChanged(auth, async (user) => {
 
       // Usage-intensity tracking: onAuthStateChanged fires on every page load,
       // so dedupe to one 'user_login' per browser session via sessionStorage.
-      if (!sessionStorage.getItem('velyncLoginLogged')) {
-        sessionStorage.setItem('velyncLoginLogged', '1');
-        reportUsageEvent(user, 'user_login');
-      }
+      const shouldLogLogin = !sessionStorage.getItem('velyncLoginLogged');
+      if (shouldLogLogin) sessionStorage.setItem('velyncLoginLogged', '1');
 
-      // These five are independent of each other (different docs/endpoints,
-      // no cross-references) — run them concurrently instead of stacking
+      // ensureUserDoc() must complete BEFORE anything that reports a usage
+      // event (user_login here; workspace_created inside ensureWorkspaceDoc
+      // below) — POST /api/usage/event derives workspaceId by reading
+      // users/{uid} server-side. On a brand-new signup that doc doesn't
+      // exist until ensureUserDoc() writes it; firing a usage event
+      // concurrently with that write (as this used to, via one big
+      // Promise.all) could race it and land before the doc exists — same
+      // race class as the GET /workspace/invites bug fixed earlier (see
+      // workspace.js). Sequencing this one call first costs one extra
+      // round-trip but removes the race outright.
+      await ensureUserDoc();
+
+      // These four are independent of each other and of the ensureUserDoc()
+      // that already completed — run them concurrently rather than stacking
       // round-trips serially, to cut time-to-usable-dashboard after sign-in.
       await Promise.all([
-        ensureUserDoc(),
         checkSuperadmin(),
         ensureWorkspaceDoc(),
         processPendingInvites(user), // hits the backend directly; bypasses Firestore rules
         loadAndApplyPlanBadge(auth), // shows the paid-plan crown badge on the avatar, if applicable
       ]);
+
+      if (shouldLogLogin) reportUsageEvent(user, 'user_login');
     } catch (err) {
       console.error("Error fetching user profile:", err);
       if (navigator.onLine) showToast('Failed to load profile', 'error');
