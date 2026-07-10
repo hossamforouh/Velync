@@ -189,6 +189,15 @@ router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy,
       redirectUrl: `${config.appBaseUrl || 'https://velync.web.app'}/settings?billing=success`,
     });
 
+    // Proves, per-request, exactly which email/name this server sent to Lemon
+    // Squeezy — if a customer record still ends up under the wrong identity,
+    // this line tells us whether that happened upstream of us (bug here) or
+    // on Lemon Squeezy's side (e.g. its checkout remembers a previously
+    // logged-in buyer session in that browser and reuses it regardless of
+    // checkout_data.email — a real LS checkout behavior, not something the
+    // Checkout creation API request can override).
+    logger.info('billing', `Checkout created for workspace "${workspaceId}" — sent email="${userEmail}" name="${userName}"`, { user: req.user.uid, planId });
+
     return res.json({ success: true, url });
   } catch (err) {
     logger.error('billing', 'Failed to create checkout', { error: err.message, details: err.response?.data });
