@@ -95,6 +95,10 @@ async function summaryDoc(uid) {
   const d = await db.collection('usage_summaries').doc(`${uid}_${MONTH}`).get();
   return d.exists ? d.data() : null;
 }
+async function wsSummaryDoc(workspaceId) {
+  const d = await db.collection('usage_workspace_summaries').doc(`${workspaceId}_${MONTH}`).get();
+  return d.exists ? d.data() : null;
+}
 async function eventsFor(uid, activityType) {
   let q = db.collection('usage_events').where('userId', '==', uid);
   if (activityType) q = q.where('activityType', '==', activityType);
@@ -119,6 +123,12 @@ before(async () => {
   await db.collection('users').doc(ADMIN_UID).set({ email: `${ADMIN_UID}@usagetest.com` });
   await db.collection('workspaces').doc(WORKSPACE_ID).set({
     ownerId: OWNER_UID, members: [OWNER_UID], invitedEmails: [], planId: 'free', name: 'Usage WS',
+  });
+  // Real workspace doc for the sync-execution test's workspaceId, so
+  // GET /api/admin/workspaces (which lists actual `workspaces` docs) can
+  // find it and attach its usage_workspace_summaries-derived cost.
+  await db.collection('workspaces').doc('usage-sync-ws-1').set({
+    ownerId: 'usage-sync-owner', members: ['usage-sync-owner'], invitedEmails: [], planId: 'free', name: 'Usage Sync WS 1',
   });
   await db.collection('plans').doc('free').set({
     name: 'Free', isActive: true, maxActiveConfigs: 10, connectorTiers: ['basic'],
@@ -204,14 +214,16 @@ describe('logUsageEvent — event doc + atomic summary increments', () => {
     assert.ok(Math.abs(summary.totals.api_call.costUsd - 30 * rates.costPerApiCall) < 1e-12);
   });
 
-  it('admin-triggered events are recorded but excluded from the user summary', async () => {
+  it('admin-triggered events are recorded but excluded from the user AND workspace summaries', async () => {
     const UID3 = 'usage-adminexcl-uid';
-    await logUsageEvent(UID3, 'ws-x', 'member_invited', { actor: 'admin' });
+    const WS3 = 'ws-adminexcl-only'; // dedicated workspace so no other test's activity pollutes this assertion
+    await logUsageEvent(UID3, WS3, 'member_invited', { actor: 'admin' });
 
     const events = await eventsFor(UID3, 'member_invited');
     assert.strictEqual(events.length, 1);
     assert.strictEqual(events[0].actor, 'admin');
     assert.strictEqual(await summaryDoc(UID3), null, 'no summary doc created for admin-attributed action');
+    assert.strictEqual(await wsSummaryDoc(WS3), null, 'admin actions excluded from the workspace rollup too');
   });
 
   it('a failed write surfaces in usage_meta/write_failures (never silent)', async () => {
@@ -225,6 +237,43 @@ describe('logUsageEvent — event doc + atomic summary increments', () => {
     assert.strictEqual(afterDoc.data().count, beforeCount + 1);
     assert.strictEqual(afterDoc.data().lastActivityType, 'not_a_real_activity_type');
     assert.ok(afterDoc.data().lastError.includes('Unknown activityType'));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('per-workspace usage rollup (usage_workspace_summaries)', () => {
+  it('sums multiple users\' activity into one workspace summary', async () => {
+    const WS = 'ws-rollup-test';
+    await logUsageEvent('rollup-user-a', WS, 'firestore_write', { units: 10 });
+    await logUsageEvent('rollup-user-b', WS, 'firestore_write', { units: 5 });
+
+    const [summaryA, summaryB, wsSummary] = await Promise.all([
+      summaryDoc('rollup-user-a'), summaryDoc('rollup-user-b'), wsSummaryDoc(WS),
+    ]);
+    assert.strictEqual(summaryA.totals.firestore_write.count, 10, "user A's own summary unaffected by user B");
+    assert.strictEqual(summaryB.totals.firestore_write.count, 5);
+    assert.strictEqual(wsSummary.totals.firestore_write.count, 15, 'workspace summary sums both members');
+    const rates = await getUsageRates();
+    assert.ok(Math.abs(wsSummary.grandTotalCostUsd - 15 * rates.costPerWrite) < 1e-12);
+  });
+
+  it('concurrent events from different users in the same workspace do not lose updates', async () => {
+    const WS = 'ws-rollup-concurrent';
+    await Promise.all([
+      ...Array.from({ length: 15 }, () => logUsageEvent('rollup-c-user1', WS, 'api_call', { connectorType: 'notion' })),
+      ...Array.from({ length: 15 }, () => logUsageEvent('rollup-c-user2', WS, 'api_call', { connectorType: 'notion' })),
+    ]);
+    const wsSummary = await wsSummaryDoc(WS);
+    assert.strictEqual(wsSummary.totals.api_call.count, 30, 'all 30 concurrent increments across 2 users landed');
+  });
+
+  it('an event with no workspaceId does not create a workspace summary doc', async () => {
+    await logUsageEvent('rollup-no-ws-user', null, 'user_login');
+    const userSummary = await summaryDoc('rollup-no-ws-user');
+    assert.strictEqual(userSummary.totals.user_login.count, 1, 'the user summary itself is still created');
+    const events = await eventsFor('rollup-no-ws-user', 'user_login');
+    assert.strictEqual(events[0].workspaceId, null);
+    assert.strictEqual(await wsSummaryDoc('null'), null, 'no workspace summary doc for a null workspaceId');
   });
 });
 
@@ -267,6 +316,11 @@ describe('real sync execution records cost-driving usage', () => {
     const byConnector = Object.fromEntries(apiEvents.map(e => [e.connectorType, e.units]));
     assert.strictEqual(byConnector.usagesrc, 2, 'source: fetch + fetchIds');
     assert.strictEqual(byConnector.usagedst, 3, 'dest: fetch + fetchIds + create');
+
+    // A real sync run also rolls up into that workspace's aggregate, not just the user's.
+    const wsSummary = await wsSummaryDoc('usage-sync-ws-1');
+    assert.strictEqual(wsSummary.totals.sync_execution.count, 1);
+    assert.strictEqual(wsSummary.grandTotalCostUsd, summary.grandTotalCostUsd, 'sole member — workspace total matches user total');
   });
 
   it('three concurrent runs for the same user → summary totals exact (no lost updates)', async () => {
@@ -407,6 +461,40 @@ describe('admin usage endpoints', () => {
       assert.strictEqual(cell.count, rawCell.count || 0, `count mismatch for ${type}`);
     }
     assert.strictEqual(body.user.grandTotalCostUsd, raw.grandTotalCostUsd || 0);
+  });
+
+  it('GET /api/admin/usage/workspace/:workspaceId matches the Firestore workspace summary exactly', async () => {
+    currentUid = ADMIN_UID;
+    const { status, body } = await apiFetch(`/api/admin/usage/workspace/usage-sync-ws-1?month=${MONTH}`);
+    assert.strictEqual(status, 200);
+
+    const raw = await wsSummaryDoc('usage-sync-ws-1');
+    assert.ok(raw, 'the workspace used by the real sync-execution test has a rollup doc');
+    for (const [type, cell] of Object.entries(body.workspace.totals)) {
+      const rawCell = (raw.totals || {})[type] || {};
+      assert.strictEqual(cell.count, rawCell.count || 0, `count mismatch for ${type}`);
+    }
+    assert.strictEqual(body.workspace.grandTotalCostUsd, raw.grandTotalCostUsd || 0);
+  });
+
+  it('GET /api/admin/usage/workspace/:workspaceId returns zeroed totals for a workspace with no usage yet', async () => {
+    currentUid = ADMIN_UID;
+    const { status, body } = await apiFetch(`/api/admin/usage/workspace/never-used-ws?month=${MONTH}`);
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.workspace.grandTotalCostUsd, 0);
+    assert.strictEqual(body.workspace.totals.firestore_read.count, 0);
+  });
+
+  it('GET /api/admin/workspaces attaches this month\'s estimated cost per workspace', async () => {
+    currentUid = ADMIN_UID;
+    const { status, body } = await apiFetch('/api/admin/workspaces?limit=200');
+    assert.strictEqual(status, 200);
+    const ws1 = body.items.find(w => w.id === 'usage-sync-ws-1');
+    assert.ok(ws1, 'the workspace used by the real sync-execution test is in the list');
+    const raw = await wsSummaryDoc('usage-sync-ws-1');
+    assert.strictEqual(ws1.estimatedCostUsd, raw.grandTotalCostUsd, "list endpoint's cost matches the rollup doc");
+    const wsWithoutUsage = body.items.find(w => w.id === WORKSPACE_ID); // the original owner workspace has no sync activity
+    assert.strictEqual(wsWithoutUsage.estimatedCostUsd, 0, 'workspace with no usage_workspace_summaries doc defaults to 0, not undefined');
   });
 
   it('GET /api/admin/usage lists all users for the month, sorted by cost, with emails joined', async () => {

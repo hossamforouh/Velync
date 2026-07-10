@@ -1,4 +1,5 @@
 import { showToast } from './toast.js';
+import { fmtCost, renderBreakdownTableHtml } from './admin-usage.js';
 
 // Admin → Workspaces management tab.
 // Powered by the server-side admin endpoints (/api/admin/stats + /api/admin/workspaces),
@@ -100,6 +101,43 @@ async function openPlanEditor(tr, workspace) {
   });
 }
 
+// Toggle an inline breakdown row directly under a workspace's row, reusing
+// the same per-activity-type table the Usage tab renders for a single user —
+// scoped here to /api/admin/usage/workspace/:id, which sums all of that
+// workspace's members (usage_workspace_summaries, incremented alongside the
+// per-user summary — see src/domains/usage/index.js).
+async function toggleUsageBreakdown(tr, workspace) {
+  const existing = tr.nextElementSibling;
+  if (existing && existing.classList.contains('ws-usage-breakdown-row')) {
+    existing.remove();
+    return;
+  }
+  // Close any other open breakdown row before opening a new one.
+  document.querySelectorAll('.ws-usage-breakdown-row').forEach(el => el.remove());
+
+  const detailRow = document.createElement('tr');
+  detailRow.className = 'ws-usage-breakdown-row';
+  const td = document.createElement('td');
+  td.colSpan = 7;
+  td.style.cssText = 'background:rgba(255,255,255,0.02);padding:16px;';
+  td.innerHTML = '<span style="color:var(--text-3);font-size:0.85rem;">Loading usage breakdown…</span>';
+  detailRow.appendChild(td);
+  tr.after(detailRow);
+
+  try {
+    const month = new Date().toISOString().slice(0, 7);
+    const data = await apiGet(`/api/admin/usage/workspace/${encodeURIComponent(workspace.id)}?month=${month}`);
+    td.innerHTML = `
+      <div style="margin-bottom:8px;color:var(--text-3);font-size:0.8rem;">
+        Usage for <strong>${esc(workspace.name || workspace.id)}</strong> — ${esc(data.month)} (all members combined, estimates only)
+      </div>
+      ${renderBreakdownTableHtml(data.activityTypes, data.workspace)}
+    `;
+  } catch (err) {
+    td.innerHTML = `<span style="color:var(--red,#ef4444);">Failed to load usage: ${esc(err.message)}</span>`;
+  }
+}
+
 async function loadAll() {
   hasLoaded = true;
   await Promise.all([loadStats(), loadWorkspaces(true)]);
@@ -137,21 +175,27 @@ async function loadWorkspaces(reset) {
     const { items, nextCursor } = await apiGet('/api/admin/workspaces?' + params.toString());
 
     if (reset && items.length === 0) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">${searchTerm ? 'No workspaces match your search.' : 'No workspaces.'}</td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">${searchTerm ? 'No workspaces match your search.' : 'No workspaces.'}</td></tr>`;
     } else if (tbody) {
       for (const w of items) {
         const tr = document.createElement('tr');
+        const hasCost = Number(w.estimatedCostUsd) > 0;
         tr.innerHTML = `
           <td data-label="Name"><strong>${esc(w.name || '—')}</strong></td>
           <td data-label="Owner"><code style="font-size:0.82rem;">${esc(w.ownerId || '—')}</code></td>
           <td data-label="Plan"><span class="badge badge-info plan-display">${esc(w.planId)}</span></td>
           <td data-label="Members">${Number(w.memberCount) || 0}</td>
+          <td data-label="Est. Cost (mo)">${hasCost
+            ? `<button class="row-action-btn btn-ws-usage" type="button" title="View usage breakdown" style="width:auto;padding:2px 8px;font-size:0.82rem;">${esc(fmtCost(w.estimatedCostUsd))} ▾</button>`
+            : `<span style="color:var(--text-3);font-size:0.82rem;">${esc(fmtCost(w.estimatedCostUsd ?? 0))}</span>`}</td>
           <td data-label="ID"><code style="font-size:0.82rem;">${esc(w.id)}</code></td>
           <td data-label="Actions"><button class="row-action-btn btn-change-plan" type="button" title="Change Plan">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
           </button></td>`;
         tbody.appendChild(tr);
         tr.querySelector('.btn-change-plan').addEventListener('click', () => openPlanEditor(tr, w));
+        const usageBtn = tr.querySelector('.btn-ws-usage');
+        if (usageBtn) usageBtn.addEventListener('click', () => toggleUsageBreakdown(tr, w));
       }
       rowsShown += items.length;
     }

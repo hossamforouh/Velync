@@ -156,6 +156,25 @@ async function logUsageEvent(userId, workspaceId, activityType, meta = {}) {
         summaryUpdate.grandTotalCostUsd = FieldValue.increment(estimatedCostUsd);
       }
       batch.set(db.collection('usage_summaries').doc(`${userId}_${yearMonth}`), summaryUpdate, { merge: true });
+
+      // Parallel per-workspace rollup — a workspace's cost is the sum of all
+      // its members' activity, so this is incremented alongside (not instead
+      // of) the per-user summary above, same atomic-increment pattern, keyed
+      // by workspaceId instead of userId. Skipped when there's no workspace
+      // (e.g. a standalone event with only a userId).
+      if (workspaceId) {
+        const wsSummaryUpdate = {
+          workspaceId,
+          yearMonth,
+          totals: { [activityType]: { count: FieldValue.increment(units) } },
+          updatedAt: now.toISOString(),
+        };
+        if (estimatedCostUsd !== null) {
+          wsSummaryUpdate.totals[activityType].costUsd = FieldValue.increment(estimatedCostUsd);
+          wsSummaryUpdate.grandTotalCostUsd = FieldValue.increment(estimatedCostUsd);
+        }
+        batch.set(db.collection('usage_workspace_summaries').doc(`${workspaceId}_${yearMonth}`), wsSummaryUpdate, { merge: true });
+      }
     }
 
     await batch.commit();

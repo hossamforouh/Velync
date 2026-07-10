@@ -229,6 +229,10 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+    match /usage_workspace_summaries/{summaryId} {
+      allow read: if false;
+      allow write: if false;
+    }
     match /usage_meta/{documentId} {
       allow read: if false;
       allow write: if false;

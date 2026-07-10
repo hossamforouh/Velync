@@ -1,5 +1,6 @@
 const { FieldPath } = require('@google-cloud/firestore');
 const db = require('../../core/db');
+const { yearMonthOf } = require('../usage');
 
 /**
  * Admin statistics & management queries.
@@ -82,6 +83,19 @@ async function listWorkspaces({ limit = 50, startAfter = null, search = null } =
       createdAt: data.createdAt || null,
     };
   });
+
+  // Attach this month's estimated cost per workspace (one batched read per
+  // page, same db.getAll pattern used to join emails in admin-usage.js) so
+  // the Workspaces table can show it without a separate round trip per row.
+  if (items.length > 0) {
+    const yearMonth = yearMonthOf();
+    const refs = items.map(w => db.collection('usage_workspace_summaries').doc(`${w.id}_${yearMonth}`));
+    const docs = await db.getAll(...refs);
+    docs.forEach((doc, i) => {
+      items[i].estimatedCostUsd = doc.exists ? (doc.data().grandTotalCostUsd || 0) : 0;
+    });
+  }
+
   const nextCursor = snap.size === limit
     ? (search ? snap.docs[snap.docs.length - 1].data().name : snap.docs[snap.docs.length - 1].id)
     : null;

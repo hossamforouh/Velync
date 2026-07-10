@@ -57,11 +57,11 @@ async function apiGet(path) {
   return res.json();
 }
 
-function escapeHtml(s) {
+export function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function fmtCost(v) {
+export function fmtCost(v) {
   if (v === null || v === undefined) return '—';
   if (v === 0) return '$0.00';
   // Per-unit Firestore rates are tiny — show enough precision to be meaningful
@@ -70,8 +70,40 @@ function fmtCost(v) {
   return v < 0.01 ? `$${v.toFixed(6)}` : `$${v.toFixed(2)}`;
 }
 
-function fmtCount(v) {
+export function fmtCount(v) {
   return Number(v || 0).toLocaleString();
+}
+
+/**
+ * Build the <table> markup for a single entity's (user or workspace) usage
+ * breakdown — one row per activity type with count AND estimated $ side by
+ * side for cost-driving types, plus a grand total row. Shared by the Usage
+ * tab's single-user view and the Admin Workspaces tab's per-row expansion.
+ */
+export function renderBreakdownTableHtml(activityTypes, entity) {
+  const rows = activityTypes.map(({ type, costDriving }) => {
+    const cell = entity.totals[type];
+    const costLabel = costDriving ? fmtCost(cell.costUsd) : '<span style="color:var(--text-3);">— (no direct cost)</span>';
+    return `
+      <tr>
+        <td>${escapeHtml(TYPE_LABELS[type] || type)}${costDriving ? ' <span style="color:var(--text-3);font-size:0.75rem;">(est.)</span>' : ''}</td>
+        <td>${fmtCount(cell.count)}</td>
+        <td>${costLabel}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <table class="connections-table">
+      <thead><tr><th>Activity</th><th>Count</th><th>Estimated Cost</th></tr></thead>
+      <tbody>
+        ${rows}
+        <tr>
+          <td><strong>Grand Total (est.)</strong></td>
+          <td></td>
+          <td><strong>${fmtCost(entity.grandTotalCostUsd)}</strong></td>
+        </tr>
+      </tbody>
+    </table>`;
 }
 
 async function load() {

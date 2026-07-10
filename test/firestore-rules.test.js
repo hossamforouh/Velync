@@ -717,9 +717,9 @@ describe('/mail/{mailId}', () => {
 });
 
 // ─────────────────────────────────────────────
-// 18. /usage_events, /usage_summaries, /usage_meta
+// 18. /usage_events, /usage_summaries, /usage_workspace_summaries, /usage_meta
 // ─────────────────────────────────────────────
-describe('usage tracking collections (usage_events / usage_summaries / usage_meta)', () => {
+describe('usage tracking collections (usage_events / usage_summaries / usage_workspace_summaries / usage_meta)', () => {
   it('usage_events: read and write always denied — admin-sdk-only', async () => {
     await assertFails(ctx.owner().firestore().collection('usage_events').doc('evt1').get());
     await assertFails(ctx.superAdmin().firestore().collection('usage_events').doc('evt1').get());
@@ -734,6 +734,15 @@ describe('usage tracking collections (usage_events / usage_summaries / usage_met
       userId: 'owner-uid', yearMonth: '2026-07', grandTotalCostUsd: 0,
     }));
     await assertFails(ctx.superAdmin().firestore().collection('usage_summaries').doc('owner-uid_2026-07').get());
+  });
+
+  it('usage_workspace_summaries: a member cannot read or forge their workspace\'s monthly totals', async () => {
+    await assertFails(ctx.owner().firestore().collection('usage_workspace_summaries').doc('owner-wsid_2026-07').get());
+    await assertFails(ctx.member().firestore().collection('usage_workspace_summaries').doc('owner-wsid_2026-07').get());
+    await assertFails(ctx.owner().firestore().collection('usage_workspace_summaries').doc('owner-wsid_2026-07').set({
+      workspaceId: 'owner-wsid', yearMonth: '2026-07', grandTotalCostUsd: 0,
+    }));
+    await assertFails(ctx.superAdmin().firestore().collection('usage_workspace_summaries').doc('owner-wsid_2026-07').get());
   });
 
   it('usage_meta: read and write always denied', async () => {

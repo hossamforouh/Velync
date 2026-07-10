@@ -29,7 +29,10 @@ const monthValidator = query('month').optional().matches(/^\d{4}-(0[1-9]|1[0-2])
 /** Stable column order for API responses and the CSV export. */
 const TYPE_ORDER = Object.keys(ACTIVITY_TYPES);
 
-/** Normalize a summary doc into { totals: {type: {count, costUsd|null}}, grandTotalCostUsd }. */
+/**
+ * Normalize a summary doc (per-user or per-workspace — same shape either way)
+ * into { totals: {type: {count, costUsd|null}}, grandTotalCostUsd }.
+ */
 function normalizeSummary(data) {
   const totals = {};
   for (const type of TYPE_ORDER) {
@@ -41,6 +44,7 @@ function normalizeSummary(data) {
   }
   return {
     userId: data.userId,
+    workspaceId: data.workspaceId,
     yearMonth: data.yearMonth,
     totals,
     grandTotalCostUsd: data.grandTotalCostUsd || 0,
@@ -120,6 +124,35 @@ router.get('/admin/usage/export', verifyAuth, requireSuperAdmin, [monthValidator
     return res.send(lines.join('\r\n') + '\r\n');
   } catch (err) {
     logger.error('admin-usage', 'Failed to export usage CSV', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Full breakdown for a single workspace/month — sums all of that workspace's
+// members' activity (usage_workspace_summaries is incremented alongside the
+// per-user summary in logUsageEvent, same atomic pattern, keyed by
+// workspaceId instead of userId). Registered before /admin/usage/:userId —
+// no ambiguity since this path has an extra segment, but keeping the more
+// specific route first for readability.
+router.get('/admin/usage/workspace/:workspaceId', verifyAuth, requireSuperAdmin, [monthValidator], validate, async (req, res) => {
+  try {
+    const month = req.query.month || yearMonthOf();
+    const { workspaceId } = req.params;
+    const [summaryDoc, wsDoc] = await Promise.all([
+      db.collection('usage_workspace_summaries').doc(`${workspaceId}_${month}`).get(),
+      db.collection('workspaces').doc(workspaceId).get(),
+    ]);
+    const summary = summaryDoc.exists
+      ? normalizeSummary(summaryDoc.data())
+      : normalizeSummary({ workspaceId, yearMonth: month });
+    summary.name = wsDoc.exists ? (wsDoc.data().name || null) : null;
+    return res.json({
+      month,
+      activityTypes: TYPE_ORDER.map(t => ({ type: t, costDriving: ACTIVITY_TYPES[t].costDriving })),
+      workspace: summary,
+    });
+  } catch (err) {
+    logger.error('admin-usage', 'Failed to load workspace usage', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });
