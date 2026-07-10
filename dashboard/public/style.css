@@ -853,6 +853,155 @@ header.legacy-header {
   font-weight: 600;
 }
 
+/* ── Workspace usage stats modal ─────────────────────────────── */
+.usage-modal {
+  max-width: 720px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.usage-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.usage-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0 0 4px;
+}
+
+.usage-modal-subtitle {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.usage-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: var(--transition);
+}
+
+.usage-modal-close:hover {
+  color: var(--text-1);
+  background: var(--glass-hover);
+}
+
+.usage-hero-total {
+  text-align: center;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--grad);
+  margin-bottom: 24px;
+}
+
+.usage-hero-total-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.usage-hero-total-value {
+  font-size: 36px;
+  font-weight: 800;
+  color: #fff;
+  margin: 6px 0;
+}
+
+.usage-hero-total-caption {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.usage-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.usage-stat-card {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  transition: var(--transition);
+}
+
+.usage-stat-card:hover {
+  background: var(--glass-hover);
+}
+
+.usage-stat-card-empty {
+  opacity: 0.5;
+}
+
+.usage-stat-card-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+
+.usage-stat-card-label .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.usage-stat-card-label .dot.violet { background: var(--violet); }
+.usage-stat-card-label .dot.indigo { background: var(--indigo); }
+.usage-stat-card-label .dot.cyan { background: var(--cyan); }
+.usage-stat-card-label .dot.rose { background: var(--rose); }
+.usage-stat-card-label .dot.amber { background: var(--amber); }
+.usage-stat-card-label .dot.green { background: var(--green); }
+
+.usage-stat-card-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.usage-stat-card-cost {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.usage-stat-card-nocost {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.usage-stat-est-tag {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+@media (max-width: 600px) {
+  .usage-modal {
+    max-width: 94vw;
+  }
+  .usage-stat-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
 /* ── Section header ──────────────────────────────────────────── */
 .section-header {
   display: flex;

@@ -1104,21 +1104,18 @@ onAuthStateChanged(auth, async (user) => {
           { initAdminPlans },
           { initAdminWorkspaces },
           { initAdminSyncHealth },
-          { initAdminUsage },
         ] = await Promise.all([
           import('./js/admin-integrations.js'),
           import('./js/admin-platforms.js'),
           import('./js/admin-plans.js'),
           import('./js/admin-workspaces.js'),
           import('./js/admin-sync-health.js'),
-          import('./js/admin-usage.js'),
         ]);
         initAdminIntegrations(db, auth);
         initAdminPlatforms(db, auth);
         initAdminPlans(db, auth);
         initAdminWorkspaces(auth);
         initAdminSyncHealth(auth);
-        initAdminUsage(auth);
       }
     }
 
