@@ -359,11 +359,15 @@
           <div class="user-avatar" id="user-avatar" role="button" tabindex="0">
             <!-- Initials will be injected here -->
           </div>
+          <span class="plan-badge" id="user-plan-badge" style="display:none;" aria-hidden="true"></span>
           <div class="avatar-dropdown" id="avatar-dropdown">
             <div class="dropdown-header">
               <div class="dropdown-avatar" id="dropdown-avatar"></div>
               <div class="dropdown-user-info">
-                <span id="dropdown-user-name" class="dropdown-name"></span>
+                <div class="dropdown-name-row">
+                  <span id="dropdown-user-name" class="dropdown-name"></span>
+                  <span class="plan-pill" id="dropdown-plan-pill" style="display:none;"></span>
+                </div>
                 <span id="dropdown-user-email" class="dropdown-email"></span>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { doc, getDoc, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
+import { updatePlanBadge } from './plan-badge.js';
 
 let firestoreDb = null;
 let auth = null;
@@ -31,6 +32,10 @@ export async function initBilling(dbInstance, authInstance) {
     }
 
     const { plan, subscription, usage } = data;
+
+    // Keep the avatar's paid-plan badge in sync with whatever this tab just
+    // fetched — reuses this response instead of a second round trip.
+    updatePlanBadge(plan);
 
     // Current plan card
     display.innerHTML = `

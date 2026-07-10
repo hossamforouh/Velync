@@ -4345,6 +4345,58 @@ header.legacy-header {
   box-shadow: 0 0 12px rgba(110, 86, 207, 0.5);
 }
 
+/* Paid-plan crown badge, cut into the bottom-right of the avatar. Shown for
+   any plan with priceMonthly > 0 (see js/plan-badge.js) — not specific to
+   "Pro"/"Business" by name, since plans are admin-editable. */
+.plan-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FBBF24, #F59E0B);
+  border: 2px solid var(--bg-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.55);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.plan-badge svg {
+  width: 10px;
+  height: 10px;
+  color: #fff;
+}
+
+.dropdown-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dropdown-name-row .dropdown-name {
+  flex-shrink: 1;
+}
+
+.plan-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 100px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #FBBF24, #F59E0B);
+  color: #1a1206;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .avatar-dropdown {
   position: absolute;
   top: calc(100% + 12px);

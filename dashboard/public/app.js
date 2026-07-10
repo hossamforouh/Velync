@@ -13,6 +13,7 @@ import { bindNavEvents, navigateTo } from './js/navigation.js';
 import { renderHubView } from './js/hub.js';
 import { connections, loadConnections, renderConnectionsView, renderConnectionsSkeleton, initiateDirectOAuthFlow } from './js/connections.js';
 import { initBilling } from './js/billing.js';
+import { loadAndApplyPlanBadge } from './js/plan-badge.js';
 import { initOnboarding } from './js/onboarding.js';
 import './js/integration-setup.js';
 import { showToast } from './js/toast.js';
@@ -1074,7 +1075,7 @@ onAuthStateChanged(auth, async (user) => {
         reportUsageEvent(user, 'user_login');
       }
 
-      // These four are independent of each other (different docs/endpoints,
+      // These five are independent of each other (different docs/endpoints,
       // no cross-references) — run them concurrently instead of stacking
       // round-trips serially, to cut time-to-usable-dashboard after sign-in.
       await Promise.all([
@@ -1082,6 +1083,7 @@ onAuthStateChanged(auth, async (user) => {
         checkSuperadmin(),
         ensureWorkspaceDoc(),
         processPendingInvites(user), // hits the backend directly; bypasses Firestore rules
+        loadAndApplyPlanBadge(auth), // shows the paid-plan crown badge on the avatar, if applicable
       ]);
     } catch (err) {
       console.error("Error fetching user profile:", err);
