@@ -53,6 +53,7 @@ const { logUsageEvent, getUsageRates, yearMonthOf, DEFAULT_RATES } = require('..
 const { Connector } = require('../src/domains/connector/interface');
 const { register } = require('../src/domains/connector/registry');
 const { runSync } = require('../src/domains/sync/engine');
+const { cleanupUsageEvents } = require('../src/domains/sync/log-cleanup');
 
 const MONTH = yearMonthOf();
 
@@ -561,5 +562,48 @@ describe('admin usage endpoints', () => {
       }
       assert.ok(Math.abs(Number(row.grandTotalCostUsd) - (data.grandTotalCostUsd || 0)) < 1e-12, `${row.userId} grand total`);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('usage_events retention cleanup (90-day flat cutoff)', () => {
+  it('deletes events older than 90 days, keeps recent ones, never touches summaries', async () => {
+    const UID = 'usage-retention-uid';
+    // A real recent event (also creates the user's summary doc).
+    await logUsageEvent(UID, 'ws-retention', 'firestore_write', { units: 7 });
+
+    // Two stale raw events, seeded directly with old ISO timestamps — the
+    // summaries they would have incremented are represented by the summary
+    // doc above, which must survive the raw-event purge.
+    const oldTs = new Date(Date.now() - 91 * 24 * 60 * 60 * 1000).toISOString();
+    const veryOldTs = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString();
+    for (const timestamp of [oldTs, veryOldTs]) {
+      await db.collection('usage_events').add({
+        userId: UID, workspaceId: 'ws-retention', activityType: 'api_call',
+        connectorType: 'notion', units: 1, estimatedCostUsd: 0.000001,
+        actor: 'user', timestamp,
+      });
+    }
+
+    const before = await eventsFor(UID);
+    assert.strictEqual(before.length, 3, 'one recent + two stale events seeded');
+
+    const deleted = await cleanupUsageEvents();
+    assert.ok(deleted >= 2, `at least the two stale events deleted (got ${deleted})`);
+
+    const after = await eventsFor(UID);
+    assert.strictEqual(after.length, 1, 'only the recent event survives');
+    assert.strictEqual(after[0].activityType, 'firestore_write');
+
+    // The monthly rollup — the long-term record — is untouched by the purge.
+    const summary = await summaryDoc(UID);
+    assert.strictEqual(summary.totals.firestore_write.count, 7);
+    const wsSummary = await wsSummaryDoc('ws-retention');
+    assert.strictEqual(wsSummary.totals.firestore_write.count, 7);
+  });
+
+  it('is a no-op when nothing is old enough', async () => {
+    const deleted = await cleanupUsageEvents();
+    assert.strictEqual(deleted, 0, 'second pass finds nothing left to delete');
   });
 });

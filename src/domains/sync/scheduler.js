@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { runSync } = require('./engine');
-const { cleanupLogs, cleanupActivityLogs, reconcileStuckRuns } = require('./log-cleanup');
+const { cleanupLogs, cleanupActivityLogs, cleanupUsageEvents, reconcileStuckRuns } = require('./log-cleanup');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -24,6 +24,11 @@ function startScheduler() {
       await cleanupActivityLogs();
     } catch (err) {
       logger.error('scheduler', 'Activity log cleanup failed', { error: err.message });
+    }
+    try {
+      await cleanupUsageEvents();
+    } catch (err) {
+      logger.error('scheduler', 'Usage-events cleanup failed', { error: err.message });
     }
   }).start();
 

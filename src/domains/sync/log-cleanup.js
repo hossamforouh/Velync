@@ -21,6 +21,16 @@ const ACTIVITY_LOG_RETENTION_DAYS = 180;
 const STUCK_RUN_LOCK_ID = 'stuck-run-reconciliation';
 const STUCK_RUN_TIMEOUT_MS = 15 * 60 * 1000; // well above LEASE_DURATION_MS in engine.js
 
+// usage_events is the raw per-action audit log behind the usage/cost tracking
+// (src/domains/usage). Unlike the monthly usage_summaries /
+// usage_workspace_summaries rollups (one doc per user/workspace per month,
+// bounded forever), the raw event log grows with every tracked action —
+// without retention the cost-tracking system would slowly become its own
+// storage cost. 90 days keeps enough raw history to debug/re-derive recent
+// aggregates; the summary docs preserve the historical totals beyond that.
+const USAGE_EVENTS_LOCK_ID = 'daily-usage-events-cleanup';
+const USAGE_EVENTS_RETENTION_DAYS = 90;
+
 /**
  * Delete execution_logs older than each workspace's plan's logRetentionDays.
  * Runs in batches to avoid unbounded Firestore deletes.
@@ -134,6 +144,53 @@ async function cleanupActivityLogs() {
 }
 
 /**
+ * Delete usage_events older than USAGE_EVENTS_RETENTION_DAYS. Flat global
+ * cutoff (like activity_logs) — the monthly summary docs retain the totals,
+ * so old raw events only matter for recent drill-down/debugging.
+ * usage_events.timestamp is an ISO string (see logUsageEvent), so the cutoff
+ * compares lexicographically like execution_logs' startTime.
+ */
+async function cleanupUsageEvents() {
+  const gotLease = await acquireLease(USAGE_EVENTS_LOCK_ID, CLEANUP_LEASE_MS);
+  if (!gotLease) {
+    logger.info('log-cleanup', 'Another instance holds the usage-events cleanup lease — skipping this run');
+    return 0;
+  }
+
+  try {
+    const cutoff = new Date(Date.now() - USAGE_EVENTS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    let hasMore = true;
+    let deleted = 0;
+
+    while (hasMore) {
+      const oldSnap = await db.collection('usage_events')
+        .where('timestamp', '<', cutoff)
+        .limit(BATCH_SIZE)
+        .get();
+
+      if (oldSnap.empty) {
+        hasMore = false;
+        break;
+      }
+
+      const batch = db.batch();
+      oldSnap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      deleted += oldSnap.size;
+
+      if (oldSnap.size < BATCH_SIZE) hasMore = false;
+    }
+
+    if (deleted > 0) {
+      logger.info('log-cleanup', `Usage-events cleanup — deleted ${deleted} event(s) older than ${USAGE_EVENTS_RETENTION_DAYS} days`);
+    }
+    return deleted;
+  } finally {
+    await releaseLease(USAGE_EVENTS_LOCK_ID);
+  }
+}
+
+/**
  * Mark execution_logs stuck at status:'running' beyond STUCK_RUN_TIMEOUT_MS
  * as status:'error' with an explanatory message, so they stop showing as
  * perpetually in-progress.
@@ -186,4 +243,4 @@ async function reconcileStuckRuns() {
   }
 }
 
-module.exports = { cleanupLogs, cleanupActivityLogs, reconcileStuckRuns };
+module.exports = { cleanupLogs, cleanupActivityLogs, cleanupUsageEvents, reconcileStuckRuns };
