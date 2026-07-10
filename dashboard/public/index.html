@@ -23,14 +23,25 @@
   <title>Velync — The Future of Integration</title>
   <meta name="description"
     content="Your apps, perfectly synchronized. Route data instantly between your favorite tools to create a flawless, automated ecosystem—zero coding required." />
+  <link rel="canonical" href="https://velync.web.app/" />
   <meta property="og:title" content="Velync — The Future of Integration" />
   <meta property="og:description"
     content="Your apps, perfectly synchronized. Route data instantly between your favorite tools to create a flawless, automated ecosystem—zero coding required." />
   <meta property="og:image" content="https://velync.web.app/velync-logo.png" />
   <meta property="og:url" content="https://velync.web.app/" />
   <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Velync — The Future of Integration" />
+  <meta name="twitter:description"
+    content="Your apps, perfectly synchronized. Route data instantly between your favorite tools to create a flawless, automated ecosystem—zero coding required." />
+  <meta name="twitter:image" content="https://velync.web.app/velync-logo.png" />
   <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+  <!-- defer: TomSelect only backs the post-login workspace switcher, not the
+       landing page itself — deferring keeps it off the landing page's
+       critical rendering path without changing load order relative to
+       app.js (both are deferred/module scripts, so document order still
+       guarantees TomSelect is defined before app.js needs it). -->
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js" defer></script>
 
 
   <link rel="stylesheet" href="style.css" />
@@ -237,6 +248,8 @@
       <footer class="landing-footer">
         <div class="landing-footer-inner">
           <span class="landing-footer-brand">© 2026 Velync</span>
+          <a href="/pricing.html" class="landing-footer-link" target="_blank" rel="noopener noreferrer">Pricing</a>
+          <a href="/terms.html" class="landing-footer-link" target="_blank" rel="noopener noreferrer">Terms</a>
           <a href="/privacy.html" class="landing-footer-link" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
         </div>
       </footer>

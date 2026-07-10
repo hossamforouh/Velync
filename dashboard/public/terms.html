@@ -4,13 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Terms of Service | Velync</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <meta name="description" content="The terms that govern your use of Velync's integration platform.">
+  <link rel="icon" type="image/png" href="velync-logo.png?v=2" />
+  <!-- Brand tokens match dashboard/public/style.css exactly (Inter font,
+       --violet #818CF8, --bg #0F0F1A) so this page reads as the same
+       product as the app and landing page, not a different template. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-body: #0a0819;
-      --bg-surface: #1e1b4b;
-      --primary: #06b6d4;
-      --violet: #8b5cf6;
+      --bg-body: #0F0F1A;
+      --bg-surface: #16162A;
+      --primary: #06B6D4;
+      --violet: #818CF8;
+      --indigo: #6366F1;
       --text-1: #f8fafc;
       --text-2: #cbd5e1;
       --text-3: #94a3b8;
@@ -19,13 +25,13 @@
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Outfit', -apple-system, sans-serif;
+      font-family: 'Inter', -apple-system, sans-serif;
       background: var(--bg-body); color: var(--text-2); line-height: 1.7;
       -webkit-font-smoothing: antialiased; overflow-x: hidden;
     }
     .orb { position: fixed; border-radius: 50%; z-index: -1; animation: float 20s infinite ease-in-out; }
-    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(139,92,246,0.25) 0%, transparent 70%); top: -150px; left: -150px; }
-    .orb-2 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(79,70,229,0.25) 0%, transparent 70%); bottom: -250px; right: -150px; animation-delay: -5s; }
+    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(129,140,248,0.25) 0%, transparent 70%); top: -150px; left: -150px; }
+    .orb-2 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(99,102,241,0.25) 0%, transparent 70%); bottom: -250px; right: -150px; animation-delay: -5s; }
     .orb-3 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 70%); top: 40%; left: 60%; animation-delay: -10s; }
     @keyframes float {
       0%, 100% { transform: translate(0, 0); }
@@ -43,12 +49,12 @@
       color: var(--text-1); text-decoration: none; font-weight: 800;
       font-size: 1.4rem; letter-spacing: 0.5px;
     }
-    .nav-links { margin-left: auto; }
+    .nav-links { margin-left: auto; display: flex; align-items: center; gap: 24px; }
     .nav-links a { color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 0.95rem; transition: color 0.2s; }
     .nav-links a:hover { color: var(--text-1); }
     .container { max-width: 1200px; margin: 120px auto 80px; padding: 0 24px; display: grid; grid-template-columns: 280px 1fr; gap: 60px; position: relative; }
     .hero { grid-column: 1 / -1; text-align: center; margin-bottom: 20px; }
-    h1 { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 800; background: linear-gradient(135deg, #a78bfa, #22d3ee); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 16px; line-height: 1.1; }
+    h1 { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 800; background: linear-gradient(135deg, #818CF8, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 16px; line-height: 1.1; }
     .effective-date { font-size: 1.1rem; color: var(--text-3); font-weight: 500; }
     .toc-container { position: sticky; top: 100px; height: max-content; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
     .toc h2 { font-size: 0.85rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-3); margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
@@ -81,14 +87,12 @@
 
   <nav class="navbar">
     <a href="/" class="logo">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-        <rect width="32" height="32" rx="8" fill="url(#g)"/>
-        <path d="M8 9l8 14 8-14" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-        <defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#8b5cf6"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
-      </svg>
+      <img src="/velync-logo.svg" width="32" height="32" alt="" />
       Velync
     </a>
     <div class="nav-links">
+      <a href="/pricing.html">Pricing</a>
+      <a href="/privacy.html">Privacy</a>
       <a href="/">&larr; Back to App</a>
     </div>
   </nav>

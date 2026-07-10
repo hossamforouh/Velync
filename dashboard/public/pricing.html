@@ -1,95 +1,154 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pricing — Velync</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
+  <meta name="description" content="Simple, transparent pricing for Velync. Sync your tools across platforms — start free, upgrade as you grow.">
+  <meta property="og:title" content="Pricing — Velync">
+  <meta property="og:description" content="Simple, transparent pricing for Velync. Sync your tools across platforms — start free, upgrade as you grow.">
+  <meta property="og:image" content="https://velync.web.app/velync-logo.png">
+  <meta property="og:url" content="https://velync.web.app/pricing.html">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://velync.web.app/pricing.html">
+  <link rel="icon" type="image/png" href="velync-logo.png?v=2" />
+  <!-- Brand tokens match dashboard/public/style.css exactly (Inter font,
+       --violet #818CF8, --bg #0F0F1A) so this page reads as the same
+       product as the app and landing page, not a different template. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f8f9fc;
-      --surface: #ffffff;
-      --primary: #6e56cf;
-      --primary-hover: #5a3fba;
-      --text: #1a1a2e;
-      --text-2: #4a4a5a;
-      --text-3: #7a7a8a;
-      --border: #e2e4e9;
-      --radius: 16px;
+      --bg-body: #0F0F1A;
+      --bg-surface: #16162A;
+      --bg-surface-2: #1E1E3A;
+      --primary: #06B6D4;
+      --violet: #818CF8;
+      --indigo: #6366F1;
+      --grad: linear-gradient(135deg, #818CF8 0%, #06B6D4 100%);
+      --text-1: #f8fafc;
+      --text-2: #cbd5e1;
+      --text-3: #94a3b8;
+      --border: rgba(255, 255, 255, 0.1);
+      --glass: rgba(30, 27, 75, 0.6);
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg); color: var(--text); line-height: 1.5;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-2);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
+
+    /* Animated background orbs — same treatment as terms.html / privacy.html */
+    .orb { position: fixed; border-radius: 50%; z-index: -1; animation: float 20s infinite ease-in-out; }
+    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(129,140,248,0.25) 0%, transparent 70%); top: -150px; left: -150px; }
+    .orb-2 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(99,102,241,0.25) 0%, transparent 70%); bottom: -250px; right: -150px; animation-delay: -5s; }
+    .orb-3 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 70%); top: 40%; left: 60%; animation-delay: -10s; }
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0); }
+      33% { transform: translate(30px, -50px); }
+      66% { transform: translate(-20px, 40px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .orb { animation: none; }
+    }
+
     .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
 
-    /* Nav */
-    nav {
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 16px 0;
+    /* Nav — matches terms.html / privacy.html exactly */
+    .navbar {
+      position: fixed; top: 0; left: 0; width: 100%; height: 72px;
+      display: flex; align-items: center; padding: 0 5%;
+      background: rgba(10, 8, 25, 0.8); backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border); z-index: 100;
     }
-    nav .container { display: flex; align-items: center; justify-content: space-between; }
-    nav .logo { font-size: 1.3rem; font-weight: 700; color: var(--primary); text-decoration: none; }
-    nav .nav-links { display: flex; gap: 20px; align-items: center; }
-    nav .nav-links a { color: var(--text-2); text-decoration: none; font-size: 0.9rem; }
-    nav .nav-links a:hover { color: var(--text); }
-    .btn-ghost { padding: 8px 18px; border-radius: 8px; font-size: 0.875rem; font-weight: 500; color: var(--primary); border: 1px solid var(--primary); text-decoration: none; }
-    .btn-primary { padding: 8px 18px; border-radius: 8px; font-size: 0.875rem; font-weight: 500; color: #fff; background: var(--primary); border: none; text-decoration: none; }
-    .btn-primary:hover { background: var(--primary-hover); }
+    .logo {
+      display: inline-flex; align-items: center; gap: 12px;
+      color: var(--text-1); text-decoration: none; font-weight: 800;
+      font-size: 1.4rem; letter-spacing: 0.5px;
+    }
+    .logo img { flex-shrink: 0; }
+    .nav-links { margin-left: auto; display: flex; align-items: center; gap: 24px; }
+    .nav-links a { color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 0.95rem; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--text-1); }
+    .btn-ghost {
+      padding: 8px 18px; border-radius: 8px; font-size: 0.875rem; font-weight: 600;
+      color: var(--text-1); border: 1px solid var(--border); text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .btn-ghost:hover { border-color: var(--violet); background: rgba(255,255,255,0.04); }
+    .btn-primary {
+      padding: 8px 18px; border-radius: 8px; font-size: 0.875rem; font-weight: 600;
+      color: #0F0F1A; background: var(--grad); border: none; text-decoration: none;
+      display: inline-block; transition: filter 0.2s, transform 0.2s;
+    }
+    .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
 
     /* Hero */
-    .hero { text-align: center; padding: 80px 0 48px; }
-    .hero h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 12px; }
+    .hero { text-align: center; padding: 160px 0 56px; }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.2rem); font-weight: 800; margin-bottom: 14px; line-height: 1.15;
+      background: var(--grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
     .hero p { font-size: 1.1rem; color: var(--text-2); max-width: 560px; margin: 0 auto; }
 
     /* Plans grid */
-    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; padding-bottom: 80px; }
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; padding-bottom: 100px; }
     .plan-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px;
       padding: 32px 24px; display: flex; flex-direction: column;
-      transition: box-shadow 0.2s, transform 0.2s; position: relative;
+      transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s; position: relative;
     }
-    .plan-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.08); transform: translateY(-2px); }
-    .plan-card.highlighted { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), 0 8px 30px rgba(110,86,207,0.12); }
+    .plan-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.2); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+    .plan-card.highlighted { border-color: transparent; background: linear-gradient(var(--bg-surface), var(--bg-surface)) padding-box, var(--grad) border-box; border-width: 1px; border-style: solid; box-shadow: 0 20px 50px rgba(129,140,248,0.15); }
     .plan-card .badge {
-      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-      background: var(--primary); color: #fff; font-size: 0.75rem; font-weight: 600;
-      padding: 4px 14px; border-radius: 20px;
+      position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+      background: var(--grad); color: #0F0F1A; font-size: 0.75rem; font-weight: 700;
+      padding: 4px 14px; border-radius: 20px; letter-spacing: 0.02em;
     }
-    .plan-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
-    .plan-card .desc { font-size: 0.875rem; color: var(--text-3); margin-bottom: 16px; }
-    .plan-card .price { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; }
+    .plan-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; color: var(--text-1); }
+    .plan-card .desc { font-size: 0.875rem; color: var(--text-3); margin-bottom: 16px; min-height: 1.3em; }
+    .plan-card .price { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; color: var(--text-1); }
     .plan-card .price span { font-size: 1rem; font-weight: 400; color: var(--text-3); }
     .plan-card .interval { font-size: 0.8rem; color: var(--text-3); margin-bottom: 20px; }
-    .plan-card ul { list-style: none; padding: 0; margin: 0 0 24px; flex: 1; }
-    .plan-card ul li { padding: 5px 0; font-size: 0.875rem; color: var(--text-2); }
-    .plan-card ul li::before { content: '✓ '; color: var(--primary); font-weight: 600; }
-    .plan-card .btn-primary { display: block; text-align: center; width: 100%; padding: 12px; font-size: 1rem; }
-    .plan-card .btn-ghost { display: block; text-align: center; width: 100%; padding: 12px; font-size: 1rem; }
+    .plan-card ul { list-style: none; margin: 0 0 24px; flex: 1; }
+    .plan-card ul li { padding: 6px 0; font-size: 0.875rem; color: var(--text-2); display: flex; gap: 8px; align-items: flex-start; }
+    .plan-card ul li::before { content: '✓'; color: var(--primary); font-weight: 700; flex-shrink: 0; }
+    .plan-card .cta { display: block; text-align: center; width: 100%; padding: 12px; font-size: 1rem; }
     .plan-card .price-note { font-size: 0.75rem; color: var(--text-3); margin-top: 8px; text-align: center; }
 
-    /* Footer */
-    footer { text-align: center; padding: 32px 0; color: var(--text-3); font-size: 0.8rem; border-top: 1px solid var(--border); }
+    /* Footer — matches terms.html / privacy.html */
+    footer { text-align: center; padding: 40px 0; color: var(--text-3); font-size: 0.85rem; border-top: 1px solid var(--border); }
+    footer a { color: var(--text-3); text-decoration: none; }
+    footer a:hover { color: var(--text-1); }
 
     /* Loading/error */
-    .loading { text-align: center; padding: 60px 0; color: var(--text-3); }
-    .error { text-align: center; padding: 60px 0; color: #e53e3e; }
+    .loading, .error { text-align: center; padding: 60px 0; color: var(--text-3); font-size: 0.95rem; }
+    .error { color: #FB7185; }
 
     @media (max-width: 640px) {
-      .hero h1 { font-size: 1.8rem; }
+      .hero { padding: 120px 0 40px; }
       .plans { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <nav>
-    <div class="container">
-      <a href="/" class="logo">Velync</a>
-      <div class="nav-links">
-        <a href="/pricing.html">Pricing</a>
-        <a href="/" class="btn-ghost">Sign In</a>
-      </div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <nav class="navbar">
+    <a href="/" class="logo">
+      <img src="/velync-logo.svg" width="32" height="32" alt="" />
+      Velync
+    </a>
+    <div class="nav-links">
+      <a href="/terms.html">Terms</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/" class="btn-ghost">Sign In</a>
     </div>
   </nav>
 
@@ -105,17 +164,24 @@
   </div>
 
   <footer>
-    <div class="container">© 2026 Velync. <a href="/terms.html" style="color:var(--text-3);">Terms</a> · <a href="/privacy.html" style="color:var(--text-3);">Privacy</a></div>
+    <div class="container">
+      © 2026 Velync · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a>
+    </div>
   </footer>
 
   <script>
     (async () => {
       const container = document.getElementById('plans-container');
+
+      function escHtml(s) {
+        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+
       try {
         const res = await fetch('/api/plans');
         const data = await res.json();
         if (!data.success || !data.plans.length) {
-          container.innerHTML = '<div class="error">No plans available.</div>';
+          container.innerHTML = '<div class="error">No plans available right now. Please check back shortly.</div>';
           return;
         }
 
@@ -129,25 +195,20 @@
             'Connectors: ' + (p.connectorTiers || ['basic']).join(', '),
             ...(p.features || []),
           ];
-          const btn = p.priceMonthly > 0
-            ? '<a href="/?signup=true" class="btn-primary">Get Started</a>'
-            : '<a href="/?signup=true" class="btn-ghost">Start Free</a>';
+          const btnClass = p.priceMonthly > 0 ? 'btn-primary' : 'btn-ghost';
+          const btnLabel = p.priceMonthly > 0 ? 'Get Started' : 'Start Free';
 
           return `<div class="plan-card${p.highlighted ? ' highlighted' : ''}">` +
-            (p.highlighted ? '<div class="badge">Popular</div>' : '') +
+            (p.highlighted ? '<div class="badge">Most Popular</div>' : '') +
             `<h3>${escHtml(p.name)}</h3>` +
-            (p.description ? `<p class="desc">${escHtml(p.description)}</p>` : '') +
+            `<p class="desc">${p.description ? escHtml(p.description) : ''}</p>` +
             `<div class="price">${monthly}<span>${p.priceMonthly > 0 ? '/mo' : ''}</span></div>` +
             '<ul>' + features.map(f => `<li>${escHtml(f)}</li>`).join('') + '</ul>' +
-            btn +
+            `<a href="/?signup=true" class="cta ${btnClass}">${btnLabel}</a>` +
             '</div>';
         }).join('') + '</div>';
       } catch (err) {
         container.innerHTML = '<div class="error">Failed to load pricing. Please try again later.</div>';
-      }
-
-      function escHtml(s) {
-        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       }
     })();
   </script>

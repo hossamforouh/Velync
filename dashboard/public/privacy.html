@@ -4,26 +4,31 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Privacy Policy | Velync</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <meta name="description" content="How Velync collects, uses, and protects your data when syncing between the platforms you connect.">
+  <link rel="icon" type="image/png" href="velync-logo.png?v=2" />
+  <!-- Brand tokens match dashboard/public/style.css exactly (Inter font,
+       --violet #818CF8, --bg #0F0F1A) so this page reads as the same
+       product as the app and landing page, not a different template. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-body: #0a0819;
-      --bg-surface: #1e1b4b;
-      --bg-surface-hover: #2e2a5c;
-      --primary: #06b6d4;
-      --violet: #8b5cf6;
-      --indigo: #4f46e5;
+      --bg-body: #0F0F1A;
+      --bg-surface: #16162A;
+      --bg-surface-hover: #1E1E3A;
+      --primary: #06B6D4;
+      --violet: #818CF8;
+      --indigo: #6366F1;
       --text-1: #f8fafc;
       --text-2: #cbd5e1;
       --text-3: #94a3b8;
       --border: rgba(255, 255, 255, 0.1);
       --glass: rgba(30, 27, 75, 0.6);
     }
-    
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    
+
     body {
-      font-family: 'Outfit', -apple-system, sans-serif;
+      font-family: 'Inter', -apple-system, sans-serif;
       background: var(--bg-body);
       color: var(--text-2);
       line-height: 1.7;
@@ -38,8 +43,8 @@
       z-index: -1;
       animation: float 20s infinite ease-in-out;
     }
-    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(139,92,246,0.25) 0%, transparent 70%); top: -150px; left: -150px; animation-delay: 0s; }
-    .orb-2 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(79,70,229,0.25) 0%, transparent 70%); bottom: -250px; right: -150px; animation-delay: -5s; }
+    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(129,140,248,0.25) 0%, transparent 70%); top: -150px; left: -150px; animation-delay: 0s; }
+    .orb-2 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(99,102,241,0.25) 0%, transparent 70%); bottom: -250px; right: -150px; animation-delay: -5s; }
     .orb-3 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 70%); top: 40%; left: 60%; animation-delay: -10s; }
 
     @keyframes float {
@@ -72,10 +77,13 @@
       font-size: 1.4rem;
       letter-spacing: 0.5px;
     }
-    .logo svg { flex-shrink: 0; }
-    
+    .logo img { flex-shrink: 0; }
+
     .nav-links {
       margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 24px;
     }
     .nav-links a {
       color: var(--text-2);
@@ -106,7 +114,7 @@
     h1 {
       font-size: clamp(2.5rem, 5vw, 4rem);
       font-weight: 800;
-      background: linear-gradient(135deg, #a78bfa, #22d3ee);
+      background: linear-gradient(135deg, #818CF8, #06B6D4);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -248,14 +256,12 @@
   <!-- Navbar -->
   <nav class="navbar">
     <a href="/" class="logo">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-        <rect width="32" height="32" rx="8" fill="url(#g)"/>
-        <path d="M8 9l8 14 8-14" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-        <defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#8b5cf6"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
-      </svg>
+      <img src="/velync-logo.svg" width="32" height="32" alt="" />
       Velync
     </a>
     <div class="nav-links">
+      <a href="/pricing.html">Pricing</a>
+      <a href="/terms.html">Terms</a>
       <a href="/">&larr; Back to App</a>
     </div>
   </nav>
