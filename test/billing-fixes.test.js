@@ -148,6 +148,24 @@ describe('create-checkout-session sends the customer\'s real name to Lemon Squee
     assert.strictEqual(lastCreateCheckoutArgs.name, 'Owner Name');
     assert.strictEqual(lastCreateCheckoutArgs.email, `${OWNER_UID}@billingtest.com`);
   });
+
+  it('falls back to the email local-part when the account has no display name (avoids the "H" placeholder)', async () => {
+    const uid = 'billing-test-noname-owner';
+    const wsId = 'billing-test-noname-ws';
+    // No `name` field on this user doc at all.
+    await db.collection('users').doc(uid).set({ workspaceId: wsId, email: 'hossamforouh@billingtest.com' });
+    await db.collection('workspaces').doc(wsId).set({ ownerId: uid, members: [uid], planId: 'free' });
+
+    currentUid = uid;
+    lastCreateCheckoutArgs = null;
+    const { status } = await apiFetch('/api/billing/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify({ planId: 'pro' }),
+    });
+    assert.strictEqual(status, 200);
+    // Must be the full local-part, never a single-letter placeholder.
+    assert.strictEqual(lastCreateCheckoutArgs.name, 'hossamforouh');
+  });
 });
 
 describe('billing routes restricted to the workspace owner', () => {
@@ -218,9 +236,17 @@ describe('create-checkout-session swaps variant in place instead of creating a d
     assert.strictEqual(status, 200);
     assert.strictEqual(body.updated, true);
     assert.strictEqual(body.url, undefined);
+    assert.strictEqual(body.planId, 'business');
 
     const sub = fakeSubscriptions.get(subId);
     assert.strictEqual(sub.attributes.variant_id, 1002);
+
+    // The workspace's planId must be updated optimistically in the same
+    // request so the Billing tab's immediate re-fetch reflects the new plan,
+    // rather than waiting for the async subscription_updated webhook.
+    const wsAfter = (await db.collection('workspaces').doc(wsId).get()).data();
+    assert.strictEqual(wsAfter.planId, 'business');
+    assert.strictEqual(wsAfter.cancelAtPeriodEnd, false);
   });
 });
 

@@ -5,6 +5,16 @@ import { updatePlanBadge } from './plan-badge.js';
 
 let firestoreDb = null;
 let auth = null;
+// Guards every subscription-mutating action (checkout swap / downgrade / undo)
+// so a second click while the first request is still in flight can't fire a
+// duplicate call to Lemon Squeezy (which was producing repeated plan changes).
+let billingActionInFlight = false;
+
+function setBillingButtonsDisabled(disabled) {
+  document
+    .querySelectorAll('#billing-checkout-area button, #billing-subscription-area button')
+    .forEach((b) => { b.disabled = disabled; });
+}
 
 export async function initBilling(dbInstance, authInstance) {
   firestoreDb = dbInstance;
@@ -87,7 +97,7 @@ export async function initBilling(dbInstance, authInstance) {
       document.getElementById('btn-manage-billing')?.addEventListener('click', openPortal);
       document.getElementById('btn-undo-downgrade')?.addEventListener('click', (e) => {
         e.preventDefault();
-        setDowngrade(true);
+        setDowngrade(true, e.currentTarget);
       });
     } else if (plan.priceMonthly === 0) {
       subArea.innerHTML = `
@@ -179,15 +189,20 @@ export async function initBilling(dbInstance, authInstance) {
     }
     checkoutArea.innerHTML = checkoutHtml;
     checkoutArea.querySelectorAll('.checkout-btn').forEach(btn => {
-      btn.addEventListener('click', () => startCheckout(btn.dataset.plan));
+      btn.addEventListener('click', () => startCheckout(btn.dataset.plan, btn));
     });
-    document.getElementById('btn-downgrade-free')?.addEventListener('click', () => setDowngrade(false));
+    document.getElementById('btn-downgrade-free')?.addEventListener('click', (e) => setDowngrade(false, e.currentTarget));
   } catch (err) {
     display.innerHTML = '<div style="color:var(--rose);font-size:0.9rem;">Error: ' + err.message + '</div>';
   }
 }
 
-async function startCheckout(planId) {
+async function startCheckout(planId, btn) {
+  if (billingActionInFlight) return;
+  billingActionInFlight = true;
+  const originalText = btn ? btn.textContent : '';
+  if (btn) btn.textContent = 'Processing…';
+  setBillingButtonsDisabled(true);
   try {
     const token = await auth.currentUser.getIdToken();
     const res = await fetch('/api/billing/create-checkout-session', {
@@ -198,19 +213,29 @@ async function startCheckout(planId) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Checkout failed');
     if (data.url) {
+      // Redirecting to Lemon Squeezy's hosted checkout — leave the buttons
+      // disabled through navigation so they can't be re-clicked mid-redirect.
       window.location.href = data.url;
+      return;
     } else if (data.updated) {
-      // Existing subscription's price was swapped in place — no redirect.
+      // Existing subscription's price was swapped in place — no redirect. The
+      // backend already optimistically updated planId, so this re-fetch shows
+      // the new plan immediately.
       showToast('Plan updated', 'success');
       if (window.__setViewCache) window.__setViewCache('billing-plans', null);
-      initBilling(firestoreDb, auth);
+      await initBilling(firestoreDb, auth); // rebuilds the buttons
     }
   } catch (err) {
     showToast('Failed to start checkout: ' + err.message, 'error');
+    if (btn && document.body.contains(btn)) btn.textContent = originalText;
+    setBillingButtonsDisabled(false);
+  } finally {
+    billingActionInFlight = false;
   }
 }
 
-async function setDowngrade(undo) {
+async function setDowngrade(undo, btn) {
+  if (billingActionInFlight) return;
   if (!undo) {
     const confirmed = await confirmDialog({
       title: 'Downgrade to Free?',
@@ -220,6 +245,8 @@ async function setDowngrade(undo) {
     });
     if (!confirmed) return;
   }
+  billingActionInFlight = true;
+  setBillingButtonsDisabled(true);
   try {
     const token = await auth.currentUser.getIdToken();
     const res = await fetch('/api/billing/downgrade-to-free', {
@@ -230,13 +257,19 @@ async function setDowngrade(undo) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to update subscription');
     showToast(undo ? 'Downgrade canceled — you\'re keeping your plan' : 'Scheduled downgrade to Free', 'success');
-    initBilling(firestoreDb, auth);
+    await initBilling(firestoreDb, auth); // rebuilds the buttons
   } catch (err) {
     showToast('Failed to update subscription: ' + err.message, 'error');
+    setBillingButtonsDisabled(false);
+  } finally {
+    billingActionInFlight = false;
   }
 }
 
 async function openPortal() {
+  if (billingActionInFlight) return;
+  billingActionInFlight = true;
+  setBillingButtonsDisabled(true);
   try {
     const token = await auth.currentUser.getIdToken();
     const res = await fetch('/api/billing/create-portal-session', {
@@ -245,9 +278,16 @@ async function openPortal() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Portal session failed');
-    if (data.url) window.location.href = data.url;
+    if (data.url) {
+      window.location.href = data.url; // leaving the page — keep buttons disabled
+      return;
+    }
+    setBillingButtonsDisabled(false);
   } catch (err) {
     showToast('Failed to open billing portal: ' + err.message, 'error');
+    setBillingButtonsDisabled(false);
+  } finally {
+    billingActionInFlight = false;
   }
 }
 

@@ -143,7 +143,12 @@ router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy,
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const userEmail = userDoc.exists ? userDoc.data().email : null;
-    const userName = userDoc.exists ? userDoc.data().name : null;
+    // Fall back to the email's local-part when no display name is on file.
+    // Without this, an account with an empty `name` sends no name to Lemon
+    // Squeezy, which then derives a single-letter placeholder ("H" from
+    // "hossam…@…") for the customer record instead of a real name.
+    const rawName = (userDoc.exists ? userDoc.data().name : '') || '';
+    const userName = rawName.trim() || (userEmail ? userEmail.split('@')[0] : null);
     const workspaceId = userDoc.exists ? userDoc.data().workspaceId : null;
     if (!workspaceId) return res.status(400).json({ error: 'No workspace found' });
 
@@ -161,8 +166,18 @@ router.post('/billing/create-checkout-session', verifyAuth, requireLemonSqueezy,
     if (ws.lsSubscriptionId) {
       const existing = await ls.getSubscription(ws.lsSubscriptionId);
       if (existing && existing.attributes.status !== 'expired' && existing.attributes.status !== 'cancelled') {
-        await ls.updateSubscriptionVariant(ws.lsSubscriptionId, variantId);
-        return res.json({ success: true, updated: true });
+        const updated = await ls.updateSubscriptionVariant(ws.lsSubscriptionId, variantId);
+        // Optimistically reflect the new plan in Firestore right away so the
+        // Billing tab's immediate re-fetch shows the change, instead of the
+        // stale old plan until the async subscription_updated webhook lands.
+        // The webhook still fires and reconciles this write (idempotent).
+        await wsDoc.ref.set({
+          planId,
+          currentPeriodEnd: updated?.attributes?.renews_at || ws.currentPeriodEnd || null,
+          cancelAtPeriodEnd: false,
+        }, { merge: true });
+        logger.info('billing', `Workspace "${workspaceId}" swapped variant in place → ${planId}`, { user: req.user.uid });
+        return res.json({ success: true, updated: true, planId });
       }
     }
 
