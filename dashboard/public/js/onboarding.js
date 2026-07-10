@@ -2,10 +2,16 @@
  * Onboarding wizard — guides new users through first config creation.
  * Replaces the simple "No Flows Found" empty state with a step-by-step flow.
  */
+import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { initiateDirectOAuthFlow, connections } from './connections.js';
 
 let currentStep = 1;
 let onboardState = { p1: null, p2: null, connection1: null, connection2: null };
 let listenerCleanups = [];
+// Populated once from Firestore (see loadPlatforms) — step 3 looks the full
+// doc up by id here to pass into initiateDirectOAuthFlow, since onboardState
+// only stores the plain id string (sync-configs expects a string platform key).
+let cachedPlatforms = [];
 
 export function initOnboarding(db, auth, onComplete) {
   cleanup();
@@ -87,19 +93,27 @@ function renderStep1() {
   `;
 }
 
+// The `platforms` collection is directly Firestore-readable by any
+// authenticated user (see firestore.rules) — there is no
+// `GET /api/platforms` backend route, and there never has been one; every
+// other page that lists platforms (e.g. connections.js) already reads
+// Firestore directly instead of going through a REST call.
+async function loadPlatforms(db) {
+  if (cachedPlatforms.length) return cachedPlatforms;
+  const snap = await getDocs(collection(db, 'platforms'));
+  cachedPlatforms = [];
+  snap.forEach(d => cachedPlatforms.push({ id: d.id, ...d.data() }));
+  return cachedPlatforms;
+}
+
 async function bindStep1(db, auth, onComplete) {
   const list = document.getElementById('step1-connection-list');
   const nextBtn = document.getElementById('btn-step1-next');
   if (!list) return;
 
   try {
-    const token = await auth.currentUser.getIdToken();
-    const res = await fetch('/api/platforms', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    const platforms = await res.json();
-    const active = (Array.isArray(platforms) ? platforms : platforms.platforms || [])
-      .filter(p => p.isActive !== false);
+    const platforms = await loadPlatforms(db);
+    const active = platforms.filter(p => p.isActive !== false);
 
     list.innerHTML = active.map(p => `
       <div class="onboarding-card onboarding-platform" data-platform="${p.id || p.key}" data-name="${escHtml(p.name || p.id)}" style="display:flex;align-items:center;gap:12px;padding:14px 18px;">
@@ -156,13 +170,8 @@ async function bindStep2(db, auth, onComplete) {
   if (!list) return;
 
   try {
-    const token = await auth.currentUser.getIdToken();
-    const res = await fetch('/api/platforms', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    const platforms = await res.json();
-    const filtered = (Array.isArray(platforms) ? platforms : platforms.platforms || [])
-      .filter(p => (p.id || p.key) !== onboardState.p1 && p.isActive !== false);
+    const platforms = await loadPlatforms(db);
+    const filtered = platforms.filter(p => p.id !== onboardState.p1 && p.isActive !== false);
 
     list.innerHTML = filtered.map(p => `
       <div class="onboarding-card onboarding-platform" data-platform="${p.id || p.key}" data-name="${escHtml(p.name || p.id)}" style="display:flex;align-items:center;gap:12px;padding:14px 18px;">
@@ -236,45 +245,11 @@ async function bindStep3(db, auth, onComplete) {
   const finishBtn = document.getElementById('btn-step3-finish');
 
   if (btn1) {
-    btn1.addEventListener('click', async () => {
-      btn1.disabled = true;
-      btn1.textContent = 'Connecting…';
-      try {
-        const token = await auth.currentUser.getIdToken();
-        const win = window.open(`/api/auth/${onboardState.p1}?token=${token}&mode=popup`, 'oauth', 'width=600,height=700');
-        const result = await waitForOAuth();
-        onboardState.connection1 = result.connectionId;
-        document.getElementById('step3-status-1').textContent = `✓ Connected (${escHtml(result.label || '')})`;
-        document.getElementById('step3-status-1').style.color = 'var(--green)';
-        btn1.style.display = 'none';
-        checkStep3Ready(finishBtn);
-      } catch (err) {
-        document.getElementById('step3-status-1').textContent = '✗ Connection failed: ' + err.message;
-        btn1.disabled = false;
-        btn1.textContent = 'Retry';
-      }
-    });
+    btn1.addEventListener('click', () => connectPlatform(1, btn1, finishBtn));
   }
 
   if (btn2) {
-    btn2.addEventListener('click', async () => {
-      btn2.disabled = true;
-      btn2.textContent = 'Connecting…';
-      try {
-        const token = await auth.currentUser.getIdToken();
-        const win = window.open(`/api/auth/${onboardState.p2}?token=${token}&mode=popup`, 'oauth', 'width=600,height=700');
-        const result = await waitForOAuth();
-        onboardState.connection2 = result.connectionId;
-        document.getElementById('step3-status-2').textContent = `✓ Connected (${escHtml(result.label || '')})`;
-        document.getElementById('step3-status-2').style.color = 'var(--green)';
-        btn2.style.display = 'none';
-        checkStep3Ready(finishBtn);
-      } catch (err) {
-        document.getElementById('step3-status-2').textContent = '✗ Connection failed: ' + err.message;
-        btn2.disabled = false;
-        btn2.textContent = 'Retry';
-      }
-    });
+    btn2.addEventListener('click', () => connectPlatform(2, btn2, finishBtn));
   }
 
   if (backBtn) {
@@ -321,23 +296,88 @@ function checkStep3Ready(finishBtn) {
   }
 }
 
-async function waitForOAuth() {
+// Reuses the exact OAuth popup flow the Connections page already relies on
+// (connections.js#initiateDirectOAuthFlow) instead of the old direct
+// `window.open('/api/auth/...')` call, which pointed at a route that has
+// never existed in this backend — every real OAuth-initiation path in this
+// app goes through the platform's own authUrl, built client-side.
+async function connectPlatform(stepNum, btn, finishBtn) {
+  const platformId = stepNum === 1 ? onboardState.p1 : onboardState.p2;
+  const statusEl = document.getElementById(`step3-status-${stepNum}`);
+  const platform = cachedPlatforms.find(p => p.id === platformId);
+  if (!platform) {
+    if (statusEl) statusEl.textContent = '✗ Platform not found — please go back and re-select it.';
+    return;
+  }
+
+  // Manual/API-key platforms (no authUrl) have no popup flow to drive from
+  // here — direct the user to the full Connections page rather than hang on
+  // "Connecting…" indefinitely.
+  if (!platform.authType || platform.authType !== 'oauth' || !platform.authUrl) {
+    if (statusEl) statusEl.innerHTML = `${escHtml(platform.name)} isn't an OAuth connection — add it from the <strong>Connections</strong> page, then come back and finish this sync from the Flows tab.`;
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+
+  const baseLabel = 'My ' + (platform.name || platformId);
+  const existingLabels = connections.map(c => c.label).filter(Boolean);
+  let label = baseLabel;
+  let idx = 1;
+  while (existingLabels.includes(label)) {
+    idx++;
+    label = `${baseLabel} (${idx})`;
+  }
+
+  try {
+    const opened = await initiateDirectOAuthFlow(platform, label);
+    if (!opened) throw new Error('Could not open the connection popup — check your popup blocker and try again.');
+
+    const result = await waitForConnectionRefresh(platformId);
+    if (stepNum === 1) onboardState.connection1 = result.connectionId;
+    else onboardState.connection2 = result.connectionId;
+
+    if (statusEl) {
+      statusEl.textContent = `✓ Connected (${escHtml(result.label || label)})`;
+      statusEl.style.color = 'var(--green)';
+    }
+    btn.style.display = 'none';
+    checkStep3Ready(finishBtn);
+  } catch (err) {
+    if (statusEl) statusEl.textContent = '✗ Connection failed: ' + err.message;
+    btn.disabled = false;
+    btn.textContent = 'Retry';
+  }
+}
+
+// initiateDirectOAuthFlow() (connections.js) dispatches a window
+// 'connections-refreshed' CustomEvent once the popup's OAuth exchange
+// finishes — { detail: { newConnectionId, platformId } } on success, or no
+// detail at all if the popup was closed/failed before completing.
+async function waitForConnectionRefresh(expectedPlatformId) {
   return new Promise((resolve, reject) => {
     const handler = (event) => {
-      if (event.data?.type === 'oauth-success') {
-        window.removeEventListener('message', handler);
-        resolve(event.data);
-      } else if (event.data?.type === 'oauth-error') {
-        window.removeEventListener('message', handler);
-        reject(new Error(event.data.error || 'OAuth failed'));
+      const detail = event.detail;
+      if (detail && detail.newConnectionId && detail.platformId === expectedPlatformId) {
+        window.removeEventListener('connections-refreshed', handler);
+        const conn = connections.find(c => c.id === detail.newConnectionId);
+        resolve({ connectionId: detail.newConnectionId, label: conn?.label });
+      } else {
+        // Any other 'connections-refreshed' firing while we're waiting means
+        // this attempt didn't produce our connection (popup closed, wrong
+        // platform, or the exchange failed) — treat it as a failure rather
+        // than hanging forever.
+        window.removeEventListener('connections-refreshed', handler);
+        reject(new Error('OAuth was not completed'));
       }
     };
-    window.addEventListener('message', handler);
-    listenerCleanups.push(() => window.removeEventListener('message', handler));
+    window.addEventListener('connections-refreshed', handler);
+    listenerCleanups.push(() => window.removeEventListener('connections-refreshed', handler));
 
     // Timeout after 5 minutes
     setTimeout(() => {
-      window.removeEventListener('message', handler);
+      window.removeEventListener('connections-refreshed', handler);
       reject(new Error('OAuth timed out'));
     }, 300000);
   });
