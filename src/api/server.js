@@ -20,6 +20,7 @@ const adminPlatformsRoutes = require('./routes/admin-platforms');
 const adminIntegrationsRoutes = require('./routes/admin-integrations');
 const billingRoutes = require('./routes/billing');
 const publicPlansRoutes = require('./routes/public-plans');
+const publicMarketplaceRoutes = require('./routes/public-marketplace');
 const internalRoutes = require('./routes/internal');
 const usageRoutes = require('./routes/usage');
 const adminUsageRoutes = require('./routes/admin-usage');
@@ -128,6 +129,7 @@ function createApp() {
   app.use('/api', adminIntegrationsRoutes);
   app.use('/api', billingRoutes);
   app.use('/api', publicPlansRoutes);
+  app.use('/api', publicMarketplaceRoutes);
   app.use('/api', internalRoutes);
   app.use('/api', usageRoutes);
   app.use('/api', adminUsageRoutes);

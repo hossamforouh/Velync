@@ -20,6 +20,8 @@ const assert = require('node:assert');
 const TEST_UID = 'sync-cfg-test-user';
 const WORKSPACE_ID = 'sync-cfg-test-ws';
 
+let currentUid = TEST_UID;
+
 const authPath = require.resolve('../src/api/middleware/auth');
 require.cache[authPath] = {
   id: authPath,
@@ -27,7 +29,7 @@ require.cache[authPath] = {
   loaded: true,
   exports: {
     verifyAuth: (req, res, next) => {
-      req.user = { uid: TEST_UID, email: 'user@synccfgtest.com' };
+      req.user = { uid: currentUid, email: `${currentUid}@synccfgtest.com` };
       next();
     },
   },
@@ -197,5 +199,91 @@ describe('enforceTotalConfigCap', () => {
       () => enforceTotalConfigCap(capWs),
       /maximum of 200 sync configs/
     );
+  });
+});
+
+describe('GET /sync-configs (list) and GET /sync-configs/:id (single)', () => {
+  const OTHER_UID = 'sync-cfg-other-user';
+  const OTHER_WS = 'sync-cfg-other-ws';
+
+  before(async () => {
+    await db.collection('users').doc(OTHER_UID).set({ workspaceId: OTHER_WS });
+    await db.collection('workspaces').doc(OTHER_WS).set({ planId: 'free', ownerId: OTHER_UID, members: [] });
+    await db.collection('plans').doc('free').set({ name: 'Free', maxActiveConfigs: 1, minSyncIntervalMinutes: 60, connectorTiers: ['basic'] });
+  });
+
+  after(() => { currentUid = TEST_UID; });
+
+  it('list returns an empty array for a workspace with no configs', async () => {
+    currentUid = OTHER_UID;
+    const { status, body } = await apiFetch('/api/sync-configs');
+    assert.strictEqual(status, 200);
+    assert.deepStrictEqual(body.items, []);
+  });
+
+  it('list returns configs belonging to the caller\'s own workspace only (cross-workspace isolation)', async () => {
+    currentUid = TEST_UID;
+    const created = await apiFetch('/api/sync-configs', {
+      method: 'POST',
+      body: JSON.stringify({ platform1: 'notion', platform2: 'ticktick', platform1ConnectionId: 'c1', platform2ConnectionId: 'c2', status: 'draft' }),
+    });
+    assert.strictEqual(created.status, 201);
+
+    const mine = await apiFetch('/api/sync-configs');
+    assert.strictEqual(mine.status, 200);
+    assert.ok(mine.body.items.some(c => c.id === created.body.id));
+
+    currentUid = OTHER_UID;
+    const theirs = await apiFetch('/api/sync-configs');
+    assert.strictEqual(theirs.status, 200);
+    assert.ok(!theirs.body.items.some(c => c.id === created.body.id), "other workspace's list must not include this config");
+  });
+
+  it('list supports ?status= filtering (matches hub.js\'s existing active-only query)', async () => {
+    currentUid = TEST_UID;
+    const draft = await apiFetch('/api/sync-configs', {
+      method: 'POST',
+      body: JSON.stringify({ platform1: 'notion', platform2: 'ticktick', platform1ConnectionId: 'c1', platform2ConnectionId: 'c2', status: 'draft' }),
+    });
+    const { status, body } = await apiFetch('/api/sync-configs?status=draft');
+    assert.strictEqual(status, 200);
+    assert.ok(body.items.every(c => c.status === 'draft'));
+    assert.ok(body.items.some(c => c.id === draft.body.id));
+  });
+
+  it('list rejects an invalid ?status= value', async () => {
+    currentUid = TEST_UID;
+    const { status, body } = await apiFetch('/api/sync-configs?status=bogus');
+    assert.strictEqual(status, 400);
+    assert.ok(body.error);
+  });
+
+  it('single fetch returns the config for its own workspace', async () => {
+    currentUid = TEST_UID;
+    const created = await apiFetch('/api/sync-configs', {
+      method: 'POST',
+      body: JSON.stringify({ platform1: 'notion', platform2: 'ticktick', platform1ConnectionId: 'c1', platform2ConnectionId: 'c2', status: 'draft' }),
+    });
+    const { status, body } = await apiFetch(`/api/sync-configs/${created.body.id}`);
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.item.id, created.body.id);
+    assert.strictEqual(body.item.workspaceId, WORKSPACE_ID);
+  });
+
+  it('single fetch 404s for a config belonging to a different workspace', async () => {
+    currentUid = TEST_UID;
+    const created = await apiFetch('/api/sync-configs', {
+      method: 'POST',
+      body: JSON.stringify({ platform1: 'notion', platform2: 'ticktick', platform1ConnectionId: 'c1', platform2ConnectionId: 'c2', status: 'draft' }),
+    });
+    currentUid = OTHER_UID;
+    const { status } = await apiFetch(`/api/sync-configs/${created.body.id}`);
+    assert.strictEqual(status, 404);
+  });
+
+  it('single fetch 404s for a nonexistent config id', async () => {
+    currentUid = TEST_UID;
+    const { status } = await apiFetch('/api/sync-configs/does-not-exist');
+    assert.strictEqual(status, 404);
   });
 });

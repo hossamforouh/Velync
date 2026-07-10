@@ -27,6 +27,11 @@ router.get('/plans', async (req, res) => {
         connectorTiers: d.connectorTiers || ['basic'],
         features: d.features || [],
         highlighted: !!d.highlighted,
+        isActive: d.isActive !== false,
+        sortOrder: d.sortOrder,
+        // Not a secret — a Lemon Squeezy variant ID, needed by billing.js to
+        // decide which plans can show a checkout button.
+        lsVariantIdMonthly: d.lsVariantIdMonthly || null,
       });
     });
 

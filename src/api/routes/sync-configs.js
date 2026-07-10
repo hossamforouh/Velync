@@ -115,6 +115,57 @@ router.post('/suggest-mappings', verifyAuth, suggestLimiter, [
   }
 });
 
+// ─── List sync configs for the caller's workspace ──────────────
+// Was previously a raw client-side Firestore read from both the Flows page
+// (app.js's loadConfigs) and the Marketplace view (hub.js) — consolidated
+// here so both go through one server-mediated path instead of duplicating
+// the same collection read (and so it can be tightened/paginated later
+// without touching two separate frontend files). ?status= mirrors hub.js's
+// existing filtered query (it only wants status=='active' for its
+// "already connected" check).
+router.get('/sync-configs', verifyAuth, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const ctx = await resolveWorkspacePlan(uid);
+    if (ctx.error) return res.status(404).json({ error: ctx.error });
+
+    let query = db.collection('workspaces').doc(ctx.workspaceId).collection('sync_configs');
+    const { status } = req.query;
+    if (status) {
+      if (!['draft', 'active', 'paused'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status filter' });
+      }
+      query = query.where('status', '==', status);
+    }
+
+    const snap = await query.get();
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return res.json({ success: true, items });
+  } catch (err) {
+    logger.error('sync-configs', 'Failed to list configs', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Fetch a single sync config ─────────────────────────────────
+router.get('/sync-configs/:configId', verifyAuth, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { configId } = req.params;
+    const ctx = await resolveWorkspacePlan(uid);
+    if (ctx.error) return res.status(404).json({ error: ctx.error });
+
+    const snap = await db.collection('workspaces').doc(ctx.workspaceId)
+      .collection('sync_configs').doc(configId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Config not found' });
+
+    return res.json({ success: true, item: { id: snap.id, ...snap.data() } });
+  } catch (err) {
+    logger.error('sync-configs', 'Failed to fetch config', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Create a new sync config ─────────────────────────────────
 router.post('/sync-configs', verifyAuth, [
   body('description').optional().isString().trim(),
