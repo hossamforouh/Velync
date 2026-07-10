@@ -1119,24 +1119,27 @@ onAuthStateChanged(auth, async (user) => {
       const shouldLogLogin = !sessionStorage.getItem('velyncLoginLogged');
       if (shouldLogLogin) sessionStorage.setItem('velyncLoginLogged', '1');
 
-      // ensureUserDoc() must complete BEFORE anything that reports a usage
-      // event (user_login here; workspace_created inside ensureWorkspaceDoc
-      // below) — POST /api/usage/event derives workspaceId by reading
-      // users/{uid} server-side. On a brand-new signup that doc doesn't
-      // exist until ensureUserDoc() writes it; firing a usage event
-      // concurrently with that write (as this used to, via one big
-      // Promise.all) could race it and land before the doc exists — same
-      // race class as the GET /workspace/invites bug fixed earlier (see
-      // workspace.js). Sequencing this one call first costs one extra
-      // round-trip but removes the race outright.
+      // ensureUserDoc() then ensureWorkspaceDoc() must complete, IN THAT
+      // ORDER, before anything that depends on either doc existing:
+      //  - POST /api/usage/event (user_login / workspace_created) reads
+      //    users/{uid} server-side for workspaceId attribution.
+      //  - GET /api/billing/plan (loadAndApplyPlanBadge below) 404s if
+      //    workspaces/{id} doesn't exist yet.
+      // On a brand-new signup neither doc exists until these two writes
+      // land; running everything in one big Promise.all (as this used to)
+      // let those reads race the writes and lose — same bug class as the
+      // GET /workspace/invites fix (see workspace.js). Sequencing these two
+      // first costs two extra round-trips on a first-ever sign-in (existing
+      // users: two fast existence checks, not writes) but removes the race
+      // outright.
       await ensureUserDoc();
+      await ensureWorkspaceDoc();
 
-      // These four are independent of each other and of the ensureUserDoc()
-      // that already completed — run them concurrently rather than stacking
-      // round-trips serially, to cut time-to-usable-dashboard after sign-in.
+      // These three are independent of each other and of the two calls
+      // above that already completed — run them concurrently rather than
+      // stacking round-trips serially, to cut time-to-usable-dashboard.
       await Promise.all([
         checkSuperadmin(),
-        ensureWorkspaceDoc(),
         processPendingInvites(user), // hits the backend directly; bypasses Firestore rules
         loadAndApplyPlanBadge(auth), // shows the paid-plan crown badge on the avatar, if applicable
       ]);
