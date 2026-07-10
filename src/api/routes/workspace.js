@@ -253,9 +253,13 @@ router.get('/workspace/memberships', verifyAuth, async (req, res) => {
 
 router.get('/workspace/invites', verifyAuth, async (req, res) => {
   try {
-    const userDoc = await db.collection('users').doc(req.user.uid).get();
-    if (!userDoc.exists) return res.json({ success: true, invites: [] });
-    const email = userDoc.data().email;
+    // Use the verified ID token's email claim directly, NOT users/{uid} —
+    // that doc is created by the frontend's ensureUserDoc() concurrently with
+    // this call on first sign-in (see app.js's onAuthStateChanged Promise.all),
+    // so a brand-new signup could lose that race and read a not-yet-existing
+    // doc, silently returning no invites (fixed by a page refresh, since by
+    // then the doc existed — the actual bug this replaced).
+    const email = req.user.email;
     if (!email) return res.json({ success: true, invites: [] });
     const snap = await db.collection('workspaces')
       .where('invitedEmails', 'array-contains', email)

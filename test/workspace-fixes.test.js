@@ -259,3 +259,33 @@ describe('GET /workspace/:id/plan', () => {
     assert.strictEqual(status, 404);
   });
 });
+
+describe('GET /workspace/invites', () => {
+  it('returns pending invites using the token email, WITHOUT requiring users/{uid} to exist', async () => {
+    // Regression test: a brand-new signup's users/{uid} doc is created by the
+    // frontend's ensureUserDoc() concurrently with this call (Promise.all in
+    // app.js's onAuthStateChanged) — reading the invite email back out of
+    // users/{uid} could lose that race on first sign-in and silently return no
+    // invites (fixed only by a page refresh). The route must resolve the email
+    // from the verified ID token directly, so it works even with no users doc.
+    const freshUid = 'ws-test-brand-new-signup';
+    const freshEmail = 'brand-new-signup@wstest.com';
+    // Deliberately do NOT create users/{freshUid} — simulates the race.
+    const inviteWsId = 'ws-test-invite-target';
+    await db.collection('workspaces').doc(inviteWsId).set({
+      name: 'Invited Workspace', ownerId: OWNER_UID, members: [OWNER_UID], invitedEmails: [freshEmail],
+    });
+
+    asUser(freshUid, freshEmail);
+    const { status, body } = await apiFetch('/api/workspace/invites');
+    assert.strictEqual(status, 200);
+    assert.ok(body.invites.some(w => w.id === inviteWsId), 'expected the pending invite to be returned even with no users/{uid} doc');
+  });
+
+  it('returns an empty list when there are no invites for the caller', async () => {
+    asUser(OTHER_UID, `${OTHER_UID}@wstest.com`);
+    const { status, body } = await apiFetch('/api/workspace/invites');
+    assert.strictEqual(status, 200);
+    assert.deepStrictEqual(body.invites, []);
+  });
+});
