@@ -695,6 +695,14 @@ function showPendingInvitesModal(invites, token) {
         if (!r.ok) throw new Error(d.error || 'Failed to join');
         showToast('Joined workspace', 'success');
         removeRow(btn.dataset.id);
+        // The workspace switcher dropdown is only ever populated once, right
+        // after sign-in (setupWorkspaceSwitcher() in onAuthStateChanged) — a
+        // workspace joined via this modal never appeared as an option until
+        // the next full page reload. Refresh it now so the newly-joined
+        // workspace is immediately selectable.
+        if (typeof setupWorkspaceSwitcher === 'function' && auth.currentUser) {
+          setupWorkspaceSwitcher(auth.currentUser).catch(err => console.error('Failed to refresh workspace switcher after join:', err));
+        }
       } catch (err) {
         showToast('Failed to join: ' + err.message, 'error');
         btn.disabled = false;
