@@ -11,7 +11,7 @@ const { describe, it, before } = require('node:test');
 const assert = require('node:assert');
 
 const db = require('../src/core/db');
-const { selectDueConfigs } = require('../src/domains/sync/dispatcher');
+const { selectDueConfigs, mapConcurrent } = require('../src/domains/sync/dispatcher');
 
 const NOW = new Date('2026-07-06T12:00:30.000Z');
 
@@ -39,5 +39,34 @@ describe('selectDueConfigs', () => {
     const never = due.find(d => d.configId === 'never');
     assert.ok(never);
     assert.strictEqual(never.config.status, 'active');
+  });
+});
+
+describe('mapConcurrent (bounded-parallel tick execution)', () => {
+  it('runs every item exactly once', async () => {
+    const items = Array.from({ length: 25 }, (_, i) => i);
+    const seen = [];
+    await mapConcurrent(items, 10, async (n) => { seen.push(n); });
+    assert.deepStrictEqual(seen.sort((a, b) => a - b), items);
+  });
+
+  it('never exceeds the concurrency limit of in-flight tasks', async () => {
+    const items = Array.from({ length: 30 }, (_, i) => i);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    await mapConcurrent(items, 5, async () => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise(r => setTimeout(r, 5));
+      inFlight--;
+    });
+    assert.ok(maxInFlight <= 5, `max in-flight was ${maxInFlight}, expected <= 5`);
+    assert.ok(maxInFlight > 1, 'expected genuine parallelism, not serial execution');
+  });
+
+  it('handles an empty list without spawning workers', async () => {
+    let called = false;
+    await mapConcurrent([], 10, async () => { called = true; });
+    assert.strictEqual(called, false);
   });
 });

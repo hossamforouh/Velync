@@ -54,17 +54,46 @@ async function selectDueConfigs(now = new Date()) {
   return due;
 }
 
+/** Max configs to execute in parallel within a single tick. */
+const DEFAULT_CONCURRENCY = 10;
+
+/**
+ * Run `fn` over `items` with at most `concurrency` in flight at once. A fixed
+ * pool of workers pulls from a shared cursor — bounded memory/connection use
+ * regardless of how many items are due. Never rejects: `fn` is expected to
+ * handle its own errors (see runDueConfigs). Pure/generic — unit-tested.
+ * @template T
+ * @param {T[]} items
+ * @param {number} concurrency
+ * @param {(item: T) => Promise<void>} fn
+ */
+async function mapConcurrent(items, concurrency, fn) {
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const item = items[cursor++];
+      await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: limit }, () => worker()));
+}
+
 /**
  * One scheduler tick: run every due config. runSync holds a distributed lease, so
  * overlapping ticks (or multiple instances) won't double-execute a config.
- * @param {Date} [now]
+ * Runs configs with bounded parallelism so a tick with many due configs finishes
+ * within a request window instead of serially (the previous behaviour would time
+ * out once enough configs came due at the same minute).
+ * @param {Date}   [now]
+ * @param {number} [concurrency]
  * @returns {Promise<{due: number, ran: number, errors: number}>}
  */
-async function runDueConfigs(now = new Date()) {
+async function runDueConfigs(now = new Date(), concurrency = DEFAULT_CONCURRENCY) {
   const due = await selectDueConfigs(now);
   let ran = 0;
   let errors = 0;
-  for (const { configId, config } of due) {
+  await mapConcurrent(due, concurrency, async ({ configId, config }) => {
     try {
       await runSync(config, configId);
       ran++;
@@ -72,9 +101,9 @@ async function runDueConfigs(now = new Date()) {
       errors++;
       logger.error('dispatcher', `Sync failed for "${configId}"`, { error: err.message });
     }
-  }
+  });
   logger.info('dispatcher', `Tick — ${due.length} due, ${ran} ran, ${errors} errored`);
   return { due: due.length, ran, errors };
 }
 
-module.exports = { isConfigDue, selectDueConfigs, runDueConfigs };
+module.exports = { isConfigDue, selectDueConfigs, runDueConfigs, mapConcurrent };

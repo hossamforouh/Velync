@@ -198,11 +198,15 @@ service cloud.firestore {
     }
 
     // ─── Activity logs ────────────────────────────────────────
+    // This is the platform-wide admin audit trail (admin emails + what each
+    // admin changed), surfaced only in the superadmin panel. Reads are
+    // superadmin-only: `if request.auth != null` previously let ANY signed-in
+    // user read every tenant's admin activity. Writes are Admin-SDK-only (see
+    // src/core/activityLog.js) — client-side logging was retired because it was
+    // trivially spoofable (any authed user could forge audit entries).
     match /activity_logs/{logId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.keys().hasAny(['action', 'timestamp']);
-      allow update, delete: if isSuperAdmin();
+      allow read: if isSuperAdmin();
+      allow write: if false;
     }
 
     // ─── Credentials ──────────────────────────────────────────

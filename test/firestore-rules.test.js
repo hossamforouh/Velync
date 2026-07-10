@@ -628,28 +628,24 @@ describe('/app_settings/{documentId}', () => {
 // 14. /activity_logs/{logId}
 // ─────────────────────────────────────────────
 describe('/activity_logs/{logId}', () => {
-  it('any authed user can read', async () => {
-    await assertSucceeds(ctx.stranger().firestore().collection('activity_logs').doc('test-log').get());
+  it('only superadmin can read (was: any authed user)', async () => {
+    await assertSucceeds(ctx.superAdmin().firestore().collection('activity_logs').doc('test-log').get());
+    await assertFails(ctx.stranger().firestore().collection('activity_logs').doc('test-log').get());
+    await assertFails(ctx.owner().firestore().collection('activity_logs').doc('test-log').get());
   });
 
-  it('any authed user can create with required fields', async () => {
-    await assertSucceeds(ctx.stranger().firestore().collection('activity_logs').add({
+  it('client writes are always denied (Admin-SDK-only audit trail)', async () => {
+    await assertFails(ctx.stranger().firestore().collection('activity_logs').add({
+      action: 'login', timestamp: new Date().toISOString(),
+    }));
+    await assertFails(ctx.superAdmin().firestore().collection('activity_logs').add({
       action: 'login', timestamp: new Date().toISOString(),
     }));
   });
 
-  it('cannot create without required fields', async () => {
-    await assertFails(ctx.stranger().firestore().collection('activity_logs').add({ foo: 'bar' }));
-  });
-
-  it('only superadmin can update', async () => {
-    await assertSucceeds(ctx.superAdmin().firestore().collection('activity_logs').doc('test-log').update({ action: 'resolved' }));
-    await assertFails(ctx.owner().firestore().collection('activity_logs').doc('test-log').update({ action: 'hack' }));
-  });
-
-  it('only superadmin can delete', async () => {
-    await assertSucceeds(ctx.superAdmin().firestore().collection('activity_logs').doc('test-log').delete());
-    await assertFails(ctx.owner().firestore().collection('activity_logs').doc('test-log').delete());
+  it('even superadmin cannot update or delete from the client', async () => {
+    await assertFails(ctx.superAdmin().firestore().collection('activity_logs').doc('test-log').update({ action: 'resolved' }));
+    await assertFails(ctx.superAdmin().firestore().collection('activity_logs').doc('test-log').delete());
   });
 });
 
