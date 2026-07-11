@@ -8,11 +8,22 @@ let editingPlan = null; // null = create mode, plan object = edit mode
 export function initAdminPlans(dbInstance, authInstance) {
   auth = authInstance;
 
+  // dataset.wired guards (matching the editor-panel buttons below) — without
+  // them, every onAuthStateChanged firing that re-confirms superadmin status
+  // re-runs initAdminPlans() and stacks another listener onto these same,
+  // never-recreated DOM nodes, so a single click would fire loadPlans()
+  // once per prior sign-in event.
   const btnRefresh = document.getElementById('admin-plans-refresh-btn');
-  if (btnRefresh) btnRefresh.addEventListener('click', () => loadPlans());
+  if (btnRefresh && !btnRefresh.dataset.wired) {
+    btnRefresh.dataset.wired = 'true';
+    btnRefresh.addEventListener('click', () => loadPlans(true));
+  }
 
   const btnNewPlan = document.getElementById('btn-new-plan');
-  if (btnNewPlan) btnNewPlan.addEventListener('click', () => openPlanEditor(null));
+  if (btnNewPlan && !btnNewPlan.dataset.wired) {
+    btnNewPlan.dataset.wired = 'true';
+    btnNewPlan.addEventListener('click', () => openPlanEditor(null));
+  }
 
   // Wire the editor panel's buttons here (not on DOMContentLoaded — this
   // module is lazy-imported well after that event has already fired, so a
@@ -43,9 +54,19 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
-async function loadPlans() {
+async function loadPlans(isManualRefresh = false) {
   const tbody = document.getElementById('admin-plans-tbody');
   if (!tbody) return;
+
+  // Visible click feedback for a manual Refresh click — same
+  // rotate+disable pattern the Flows page's own refresh button uses.
+  const btnRefresh = isManualRefresh ? document.getElementById('admin-plans-refresh-btn') : null;
+  const icon = isManualRefresh ? document.getElementById('admin-plans-refresh-icon') : null;
+  if (btnRefresh) btnRefresh.disabled = true;
+  if (icon) {
+    icon.style.transition = 'transform 0.5s';
+    icon.style.transform = 'rotate(360deg)';
+  }
 
   try {
     allPlans = await apiRequest('/api/admin/plans');
@@ -57,6 +78,9 @@ async function loadPlans() {
     </td></tr>`;
     const retryLink = document.getElementById('admin-plans-retry');
     if (retryLink) retryLink.addEventListener('click', (e) => { e.preventDefault(); loadPlans(); });
+  } finally {
+    if (btnRefresh) btnRefresh.disabled = false;
+    if (icon) setTimeout(() => { icon.style.transition = ''; icon.style.transform = ''; }, 500);
   }
 }
 

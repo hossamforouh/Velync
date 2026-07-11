@@ -1815,6 +1815,45 @@ header.legacy-header {
   border-color: var(--violet);
 }
 
+/* Native number-input spinner arrows read as a jarring, unstyled
+   light-gray widget against the app's dark inputs — hidden across
+   engines rather than attempting to reskin them per-browser. Typing and
+   the keyboard up/down arrows still work; only the visible stepper goes. */
+.admin-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.admin-input[type="number"]::-webkit-outer-spin-button,
+.admin-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.admin-hint-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-2);
+  max-width: 480px;
+}
+
+.admin-hint-callout svg {
+  flex-shrink: 0;
+  color: var(--amber);
+  margin-top: 1px;
+}
+
+.admin-hint-callout strong {
+  color: var(--text-1);
+}
+
 .settings-section-title {
   font-size: 0.78rem;
   font-weight: 700;
