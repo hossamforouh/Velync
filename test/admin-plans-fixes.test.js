@@ -135,3 +135,64 @@ describe('POST /api/admin/plans — isDefault uniqueness', () => {
     assert.strictEqual(bystanderDoc.data().isDefault, false);
   });
 });
+
+describe('PUT /api/admin/plans/:planId — no-op save guard', () => {
+  it('clicking Save without changing anything writes no audit entry and reports changed:false', async () => {
+    // Regression test: previously every PUT logged an 'update' audit entry
+    // unconditionally, even when the submitted data was identical to what
+    // was already stored.
+    const created = await apiFetch('/api/admin/plans', {
+      method: 'POST', body: JSON.stringify({ name: 'NoOp Save Test', priceMonthly: 9, maxActiveConfigs: 3 }),
+    });
+    assert.strictEqual(created.status, 200);
+    const planId = created.body.id;
+
+    const doc = await db.collection('plans').doc(planId).get();
+    const unchangedPayload = {
+      name: doc.data().name,
+      priceMonthly: doc.data().priceMonthly,
+      maxActiveConfigs: doc.data().maxActiveConfigs,
+      minSyncIntervalMinutes: doc.data().minSyncIntervalMinutes,
+      maxItemsPerRun: doc.data().maxItemsPerRun,
+      connectorTiers: doc.data().connectorTiers,
+      logRetentionDays: doc.data().logRetentionDays,
+      isActive: doc.data().isActive,
+      isDefault: doc.data().isDefault,
+    };
+
+    const resave = await apiFetch(`/api/admin/plans/${planId}`, {
+      method: 'PUT', body: JSON.stringify(unchangedPayload),
+    });
+    assert.strictEqual(resave.status, 200);
+    assert.strictEqual(resave.body.changed, false);
+
+    const logsSnap = await db.collection('activity_logs')
+      .where('targetType', '==', 'plan')
+      .where('targetId', '==', planId)
+      .where('action', '==', 'update')
+      .get();
+    assert.strictEqual(logsSnap.size, 0, 'no update audit entry should be written for a no-op save');
+  });
+
+  it('a real field change still writes exactly one audit entry with a changes diff', async () => {
+    const created = await apiFetch('/api/admin/plans', {
+      method: 'POST', body: JSON.stringify({ name: 'Real Change Test', priceMonthly: 9 }),
+    });
+    const planId = created.body.id;
+
+    const update = await apiFetch(`/api/admin/plans/${planId}`, {
+      method: 'PUT', body: JSON.stringify({ priceMonthly: 19 }),
+    });
+    assert.strictEqual(update.status, 200);
+    assert.strictEqual(update.body.changed, true);
+
+    const logsSnap = await db.collection('activity_logs')
+      .where('targetType', '==', 'plan')
+      .where('targetId', '==', planId)
+      .where('action', '==', 'update')
+      .get();
+    assert.strictEqual(logsSnap.size, 1);
+    const log = logsSnap.docs[0].data();
+    assert.deepStrictEqual(log.changes.priceMonthly, { before: 9, after: 19 });
+  });
+});

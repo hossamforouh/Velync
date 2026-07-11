@@ -97,6 +97,34 @@ describe('POST/PUT/DELETE /api/admin/platforms', () => {
     assert.strictEqual(intDoc.data().platform1.name, 'RenamedPlatform');
   });
 
+  it('is a no-op when Save is clicked with no actual field changes — no NEW audit entry', async () => {
+    // Regression test: previously every PUT logged an 'update' audit entry
+    // unconditionally, even when the submitted data was identical to what
+    // was already stored (e.g. opening the editor and clicking Save without
+    // touching anything). Compares the count before/after (rather than
+    // asserting it's exactly 0) because the earlier "renames a platform"
+    // test in this same describe block already wrote one legitimate
+    // 'update' entry for this platformId.
+    const query = () => db.collection('activity_logs')
+      .where('targetType', '==', 'platform')
+      .where('targetId', '==', platformId)
+      .where('action', '==', 'update')
+      .get();
+    const before = await db.collection('platforms').doc(platformId).get();
+    const unchangedPayload = { name: before.data().name, tier: before.data().tier };
+    const countBefore = (await query()).size;
+
+    const { status, body } = await apiFetch(`/api/admin/platforms/${platformId}`, {
+      method: 'PUT',
+      body: JSON.stringify(unchangedPayload),
+    });
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.changed, false);
+
+    const countAfter = (await query()).size;
+    assert.strictEqual(countAfter, countBefore, 'no NEW update audit entry should be written for a no-op save');
+  });
+
   it('deletes a platform, returns deletedData with the secret, and supports restore', async () => {
     const { status, body } = await apiFetch(`/api/admin/platforms/${platformId}`, { method: 'DELETE' });
     assert.strictEqual(status, 200);
@@ -179,6 +207,29 @@ describe('POST/PUT/DELETE /api/admin/integrations', () => {
     assert.strictEqual(status, 200);
     const doc = await db.collection('integrations').doc(integrationId).get();
     assert.strictEqual(doc.data().name, 'RenamedIntegration');
+  });
+
+  it('is a no-op when Save is clicked with no actual field changes — no NEW audit entry', async () => {
+    // Compares before/after count rather than asserting exactly 0, since the
+    // earlier "updates an integration" test already wrote one legitimate
+    // 'update' entry for this integrationId.
+    const query = () => db.collection('activity_logs')
+      .where('targetType', '==', 'integration')
+      .where('targetId', '==', integrationId)
+      .where('action', '==', 'update')
+      .get();
+    const before = await db.collection('integrations').doc(integrationId).get();
+    const countBefore = (await query()).size;
+
+    const { status, body } = await apiFetch(`/api/admin/integrations/${integrationId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: before.data().name }),
+    });
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.changed, false);
+
+    const countAfter = (await query()).size;
+    assert.strictEqual(countAfter, countBefore, 'no NEW update audit entry should be written for a no-op save');
   });
 
   it('deletes and restores an integration', async () => {

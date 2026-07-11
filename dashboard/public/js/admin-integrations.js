@@ -828,7 +828,7 @@ let activityPageSize = 50;
 let activityLastVisible = null;
 let activityHasMore = false;
 let activityLoading = false;
-let activityFilters = { action: '', search: '', dateFrom: '', dateTo: '' };
+let activityFilters = { action: '', type: '', search: '', dateFrom: '', dateTo: '' };
 let activitySearchTimer = null;
 
 async function loadActivityLog(reset = false) {
@@ -840,6 +840,7 @@ async function loadActivityLog(reset = false) {
 
   // Read current filter values from DOM
   activityFilters.action = document.getElementById('admin-activity-filter-action')?.value || '';
+  activityFilters.type = document.getElementById('admin-activity-filter-type')?.value || '';
   activityFilters.dateFrom = document.getElementById('admin-activity-filter-date-from')?.value || '';
   activityFilters.dateTo = document.getElementById('admin-activity-filter-date-to')?.value || '';
   activityFilters.search = document.getElementById('admin-activity-search')?.value?.trim() || '';
@@ -849,7 +850,7 @@ async function loadActivityLog(reset = false) {
   if (reset) {
     activityLastVisible = null;
     activityHasMore = false;
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;">Loading...</td></tr>';
     if (emptyMsg) emptyMsg.style.display = 'none';
   }
 
@@ -890,6 +891,14 @@ async function loadActivityLog(reset = false) {
 
     snap.forEach(docSnap => {
       const d = docSnap.data();
+
+      // Client-side type filter — matches the existing search filter's
+      // pattern (client-side within the fetched page) rather than adding a
+      // Firestore `where('targetType', ...)` constraint, which combined with
+      // the existing action/date-range filters would need new composite
+      // indexes for every combination.
+      if (activityFilters.type && d.targetType !== activityFilters.type) return;
+
       // Client-side search match
       if (searchLower) {
         const haystack = ((d.userEmail || '') + ' ' + (d.userId || '') + ' ' + (d.targetName || '') + ' ' + (d.targetType || '') + ' ' + (d.details || '')).toLowerCase();
@@ -898,12 +907,22 @@ async function loadActivityLog(reset = false) {
 
       const ts = d.timestamp?.toDate?.() || new Date();
       const tr = document.createElement('tr');
-      const actionBadge = d.action === 'delete' ? 'badge-danger' : d.action === 'create' ? 'badge-success' : d.action === 'restore' ? 'badge-warning' : 'badge-info';
+      const actionBadge = d.action === 'delete' ? 'badge-danger'
+        : d.action === 'create' ? 'badge-success'
+        : d.action === 'restore' || d.action === 'activate' ? 'badge-warning'
+        : d.action === 'deactivate' ? 'badge-danger'
+        : 'badge-info';
+      const changesSummary = d.changes
+        ? Object.entries(d.changes).map(([field, { before, after }]) =>
+            `<div><strong>${escHtml(field)}:</strong> ${escHtml(String(before ?? '—'))} → ${escHtml(String(after ?? '—'))}</div>`
+          ).join('')
+        : '<span style="color:var(--text-3);">—</span>';
       tr.innerHTML = `
         <td data-label="Timestamp" style="font-size:0.82rem;color:var(--text-2);white-space:nowrap;">${ts.toLocaleString()}</td>
         <td data-label="User" style="font-size:0.85rem;">${escHtml(d.userDisplayName || d.userEmail || d.userId || '—')}</td>
         <td data-label="Action"><span class="badge ${actionBadge}">${escHtml(d.action)}</span></td>
         <td data-label="Target" style="font-size:0.85rem;">${escHtml(d.targetType)}: ${escHtml(d.targetName || d.targetId || '')}</td>
+        <td data-label="Changes" style="font-size:0.78rem;color:var(--text-2);max-width:280px;">${changesSummary}</td>
         <td data-label="Details" style="font-size:0.82rem;color:var(--text-3);">${escHtml(d.details || '')}</td>
       `;
       tbody.appendChild(tr);
@@ -918,7 +937,7 @@ async function loadActivityLog(reset = false) {
 
     if (rowCount === 0) {
       if (reset && !activityLastVisible) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;">No activity recorded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;">No audit entries recorded yet.</td></tr>';
       } else if (emptyMsg) {
         emptyMsg.style.display = 'block';
       }
@@ -944,7 +963,7 @@ async function loadActivityLog(reset = false) {
   }
 
   // Filter change → debounced reload
-  const filterEls = ['admin-activity-filter-action', 'admin-activity-filter-date-from', 'admin-activity-filter-date-to'];
+  const filterEls = ['admin-activity-filter-action', 'admin-activity-filter-type', 'admin-activity-filter-date-from', 'admin-activity-filter-date-to'];
   filterEls.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => loadActivityLog(true));

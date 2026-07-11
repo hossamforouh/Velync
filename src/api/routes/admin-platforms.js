@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
-const { logAdminActivity } = require('../../core/activityLog');
+const { logAdminActivity, computeChanges } = require('../../core/activityLog');
 const { getRegisteredPlatforms } = require('../../domains/connector');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
@@ -100,20 +100,38 @@ router.put('/admin/platforms/:platformId', verifyAuth, requireSuperAdmin, [
   try {
     const { platformId } = req.params;
     const data = pickPlatformFields(req.body);
+
+    const [existingSnap, existingSecretSnap] = await Promise.all([
+      db.collection('platforms').doc(platformId).get(),
+      req.body.clientSecret ? db.collection('platform_secrets').doc(platformId).get() : Promise.resolve(null),
+    ]);
+    const changes = computeChanges(existingSnap.data(), data, PLATFORM_FIELDS);
+    const secretChanged = !!req.body.clientSecret
+      && req.body.clientSecret !== (existingSecretSnap && existingSecretSnap.exists ? existingSecretSnap.data().clientSecret : undefined);
+    // Never store the actual secret value in the audit log — just flag that it changed.
+    if (secretChanged) changes.clientSecret = { before: '(hidden)', after: '(hidden)' };
+
+    // Clicking Save without editing anything must not add a no-op 'update'
+    // entry to the audit log — this used to happen unconditionally on every save.
+    if (Object.keys(changes).length === 0) {
+      return res.json({ success: true, changed: false });
+    }
+
     data.key = platformId;
     await db.collection('platforms').doc(platformId).set(data);
 
     if (data.name) await syncIntegrationNames(platformId, data.name);
 
-    if (req.body.clientSecret) {
+    if (secretChanged) {
       await db.collection('platform_secrets').doc(platformId).set({ clientSecret: req.body.clientSecret });
     }
 
     await logAdminActivity({
       uid: req.user.uid, userEmail: req.user.email,
       action: 'update', targetType: 'platform', targetId: platformId, targetName: data.name,
+      changes,
     });
-    return res.json({ success: true });
+    return res.json({ success: true, changed: true });
   } catch (err) {
     logger.error('admin-platforms', 'Failed to update platform', { error: err.message });
     return res.status(500).json({ error: err.message });

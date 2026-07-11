@@ -93,12 +93,24 @@ router.patch('/admin/workspaces/:workspaceId/plan', verifyAuth, requireSuperAdmi
 
     const ws = wsDoc.data();
     const plan = planDoc.data();
+
+    // No-op guard: previously this always wrote, logged an 'update' entry,
+    // AND emailed the workspace owner "your plan was updated" even when the
+    // admin clicked Save with the same plan already selected.
+    if (ws.planId === planId) {
+      return res.json({ success: true, planId, changed: false });
+    }
+
+    const previousPlanDoc = ws.planId ? await db.collection('plans').doc(ws.planId).get() : null;
+    const previousPlanName = previousPlanDoc && previousPlanDoc.exists ? previousPlanDoc.data().name : (ws.planId || 'none');
+
     await wsDoc.ref.set({ planId }, { merge: true });
 
     logger.info('admin-stats', `Superadmin set workspace "${workspaceId}" planId → "${planId}"`, { user: req.user.uid });
     await logAdminActivity({
       uid: req.user.uid, userEmail: req.user.email,
       action: 'update', targetType: 'workspace-plan', targetId: workspaceId, targetName: `${ws.name || workspaceId} → ${plan.name}`,
+      changes: { planId: { before: previousPlanName, after: plan.name } },
     });
 
     if (ws.ownerId) {

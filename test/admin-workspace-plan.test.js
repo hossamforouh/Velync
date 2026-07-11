@@ -118,4 +118,31 @@ describe('PATCH /api/admin/workspaces/:workspaceId/plan', () => {
     assert.strictEqual(status, 404);
     assert.match(body.error, /Plan not found/);
   });
+
+  it('is a no-op when the workspace is already on the requested plan — no audit entry, no email', async () => {
+    // Regression test: previously this route always wrote, logged an
+    // 'update' audit entry, AND emailed the workspace owner "your plan was
+    // updated" even when re-submitting the SAME plan (e.g. clicking Save
+    // in the admin panel without actually changing the selection).
+    const wsId = 'admin-ws-plan-noop-ws';
+    const ownerUid = 'admin-ws-plan-noop-owner';
+    await db.collection('users').doc(ownerUid).set({ email: `${ownerUid}@admintest.com` });
+    await db.collection('workspaces').doc(wsId).set({ name: 'W', ownerId: ownerUid, planId: 'pro' });
+
+    currentUid = SUPERADMIN_UID;
+    const { status, body } = await apiFetch(`/api/admin/workspaces/${wsId}/plan`, {
+      method: 'PATCH', body: JSON.stringify({ planId: 'pro' }),
+    });
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.changed, false);
+
+    const logsSnap = await db.collection('activity_logs')
+      .where('targetType', '==', 'workspace-plan')
+      .where('targetId', '==', wsId)
+      .get();
+    assert.strictEqual(logsSnap.size, 0, 'no audit entry should be written for a no-op plan grant');
+
+    const mailSnap = await db.collection('mail').where('to', '==', `${ownerUid}@admintest.com`).get();
+    assert.strictEqual(mailSnap.size, 0, 'no "plan updated" email should be sent for a no-op plan grant');
+  });
 });

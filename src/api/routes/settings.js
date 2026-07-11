@@ -6,6 +6,7 @@ const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
 const { deleteWorkspace } = require('../../domains/workspace/deletion');
 const { notifyAdmins } = require('../../core/notifications');
+const { logAdminActivity, computeChanges } = require('../../core/activityLog');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -37,6 +38,8 @@ router.get('/global', async (req, res) => {
   }
 });
 
+const GLOBAL_SETTINGS_FIELDS = ['whatsappNumber', 'maintenanceMode', 'maintenanceMessage'];
+
 router.put('/global', verifyAuth, [
   body('whatsappNumber').optional().isString().trim(),
   body('maintenanceMode').optional().isBoolean(),
@@ -47,16 +50,33 @@ router.put('/global', verifyAuth, [
       return res.status(403).json({ error: 'Forbidden: superadmin only' });
     }
     const { whatsappNumber, maintenanceMode, maintenanceMessage } = req.body;
-    const updateData = {};
-    if (whatsappNumber !== undefined) updateData.whatsappNumber = whatsappNumber;
-    if (maintenanceMode !== undefined) updateData.maintenanceMode = !!maintenanceMode;
-    if (maintenanceMessage !== undefined) updateData.maintenanceMessage = maintenanceMessage;
-    updateData.updatedAt = new Date().toISOString();
+    const fields = {};
+    if (whatsappNumber !== undefined) fields.whatsappNumber = whatsappNumber;
+    if (maintenanceMode !== undefined) fields.maintenanceMode = !!maintenanceMode;
+    if (maintenanceMessage !== undefined) fields.maintenanceMessage = maintenanceMessage;
 
+    const currentSnap = await db.collection('app_settings').doc('general').get();
+    const changes = computeChanges(currentSnap.data(), fields, GLOBAL_SETTINGS_FIELDS);
+
+    // Clicking Save without editing anything must not add a no-op 'update'
+    // entry to the audit log.
+    if (Object.keys(changes).length === 0) {
+      return res.json({ success: true, changed: false });
+    }
+
+    const updateData = { ...fields, updatedAt: new Date().toISOString() };
     await db.collection('app_settings').doc('general').set(updateData, { merge: true });
     settingsCache = { data: null, time: 0 };
     logger.info('settings', 'Global settings updated', { user: req.user.uid });
-    return res.json({ success: true });
+    // Maintenance mode affects every visitor's ability to use the site at
+    // all — this and the WhatsApp support number were previously the only
+    // superadmin-impacting write in the app with NO audit trail whatsoever.
+    await logAdminActivity({
+      uid: req.user.uid, userEmail: req.user.email,
+      action: 'update', targetType: 'global-settings', targetId: 'general', targetName: 'Global Settings',
+      changes,
+    });
+    return res.json({ success: true, changed: true });
   } catch (err) {
     logger.error('settings', 'Failed to save settings', { error: err.message });
     return res.status(500).json({ error: err.message });

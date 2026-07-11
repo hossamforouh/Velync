@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
-const { logAdminActivity } = require('../../core/activityLog');
+const { logAdminActivity, computeChanges } = require('../../core/activityLog');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -71,11 +71,22 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
       'connectorTiers', 'logRetentionDays', 'sortOrder',
       'isActive', 'isDefault', 'lsVariantIdMonthly',
     ];
-    const update = { updatedAt: new Date().toISOString() };
+    const fields = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) update[key] = req.body[key];
+      if (req.body[key] !== undefined) fields[key] = req.body[key];
     }
 
+    const existingSnap = await db.collection('plans').doc(planId).get();
+    const changes = computeChanges(existingSnap.data(), fields, allowed);
+
+    // Clicking Save without editing anything must not write a fresh
+    // updatedAt or add a no-op 'update' entry to the audit log — this used
+    // to happen unconditionally on every save.
+    if (Object.keys(changes).length === 0) {
+      return res.json({ success: true, changed: false });
+    }
+
+    const update = { ...fields, updatedAt: new Date().toISOString() };
     await db.collection('plans').doc(planId).set(update, { merge: true });
     if (update.isDefault === true) await unsetOtherDefaults(planId);
 
@@ -83,8 +94,9 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
     await logAdminActivity({
       uid: req.user.uid, userEmail: req.user.email,
       action: 'update', targetType: 'plan', targetId: planId, targetName: update.name || planId,
+      changes,
     });
-    return res.json({ success: true });
+    return res.json({ success: true, changed: true });
   } catch (err) {
     logger.error('admin-plans', 'Failed to update plan', { error: err.message });
     return res.status(500).json({ error: err.message });

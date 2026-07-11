@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
-const { logAdminActivity } = require('../../core/activityLog');
+const { logAdminActivity, computeChanges } = require('../../core/activityLog');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -58,12 +58,23 @@ router.put('/admin/integrations/:integrationId', verifyAuth, requireSuperAdmin, 
   try {
     const { integrationId } = req.params;
     const data = pickIntegrationFields(req.body);
+
+    const existingSnap = await db.collection('integrations').doc(integrationId).get();
+    const changes = computeChanges(existingSnap.data(), data, INTEGRATION_FIELDS);
+
+    // Clicking Save without editing anything must not add a no-op 'update'
+    // entry to the audit log — this used to happen unconditionally on every save.
+    if (Object.keys(changes).length === 0) {
+      return res.json({ success: true, changed: false });
+    }
+
     await db.collection('integrations').doc(integrationId).set(data, { merge: true });
     await logAdminActivity({
       uid: req.user.uid, userEmail: req.user.email,
       action: 'update', targetType: 'integration', targetId: integrationId, targetName: data.name,
+      changes,
     });
-    return res.json({ success: true });
+    return res.json({ success: true, changed: true });
   } catch (err) {
     logger.error('admin-integrations', 'Failed to update integration', { error: err.message });
     return res.status(500).json({ error: err.message });
