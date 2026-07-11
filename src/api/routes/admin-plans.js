@@ -77,18 +77,7 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
     }
 
     await db.collection('plans').doc(planId).set(update, { merge: true });
-
-    // If this plan is set as default, unset isDefault on all others
-    if (update.isDefault === true) {
-      const snap = await db.collection('plans').get();
-      const batch = db.batch();
-      snap.forEach(doc => {
-        if (doc.id !== planId) {
-          batch.update(doc.ref, { isDefault: false });
-        }
-      });
-      await batch.commit();
-    }
+    if (update.isDefault === true) await unsetOtherDefaults(planId);
 
     logger.info('admin-plans', `Plan "${planId}" updated`, { user: req.user.uid });
     await logAdminActivity({
@@ -112,6 +101,26 @@ function slugify(name) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '') || 'plan';
+}
+
+// Unset isDefault on every plan except `keepPlanId` — enforces the
+// invariant that at most one plan is ever marked default. Was previously
+// only run from the PUT (update) handler; the POST (create) handler set
+// isDefault: true on a brand-new plan without this, so creating a new
+// default plan left the OLD default also still marked default — two plans
+// simultaneously "Default" until the next unrelated update happened to
+// trigger this cleanup.
+async function unsetOtherDefaults(keepPlanId) {
+  const snap = await db.collection('plans').where('isDefault', '==', true).get();
+  const batch = db.batch();
+  let any = false;
+  snap.forEach(doc => {
+    if (doc.id !== keepPlanId) {
+      batch.update(doc.ref, { isDefault: false });
+      any = true;
+    }
+  });
+  if (any) await batch.commit();
 }
 
 async function generateUniquePlanId(name) {
@@ -159,6 +168,8 @@ router.post('/admin/plans', verifyAuth, requireSuperAdmin, [
       updatedAt: new Date().toISOString(),
     };
     await db.collection('plans').doc(id).set(plan);
+    if (plan.isDefault === true) await unsetOtherDefaults(id);
+
     logger.info('admin-plans', `Plan "${id}" created`, { user: req.user.uid });
     await logAdminActivity({
       uid: req.user.uid, userEmail: req.user.email,

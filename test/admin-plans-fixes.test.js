@@ -96,3 +96,42 @@ describe('POST /api/admin/plans — id-less creation', () => {
     assert.strictEqual(doc.data().sortOrder, 50);
   });
 });
+
+describe('POST /api/admin/plans — isDefault uniqueness', () => {
+  it('creating a new plan with isDefault:true unsets isDefault on the previously-default plan', async () => {
+    // Regression test: PUT (update) already unset other defaults, but POST
+    // (create) did not — creating a second plan marked default left BOTH the
+    // old and new plan simultaneously flagged isDefault:true.
+    const first = await apiFetch('/api/admin/plans', {
+      method: 'POST', body: JSON.stringify({ name: 'Default Test A', isDefault: true }),
+    });
+    assert.strictEqual(first.status, 200);
+    let firstDoc = await db.collection('plans').doc(first.body.id).get();
+    assert.strictEqual(firstDoc.data().isDefault, true);
+
+    const second = await apiFetch('/api/admin/plans', {
+      method: 'POST', body: JSON.stringify({ name: 'Default Test B', isDefault: true }),
+    });
+    assert.strictEqual(second.status, 200);
+
+    firstDoc = await db.collection('plans').doc(first.body.id).get();
+    const secondDoc = await db.collection('plans').doc(second.body.id).get();
+    assert.strictEqual(firstDoc.data().isDefault, false, 'the previously-default plan must be unset');
+    assert.strictEqual(secondDoc.data().isDefault, true, 'the newly-created plan is the sole default');
+  });
+
+  it('creating a plan WITHOUT isDefault does not disturb the existing default', async () => {
+    const existing = await apiFetch('/api/admin/plans', {
+      method: 'POST', body: JSON.stringify({ name: 'Default Test C', isDefault: true }),
+    });
+    const bystander = await apiFetch('/api/admin/plans', {
+      method: 'POST', body: JSON.stringify({ name: 'Non-Default Bystander' }),
+    });
+    assert.strictEqual(bystander.status, 200);
+
+    const existingDoc = await db.collection('plans').doc(existing.body.id).get();
+    const bystanderDoc = await db.collection('plans').doc(bystander.body.id).get();
+    assert.strictEqual(existingDoc.data().isDefault, true);
+    assert.strictEqual(bystanderDoc.data().isDefault, false);
+  });
+});

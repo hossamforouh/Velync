@@ -51,7 +51,7 @@ async function loadPlans() {
     allPlans = await apiRequest('/api/admin/plans');
     renderPlans();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--rose);">
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--rose);">
       Failed to load plans: ${escHtml(err.message)} —
       <a href="#" id="admin-plans-retry" style="color:var(--violet);">Retry</a>
     </td></tr>`;
@@ -65,7 +65,7 @@ function renderPlans() {
   if (!tbody) return;
 
   if (allPlans.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-3);">No plans configured yet. Click "+ New Plan" to create your first one.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">No plans configured yet. Click "+ New Plan" to create your first one.</td></tr>';
     const countEl = document.getElementById('admin-plans-count');
     if (countEl) countEl.textContent = '';
     return;
@@ -74,8 +74,15 @@ function renderPlans() {
   tbody.innerHTML = '';
   allPlans.forEach(p => {
     const tr = document.createElement('tr');
+    // Toggle icon/color mirror the ACTION the button performs, not the
+    // current state: a plan that's active shows a red pause icon (clicking
+    // deactivates it); an inactive plan shows a green play icon (clicking
+    // activates it) — same play/pause convention as a media control.
+    const toggleIcon = p.isActive
+      ? '<circle cx="12" cy="12" r="10"></circle><line x1="10" y1="9" x2="10" y2="15"></line><line x1="14" y1="9" x2="14" y2="15"></line>'
+      : '<circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon>';
+    const toggleColor = p.isActive ? 'var(--rose)' : 'var(--green)';
     tr.innerHTML = `
-      <td data-label="ID"><code style="font-size:0.85rem;">${escHtml(p.id)}</code></td>
       <td data-label="Name"><strong>${escHtml(p.name)}</strong></td>
       <td data-label="Price">${p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}/mo`}</td>
       <td data-label="Configs">${p.maxActiveConfigs}</td>
@@ -89,8 +96,8 @@ function renderPlans() {
         <button class="row-action-btn edit-plan-btn" data-id="${p.id}" type="button" title="Edit Plan">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
         </button>
-        <button class="row-action-btn toggle-plan-btn" data-id="${p.id}" type="button" title="${p.isActive ? 'Deactivate' : 'Activate'} Plan">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        <button class="row-action-btn toggle-plan-btn" data-id="${p.id}" type="button" title="${p.isActive ? 'Deactivate' : 'Activate'} Plan" style="color:${toggleColor};">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${toggleIcon}</svg>
         </button>
       </td>
     `;
