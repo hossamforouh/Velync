@@ -2531,7 +2531,7 @@ btnLogin.addEventListener('click', async () => {
     authError.style.display = 'block';
   } finally {
     btnLogin.disabled = false;
-    btnLogin.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="18" height="18" /> Continue with Google';
+    btnLogin.innerHTML = '<img src="/vendor/google.svg" alt="Google" width="18" height="18" /> Continue with Google';
   }
 });
 

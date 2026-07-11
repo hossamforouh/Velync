@@ -48,7 +48,13 @@ async function build() {
     const destPath = path.join(DIST_DIR, rel);
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
-    if (srcPath.endsWith('.js')) {
+    // Third-party vendored libraries (dashboard/public/vendor/*) are already
+    // minified UMD bundles — copy them verbatim. Running them back through
+    // esbuild's esm-format transform is pointless and risks mangling the
+    // UMD global-assignment wrapper.
+    const isVendor = rel.split(path.sep).includes('vendor');
+
+    if (srcPath.endsWith('.js') && !isVendor) {
       const source = fs.readFileSync(srcPath, 'utf8');
       const result = await esbuild.transform(source, {
         minify: true,

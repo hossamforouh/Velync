@@ -11,12 +11,11 @@
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0f0c29" />
 
-  <!-- Preconnect to critical origins -->
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <!-- Preconnect to critical origins. gstatic hosts the Firebase SDK modules
+       that app.js imports; jsdelivr/unpkg are no longer used at runtime —
+       TomSelect and Feather are now served from same-origin /vendor/ so the
+       app doesn't break when a third-party CDN is slow, blocked, or offline. -->
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
-  <link rel="dns-prefetch" href="https://unpkg.com" />
   <link rel="dns-prefetch" href="https://www.gstatic.com" />
 
   <!-- Meta & Open Graph Tags -->
@@ -35,13 +34,14 @@
   <meta name="twitter:description"
     content="Your apps, perfectly synchronized. Route data instantly between your favorite tools to create a flawless, automated ecosystem—zero coding required." />
   <meta name="twitter:image" content="https://velync.web.app/velync-logo.png" />
-  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+  <link href="/vendor/tom-select.css?v=2.2.2" rel="stylesheet">
   <!-- defer: TomSelect only backs the post-login workspace switcher, not the
        landing page itself — deferring keeps it off the landing page's
        critical rendering path without changing load order relative to
        app.js (both are deferred/module scripts, so document order still
-       guarantees TomSelect is defined before app.js needs it). -->
-  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js" defer></script>
+       guarantees TomSelect is defined before app.js needs it).
+       Self-hosted (was jsdelivr) so a CDN outage can't break the switcher. -->
+  <script src="/vendor/tom-select.complete.min.js?v=2.2.2" defer></script>
 
 
   <link rel="stylesheet" href="style.css" />
@@ -229,8 +229,7 @@
             </div>
 
             <button class="btn btn-secondary btn-auth-google" id="btn-login" type="button">
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="18"
-                height="18" />
+              <img src="/vendor/google.svg" alt="Google" width="18" height="18" />
               Continue with Google
             </button>
 
@@ -2256,12 +2255,16 @@
   </div>
 
   <!-- Scripts -->
-  <script src="https://unpkg.com/feather-icons"></script>
+  <!-- Self-hosted (was unpkg) so an icon CDN outage can't break rendering. -->
+  <script src="/vendor/feather.min.js?v=4.29.2"></script>
 
   <script type="module" src="app.js?v=7"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      feather.replace();
+      // Guard: if feather somehow failed to load (e.g. blocked by an
+      // extension), don't throw an uncaught ReferenceError that aborts the
+      // rest of this init block. Icons degrade to their inline SVG fallbacks.
+      if (typeof feather !== 'undefined') feather.replace();
     });
   </script>
 
