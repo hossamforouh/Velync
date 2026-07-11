@@ -67,7 +67,22 @@ export function showToast(msg, type = 'info', opts = {}) {
     if (!el.parentNode) return;
     clearTimeout(el._timeout);
     el.classList.add('toast-exit');
-    el.addEventListener('animationend', () => { el.remove(); }, { once: true });
+    // .toast-exit fades out via a CSS `transition` (opacity + transform),
+    // not a @keyframes animation — listening for 'animationend' here never
+    // fired, so el.remove() never ran. The toast stayed in the DOM
+    // invisible (opacity: 0) but still `pointer-events: all` at its fixed
+    // position, permanently blocking clicks on whatever was underneath it
+    // until a full page reload.
+    //
+    // Fixed here with a plain setTimeout matching (and slightly exceeding)
+    // the .toast-exit transition's longest duration (200ms), rather than
+    // waiting on a 'transitionend' event — deliberately, not just to dodge
+    // the original bug: transitionend is itself an unreliable trigger for
+    // DOM cleanup in general (a backgrounded tab, prefers-reduced-motion,
+    // or a parent going display:none mid-transition can all suppress it
+    // without ever firing), so a duration-matched timer is the more robust
+    // mechanism regardless.
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 220);
     activeToasts = activeToasts.filter(t => t !== el);
   };
 
