@@ -2092,7 +2092,13 @@ header.legacy-header {
    instead, leaving the dimmed background list visible for context. Not
    applied to genuinely complex panels (e.g. the New/Edit Config wizard),
    which still warrant the full-width treatment. */
-.side-panel--compact {
+/* Uses the doubled `.side-panel.side-panel--compact` selector deliberately:
+   responsive.css loads AFTER style.css and has a top-level
+   `.side-panel { max-width: 100vw }` rule. That's equal specificity to a
+   single `.side-panel--compact`, so source order would let responsive.css
+   win and force full width. Doubling the class here (0,2,0) beats it
+   regardless of load order. */
+.side-panel.side-panel--compact {
   left: auto;
   width: 100%;
   max-width: 560px;
@@ -3066,7 +3072,7 @@ header.legacy-header {
     width: 100%;
   }
 
-  .side-panel--compact {
+  .side-panel.side-panel--compact {
     max-width: 100%;
   }
 }
