@@ -13,8 +13,12 @@
  *   2. .firebaserc's projects.staging alias
  *
  * Usage:
- *   npm run seed:staging            # prompts for confirmation
- *   npm run seed:staging -- --yes   # skips the confirmation prompt (CI use)
+ *   npm run seed:staging -- --superadmin=<uid-or-email>
+ *   npm run seed:staging -- --superadmin=you@example.com --yes
+ *
+ * --superadmin is required — seed-superadmin.js takes an explicit uid/email
+ * per project (Firebase Auth UIDs are per-project, so there's no safe
+ * default here; see scripts/seed-superadmin.js for why).
  *
  * Requires application-default credentials for the staging project:
  *   gcloud auth application-default login
@@ -25,7 +29,6 @@ const path = require('path');
 const fs = require('fs');
 
 const PROD_PROJECT_ID = 'velync';
-const SCRIPTS = ['seed-plans.js', 'seed-superadmin.js', 'seed-marketplace.js'];
 
 function resolveProjectId() {
   if (process.env.STAGING_PROJECT_ID) return process.env.STAGING_PROJECT_ID;
@@ -50,7 +53,14 @@ function confirm(question) {
 async function main() {
   const projectId = resolveProjectId();
   const skipConfirm = process.argv.includes('--yes');
+  const superadminArg = process.argv.find(a => a.startsWith('--superadmin='));
+  const superadmin = superadminArg ? superadminArg.split('=')[1] : '';
 
+  if (!superadmin) {
+    console.error('ERROR: --superadmin=<uid-or-email> is required.');
+    console.error('Usage: npm run seed:staging -- --superadmin=you@example.com');
+    process.exit(1);
+  }
   if (!projectId) {
     console.error('ERROR: no staging project id found (set STAGING_PROJECT_ID or .firebaserc projects.staging).');
     process.exit(1);
@@ -70,9 +80,15 @@ async function main() {
     }
   }
 
-  for (const script of SCRIPTS) {
+  const steps = [
+    { script: 'seed-plans.js', args: [] },
+    { script: 'seed-superadmin.js', args: [superadmin] },
+    { script: 'seed-marketplace.js', args: [] },
+  ];
+
+  for (const { script, args } of steps) {
     console.log(`\n=== Running ${script} against ${projectId} ===`);
-    const result = spawnSync('node', [path.join(__dirname, script)], {
+    const result = spawnSync('node', [path.join(__dirname, script), ...args], {
       stdio: 'inherit',
       env: { ...process.env, GOOGLE_CLOUD_PROJECT: projectId, GCLOUD_PROJECT: projectId },
     });

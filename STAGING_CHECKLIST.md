@@ -62,10 +62,12 @@ exact `gcloud secrets create` commands:
 ### A5. Seed staging data
 - [ ] `gcloud auth application-default login` (or set
       `GOOGLE_APPLICATION_CREDENTIALS` to a staging service account key)
-- [ ] `npm run seed:staging` — seeds default plans (Free/Pro/Business),
-      the superadmin doc, and marketplace platforms/integrations. Refuses to
-      run if it resolves to the production project — see
-      `scripts/seed-staging.js`.
+- [ ] `npm run seed:staging -- --superadmin=you@example.com` — seeds default
+      plans (Free/Pro/Business), a superadmin doc for that email's staging
+      UID, and marketplace platforms/integrations. Refuses to run if it
+      resolves to the production project — see `scripts/seed-staging.js`.
+      Use the email you'll actually sign in with on staging — Firebase Auth
+      UIDs are per-project, so your production UID does NOT carry over.
 - [ ] Log in to the staging site as the superadmin, go to Admin Panel →
       Platforms tab, and fill in `clientId`/`clientSecret` for each platform
       from Section A4 (these live in Firestore, not env vars — see
