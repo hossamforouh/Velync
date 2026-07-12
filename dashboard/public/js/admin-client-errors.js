@@ -23,7 +23,19 @@ const CLIENTERR_PAGE_SIZE = 50;
 let clientErrLastVisible = null;
 let clientErrHasMore = false;
 let clientErrLoading = false;
-let clientErrFilters = { status: 'unresolved', search: '' };
+let clientErrFilters = { status: 'open', search: '' };
+
+const STATUS_BADGE = { open: 'badge-warning', resolved: 'badge-info', closed: 'badge-success' };
+const STATUS_LABEL = { open: 'Open', resolved: 'Resolved', closed: 'Closed' };
+
+// Action buttons per current status — matches the review workflow: Claude
+// marks an error Resolved after shipping a fix, the user verifies it and
+// either Closes it (confirmed fixed) or Reopens it (fix didn't hold).
+function actionsFor(status) {
+  if (status === 'open') return [{ to: 'resolved', label: 'Mark Resolved' }];
+  if (status === 'resolved') return [{ to: 'closed', label: 'Close' }, { to: 'open', label: 'Reopen' }];
+  return [{ to: 'open', label: 'Reopen' }]; // closed
+}
 let clientErrSearchTimer = null;
 
 function timeAgo(date) {
@@ -43,6 +55,12 @@ function escHtml(str) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function escAttr(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 async function loadClientErrors(reset = false) {
   if (clientErrLoading) return;
 
@@ -50,7 +68,7 @@ async function loadClientErrors(reset = false) {
   const emptyMsg = document.getElementById('admin-clienterr-empty');
   if (!tbody) return;
 
-  clientErrFilters.status = document.getElementById('admin-clienterr-filter-status')?.value ?? 'unresolved';
+  clientErrFilters.status = document.getElementById('admin-clienterr-filter-status')?.value ?? 'open';
   clientErrFilters.search = document.getElementById('admin-clienterr-search')?.value?.trim() || '';
 
   clientErrLoading = true;
@@ -78,10 +96,12 @@ async function loadClientErrors(reset = false) {
 
     snap.forEach(docSnap => {
       const d = docSnap.data();
-      const resolved = !!d.resolved;
+      // status was added after this collection launched with a boolean
+      // `resolved` field — no real data exists on that old schema (verified
+      // before this migration), but fall back defensively just in case.
+      const status = d.status || (d.resolved ? 'closed' : 'open');
 
-      if (clientErrFilters.status === 'unresolved' && resolved) return;
-      if (clientErrFilters.status === 'resolved' && !resolved) return;
+      if (clientErrFilters.status && clientErrFilters.status !== status) return;
 
       if (searchLower) {
         const haystack = ((d.message || '') + ' ' + (d.url || '') + ' ' + (d.uid || '') + ' ' + (d.workspaceId || '')).toLowerCase();
@@ -91,14 +111,17 @@ async function loadClientErrors(reset = false) {
       const ts = d.createdAt?.toDate?.() || new Date();
       const tr = document.createElement('tr');
       tr.dataset.id = docSnap.id;
+      const actionButtons = actionsFor(status)
+        .map(a => `<button class="btn btn-secondary btn-sm clienterr-status-btn" data-status="${escAttr(a.to)}" style="padding:4px 8px;font-size:12px;">${escHtml(a.label)}</button>`)
+        .join(' ');
       tr.innerHTML = `
         <td data-label="Occurred" style="font-size:0.82rem;color:var(--text-2);white-space:nowrap;" title="${escHtml(ts.toLocaleString())}">${escHtml(timeAgo(ts))}</td>
         <td data-label="Message" style="font-size:0.85rem;max-width:340px;word-break:break-word;">${escHtml(d.message || '')}</td>
         <td data-label="URL" style="font-size:0.78rem;color:var(--text-3);max-width:220px;word-break:break-all;">${escHtml(d.url || '')}</td>
         <td data-label="User" style="font-size:0.78rem;color:var(--text-3);">${escHtml(d.uid || '—')}</td>
-        <td data-label="Status"><span class="badge ${resolved ? 'badge-success' : 'badge-warning'}">${resolved ? 'Resolved' : 'Unresolved'}</span></td>
+        <td data-label="Status"><span class="badge ${STATUS_BADGE[status]}">${STATUS_LABEL[status]}</span></td>
         <td data-label="Actions" style="white-space:nowrap;">
-          <button class="btn btn-secondary btn-sm clienterr-toggle-btn" style="padding:4px 8px;font-size:12px;">${resolved ? 'Reopen' : 'Resolve'}</button>
+          ${actionButtons}
           <button class="btn btn-secondary btn-sm clienterr-delete-btn" style="padding:4px 8px;font-size:12px;color:var(--rose);">Delete</button>
         </td>
       `;
@@ -129,16 +152,16 @@ async function loadClientErrors(reset = false) {
   }
 }
 
-async function toggleResolved(id, currentlyResolved, btn) {
+async function setStatus(id, newStatus, btn) {
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = '...';
   try {
-    await apiRequest(`/api/admin/client-errors/${id}/resolved`, {
+    await apiRequest(`/api/admin/client-errors/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ resolved: !currentlyResolved }),
+      body: JSON.stringify({ status: newStatus }),
     });
-    showToast(currentlyResolved ? 'Reopened' : 'Marked resolved', 'success');
+    showToast(`Marked ${STATUS_LABEL[newStatus].toLowerCase()}`, 'success');
     loadClientErrors(true);
   } catch (err) {
     showToast('Failed to update: ' + err.message, 'error');
@@ -186,9 +209,8 @@ function wireClientErrorControls() {
       const tr = e.target.closest('tr[data-id]');
       if (!tr) return;
       const id = tr.dataset.id;
-      if (e.target.classList.contains('clienterr-toggle-btn')) {
-        const resolved = tr.querySelector('.badge')?.textContent === 'Resolved';
-        toggleResolved(id, resolved, e.target);
+      if (e.target.classList.contains('clienterr-status-btn')) {
+        setStatus(id, e.target.dataset.status, e.target);
       } else if (e.target.classList.contains('clienterr-delete-btn')) {
         deleteError(id, e.target);
       }

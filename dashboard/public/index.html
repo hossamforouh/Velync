@@ -1298,11 +1298,12 @@
                   <button id="admin-clienterr-refresh" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">⟳ Refresh</button>
                 </div>
               </div>
-              <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. Mark an entry resolved once you've addressed it, or delete it if it isn't actionable.</p>
+              <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. <strong>Open</strong>: needs attention. <strong>Resolved</strong>: a fix has shipped, awaiting verification. <strong>Closed</strong>: verified fixed.</p>
               <div id="admin-clienterr-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;">
                 <select id="admin-clienterr-filter-status" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;">
-                  <option value="unresolved">Unresolved</option>
+                  <option value="open">Open</option>
                   <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
                   <option value="">All</option>
                 </select>
                 <input type="text" id="admin-clienterr-search" placeholder="Search message, URL, or uid..." style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;flex:1;min-width:180px;">

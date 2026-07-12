@@ -130,7 +130,7 @@ async function seedDocs(firestore) {
   await firestore.collection('client_errors').doc('test-error').set({
     message: 'TypeError: x is not a function',
     createdAt: new Date().toISOString(),
-    resolved: false,
+    status: 'open',
   });
 
   // Seed mail (for firestore-send-email extension)
@@ -676,8 +676,8 @@ describe('/client_errors/{errorId}', () => {
     }));
   });
 
-  it('even superadmin cannot update or delete from the client (resolve/delete go through the backend)', async () => {
-    await assertFails(ctx.superAdmin().firestore().collection('client_errors').doc('test-error').update({ resolved: true }));
+  it('even superadmin cannot update or delete from the client (status change/delete go through the backend)', async () => {
+    await assertFails(ctx.superAdmin().firestore().collection('client_errors').doc('test-error').update({ status: 'closed' }));
     await assertFails(ctx.superAdmin().firestore().collection('client_errors').doc('test-error').delete());
   });
 });

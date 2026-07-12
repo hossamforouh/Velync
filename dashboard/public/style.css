@@ -4281,6 +4281,22 @@ header.legacy-header {
   border: 1px solid rgba(129, 140, 248, 0.3);
 }
 
+/* .badge-warning/.badge-danger are referenced across several existing pages
+   (Plans, Integrations, Audit Log, Hub, Exec Logs) but were never defined —
+   those badges have been rendering unstyled all along. Adding them here
+   fixes all of those at once, not just the new Client Errors tab. */
+.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
 /* ── Execution Logs Filter Pills ────────────────────────────── */
 .logs-filter-pills {
   display: flex;

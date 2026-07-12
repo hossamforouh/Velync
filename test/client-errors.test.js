@@ -2,10 +2,11 @@
  * Client Errors Route Test Suite
  *
  * Verifies the frontend-error-reporting pipeline: the public POST endpoint
- * (no auth — errors can happen before login) and the superadmin-only
- * resolve/delete actions. Runs the real Express app against the Firestore
- * emulator, with only verifyAuth stubbed (via require.cache injection), same
- * pattern as test/admin-platforms.test.js.
+ * (no auth — errors can happen before login), and the superadmin-only status
+ * transitions (open -> resolved -> closed, with reopen at any point) and
+ * delete. Runs the real Express app against the Firestore emulator, with
+ * only verifyAuth stubbed (via require.cache injection), same pattern as
+ * test/admin-platforms.test.js.
  *
  * Run:  npx firebase emulators:exec --only firestore "node --test test/client-errors.test.js"
  */
@@ -74,7 +75,7 @@ describe('POST /api/client-errors', () => {
     assert.strictEqual(body.success, true);
   });
 
-  it('stores message/stack/url/userAgent/uid/workspaceId and defaults resolved to false', async () => {
+  it('stores message/stack/url/userAgent/uid/workspaceId and defaults status to open', async () => {
     const { status, body } = await apiFetch('/api/client-errors', {
       method: 'POST',
       body: JSON.stringify({
@@ -96,7 +97,7 @@ describe('POST /api/client-errors', () => {
     const doc = snap.docs[0].data();
     assert.strictEqual(doc.uid, 'some-real-user-uid');
     assert.strictEqual(doc.workspaceId, 'some-workspace-id');
-    assert.strictEqual(doc.resolved, false);
+    assert.strictEqual(doc.status, 'open');
     assert.ok(doc.stack.includes('at foo'));
   });
 
@@ -143,47 +144,64 @@ describe('POST /api/client-errors', () => {
   });
 });
 
-describe('PATCH /api/admin/client-errors/:id/resolved', () => {
+describe('PATCH /api/admin/client-errors/:id/status', () => {
   let errorId;
 
   before(async () => {
     const ref = await db.collection('client_errors').add({
-      message: 'to be resolved', createdAt: new Date(), resolved: false,
+      message: 'to be resolved', createdAt: new Date(), status: 'open',
     });
     errorId = ref.id;
   });
 
   it('non-superadmin gets 403', async () => {
-    const { status } = await apiFetch(`/api/admin/client-errors/${errorId}/resolved`, {
+    const { status } = await apiFetch(`/api/admin/client-errors/${errorId}/status`, {
       method: 'PATCH',
       headers: { 'x-test-uid': 'not-a-superadmin' },
-      body: JSON.stringify({ resolved: true }),
+      body: JSON.stringify({ status: 'resolved' }),
     });
     assert.strictEqual(status, 403);
   });
 
-  it('superadmin can mark resolved and reopen', async () => {
-    let res = await apiFetch(`/api/admin/client-errors/${errorId}/resolved`, {
+  it('rejects an invalid status value', async () => {
+    const { status } = await apiFetch(`/api/admin/client-errors/${errorId}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ resolved: true }),
+      body: JSON.stringify({ status: 'archived' }),
+    });
+    assert.strictEqual(status, 400);
+  });
+
+  it('superadmin can walk the full open -> resolved -> closed -> reopen cycle', async () => {
+    let res = await apiFetch(`/api/admin/client-errors/${errorId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'resolved' }),
     });
     assert.strictEqual(res.status, 200);
     let doc = await db.collection('client_errors').doc(errorId).get();
-    assert.strictEqual(doc.data().resolved, true);
+    assert.strictEqual(doc.data().status, 'resolved');
 
-    res = await apiFetch(`/api/admin/client-errors/${errorId}/resolved`, {
+    res = await apiFetch(`/api/admin/client-errors/${errorId}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ resolved: false }),
+      body: JSON.stringify({ status: 'closed' }),
     });
     assert.strictEqual(res.status, 200);
     doc = await db.collection('client_errors').doc(errorId).get();
-    assert.strictEqual(doc.data().resolved, false);
+    assert.strictEqual(doc.data().status, 'closed');
+
+    // A verification failure reopens it, even from 'closed'.
+    res = await apiFetch(`/api/admin/client-errors/${errorId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'open' }),
+    });
+    assert.strictEqual(res.status, 200);
+    doc = await db.collection('client_errors').doc(errorId).get();
+    assert.strictEqual(doc.data().status, 'open');
   });
 
   it('404s for a nonexistent id', async () => {
-    const { status } = await apiFetch('/api/admin/client-errors/does-not-exist/resolved', {
+    const { status } = await apiFetch('/api/admin/client-errors/does-not-exist/status', {
       method: 'PATCH',
-      body: JSON.stringify({ resolved: true }),
+      body: JSON.stringify({ status: 'resolved' }),
     });
     assert.strictEqual(status, 404);
   });
@@ -191,7 +209,7 @@ describe('PATCH /api/admin/client-errors/:id/resolved', () => {
 
 describe('DELETE /api/admin/client-errors/:id', () => {
   it('non-superadmin gets 403', async () => {
-    const ref = await db.collection('client_errors').add({ message: 'x', createdAt: new Date(), resolved: false });
+    const ref = await db.collection('client_errors').add({ message: 'x', createdAt: new Date(), status: 'open' });
     const { status } = await apiFetch(`/api/admin/client-errors/${ref.id}`, {
       method: 'DELETE',
       headers: { 'x-test-uid': 'not-a-superadmin' },
@@ -200,7 +218,7 @@ describe('DELETE /api/admin/client-errors/:id', () => {
   });
 
   it('superadmin can delete', async () => {
-    const ref = await db.collection('client_errors').add({ message: 'to delete', createdAt: new Date(), resolved: false });
+    const ref = await db.collection('client_errors').add({ message: 'to delete', createdAt: new Date(), status: 'open' });
     const { status } = await apiFetch(`/api/admin/client-errors/${ref.id}`, { method: 'DELETE' });
     assert.strictEqual(status, 200);
     const doc = await db.collection('client_errors').doc(ref.id).get();
