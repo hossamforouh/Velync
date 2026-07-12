@@ -9,6 +9,7 @@ const db = new Firestore();
 const platforms = [
   {
     id: 'ticktick',
+    connectorKey: 'ticktick',
     name: 'TickTick',
     logo: '<svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#5B6AEB"/><path d="M8 16l5 5 11-11" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     authType: 'oauth',
@@ -23,6 +24,7 @@ const platforms = [
   },
   {
     id: 'notion',
+    connectorKey: 'notion',
     name: 'Notion',
     logo: '<svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#1A1A1A"/><path d="M8 10l6-2v15l-6 2V10z" fill="white" opacity="0.9"/><path d="M14 8l10-2v15l-10 2V8z" fill="white" opacity="0.6"/></svg>',
     authType: 'oauth',
