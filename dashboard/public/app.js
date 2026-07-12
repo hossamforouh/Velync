@@ -735,7 +735,9 @@ function showPendingInvitesModal(invites, token) {
 // -----------------------------------
 
 
-const firebaseConfig = {
+// Sourced from window.VELYNC_CONFIG.firebase, set in index.html by hostname
+// (production vs staging) — see the environment-detection block there.
+const firebaseConfig = (window.VELYNC_CONFIG && window.VELYNC_CONFIG.firebase) || {
   apiKey: "AIzaSyBSMJMrR2lCYJP5D6e7wZDp-PmR8MZ5pIE",
   authDomain: "velync.web.app",
   projectId: "velync",

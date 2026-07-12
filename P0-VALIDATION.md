@@ -5,8 +5,10 @@ with fake connectors. P0 is the gap that only **real accounts + real secret keys
 can close. These steps must be run by you (they need live credentials); the tooling
 below makes each one a single command.
 
-Recommended target: a **staging** project/service first (see
-`infrastructure/cloudbuild.yaml`), then production.
+Recommended target: the **staging** project/service first (`npm run deploy:staging`,
+see `STAGING_CHECKLIST.md` for one-time setup and `infrastructure/cloudbuild.yaml`
+for the deploy config), then production once staging is clean — see
+`PROMOTION_RUNBOOK.md`.
 
 ---
 
@@ -37,20 +39,28 @@ Recommended target: a **staging** project/service first (see
 3. Confirm the sync still succeeds (the engine refreshed the token) and that a
    new access token was written back to `credentials/{uid}`.
 
-## C. Stripe billing (real webhook signature)
+## C. Lemon Squeezy billing (real webhook signature)
 
-1. Install the Stripe CLI and forward events to the backend:
+Lemon Squeezy has no CLI event-trigger equivalent to `stripe trigger` — this
+section is a real, browser-driven TEST MODE checkout instead of synthetic
+events.
+
+1. In the Lemon Squeezy dashboard (TEST MODE store), confirm the webhook
+   endpoint (Settings → Webhooks) points at:
    ```
-   stripe listen --forward-to https://<backend-url>/api/billing/webhook
+   https://<staging-backend-url>/api/billing/webhook
    ```
-2. Complete a real Checkout (test mode) for a paid plan, or trigger events:
-   ```
-   stripe trigger checkout.session.completed
-   stripe trigger customer.subscription.deleted
-   ```
-3. Verify the workspace's `planId` / subscription fields update correctly and that
-   signature verification passes (no 400 "signature" errors in logs — the raw-body
-   handling is the thing being validated here).
+2. Complete a real Checkout in TEST MODE for a paid plan via the app UI
+   (Settings → Billing tab → Upgrade), using a Lemon Squeezy test card.
+3. Verify the workspace's `planId` / `lsSubscriptionId` / `subscriptionStatus`
+   fields update correctly in Firestore, and that no signature-verification
+   errors appear in the Cloud Run logs (the raw-body handling in
+   `src/api/routes/billing.js`'s webhook route is what's being validated
+   here — `express.json()` must not have consumed the body before the
+   signature check runs).
+4. Also trigger a downgrade/cancel (Settings → Billing → Cancel) and confirm
+   the workspace reverts to Free at the end of the billing period (soft-cancel
+   semantics, not immediate).
 
 ## D. Distributed lock under multiple instances
 
@@ -75,6 +85,6 @@ Confirm due configs actually run and `lastRunAt` advances.
 ### Sign-off checklist
 - [ ] A: create / update / delete / no-duplicates verified with live accounts
 - [ ] B: token auto-refresh verified after expiry
-- [ ] C: real Stripe webhook updates the plan; signature verifies
+- [ ] C: real Lemon Squeezy webhook updates the plan; signature verifies
 - [ ] D: single execution under 2 instances
 - [ ] E: (optional) external scheduler ticks drive syncs

@@ -3,15 +3,20 @@
 # Run this against your deployed staging Cloud Run URL after deploying.
 #
 # Usage:
-#   export STAGING_URL=https://velync-staging-<hash>.run.app
+#   export STAGING_URL=https://velync-staging-<hash>.us-central1.run.app
 #   export TEST_AUTH_TOKEN=<valid Firebase ID token for a test user>
 #   export TEST_WORKSPACE_ID=<the test user's workspace ID>
-#   export STRIPE_API_KEY=sk_test_<for stripe CLI commands>
 #   bash scripts/test-staging.sh
 #
-# Requires: curl, jq, stripe CLI
+# Requires: curl, jq
 #   brew install jq
-#   npm install -g stripe  # then stripe login
+#
+# Billing (Lemon Squeezy) is NOT exercised via CLI here — Lemon Squeezy has
+# no event-trigger CLI equivalent to `stripe trigger`. Real webhook
+# verification (Section A2.1) is a manual step: complete a real TEST MODE
+# checkout in the browser and watch the staging backend logs /
+# `execution_logs`-equivalent for the webhook landing and the workspace doc
+# updating. See P0-VALIDATION.md Section C.
 
 set -euo pipefail
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -72,39 +77,17 @@ fi
 BASE="$STAGING_URL/api"
 
 # ──────────────────────────────────────────────
-# A2.1 — Stripe webhook signature verification
+# A2.1 — Lemon Squeezy webhook (manual — see header note)
 # ──────────────────────────────────────────────
 echo ""
-echo "─── A2.1: Stripe webhook ──────────────────────────"
-
-if command -v stripe &>/dev/null && [ -n "${STRIPE_API_KEY:-}" ]; then
-  echo "  Starting stripe listener in background..."
-  stripe listen --forward-to "$STAGING_URL/api/billing/webhook" --api-key "$STRIPE_API_KEY" &
-  LISTENER_PID=$!
-  sleep 2
-
-  echo "  Triggering checkout.session.completed..."
-  stripe trigger checkout.session.completed --api-key "$STRIPE_API_KEY" 2>&1 | tail -5
-
-  echo "  Triggering customer.subscription.updated..."
-  stripe trigger customer.subscription.updated --api-key "$STRIPE_API_KEY" 2>&1 | tail -5
-
-  echo "  Triggering customer.subscription.deleted..."
-  stripe trigger customer.subscription.deleted --api-key "$STRIPE_API_KEY" 2>&1 | tail -5
-
-  echo "  Triggering invoice.payment_failed..."
-  stripe trigger invoice.payment_failed --api-key "$STRIPE_API_KEY" 2>&1 | tail -5
-
-  kill "$LISTENER_PID" 2>/dev/null || true
-  # THEN CHECK FIRESTORE: manually verify workspace doc updated via gcloud firestore
-  echo -e "  ${YELLOW}⚠ MANUAL CHECK REQUIRED: verify workspace document updated in staging Firestore${NC}"
-  echo "    gcloud firestore documents list --collection=workspaces --project=<staging-project>"
-  echo "    Look for planId, stripeSubscriptionId, subscriptionStatus fields."
-  skip=$((skip+1))
-else
-  echo -e "  ${YELLOW}⚠ Skipping — stripe CLI not available or STRIPE_API_KEY not set${NC}"
-  skip=$((skip+1))
-fi
+echo "─── A2.1: Lemon Squeezy webhook ───────────────────"
+echo -e "  ${YELLOW}⚠ MANUAL: complete a real TEST MODE checkout in the browser,${NC}"
+echo "    then verify in staging Firestore that the workspace doc's"
+echo "    planId / lsSubscriptionId / subscriptionStatus fields updated:"
+echo "    gcloud firestore documents list --collection=workspaces --project=<staging-project>"
+echo "    Also confirm no 'signature' verification errors in Cloud Run logs:"
+echo "    gcloud run services logs read velync-staging --project=<staging-project> --limit=50"
+skip=$((skip+1))
 
 # ──────────────────────────────────────────────
 # A2.2 — Checkout → plan upgrade → unlock config
@@ -113,9 +96,9 @@ echo ""
 echo "─── A2.2: Checkout → upgrade flow ────────────────"
 if [ -n "${TEST_AUTH_TOKEN:-}" ]; then
   assert_status "GET /api/billing/plan (authenticated)" "$BASE/billing/plan" 200
-  echo -e "  ${YELLOW}⚠ MANUAL: run full checkout with real (test-mode) card via browser${NC}"
+  echo -e "  ${YELLOW}⚠ MANUAL: run full checkout with a Lemon Squeezy TEST MODE card via browser${NC}"
   echo "    Visit ${STAGING_URL}/settings → billing tab → click 'Upgrade'"
-  echo "    Use card 4242 4242 4242 4242, exp any future date, CVC any 3 digits"
+  echo "    Use test card 4242 4242 4242 4242, exp any future date, CVC any 3 digits"
   skip=$((skip+1))
 fi
 

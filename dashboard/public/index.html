@@ -47,10 +47,47 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="responsive.css?v=2" />
   <script>
-    window.VELYNC_CONFIG = {
-      apiBase: window.VELYNC_API_URL || 'https://velync-backend-632548720073.us-central1.run.app',
-      projectId: 'velync',
-    };
+    // Environment-aware config: picks Firebase project + backend API base by
+    // hostname, so the SAME dashboard/public source serves both the staging
+    // and production Firebase Hosting sites without a build-time swap.
+    // Unknown/local hostnames default to PRODUCTION (matches pre-split
+    // behavior) — staging is opt-in by hostname match only, never the
+    // fallback, so this can't accidentally point a real user at staging.
+    (function () {
+      var STAGING_PROJECT_ID = 'velync-staging';
+      var STAGING_HOSTS = [
+        'velync-staging.web.app',
+        'velync-staging.firebaseapp.com',
+      ];
+      var STAGING_API_BASE = 'https://velync-backend-7ficeiyopq-uc.a.run.app';
+
+      var isStaging = STAGING_HOSTS.indexOf(window.location.hostname) !== -1;
+
+      window.VELYNC_ENV = isStaging ? 'staging' : 'production';
+      window.VELYNC_CONFIG = isStaging ? {
+        apiBase: window.VELYNC_API_URL || STAGING_API_BASE,
+        projectId: STAGING_PROJECT_ID,
+        firebase: {
+          apiKey: 'AIzaSyCM_KAltuLAc2zQOjuEOO1lNpHEtTK0314',
+          authDomain: STAGING_PROJECT_ID + '.firebaseapp.com',
+          projectId: STAGING_PROJECT_ID,
+          storageBucket: STAGING_PROJECT_ID + '.firebasestorage.app',
+          messagingSenderId: '201201568848',
+          appId: '1:201201568848:web:1accd9e27a8ad690779555',
+        },
+      } : {
+        apiBase: window.VELYNC_API_URL || 'https://velync-backend-632548720073.us-central1.run.app',
+        projectId: 'velync',
+        firebase: {
+          apiKey: 'AIzaSyBSMJMrR2lCYJP5D6e7wZDp-PmR8MZ5pIE',
+          authDomain: 'velync.web.app',
+          projectId: 'velync',
+          storageBucket: 'velync.firebasestorage.app',
+          messagingSenderId: '632548720073',
+          appId: '1:632548720073:web:521085551e7c24da27bc18',
+        },
+      };
+    })();
     (function() {
       var KEY = 'message channel closed';
       function handler(e) {

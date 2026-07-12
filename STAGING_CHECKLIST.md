@@ -1,54 +1,92 @@
-# Velync — Staging Deployment & Validation Checklist
+# Velync — Staging Provisioning & Deployment Checklist
 
-## A1. Deploy to Cloud Run
+This is the user-facing side of the Production/Staging split. Everything
+here requires YOUR own accounts/logins (GCP billing, third-party OAuth
+consoles, Lemon Squeezy) — none of it can be done by Claude directly. Once
+the one-time setup (Section A) is done, day-to-day deploys are a single
+command (Section B).
 
-### GCP setup (one-time)
-- [ ] Create a **separate GCP project** for staging (do NOT use production)
-- [ ] Enable Firestore (Native mode), Cloud Run, Artifact Registry, Secret Manager
-- [ ] Create a Firestore database in the staging project
-- [ ] Enable the Vertex AI API (for Gemini mapping suggestions)
-- [ ] Create a service account for Cloud Run with roles:
-  - `roles/datastore.user`
-  - `roles/aiplatform.user`
-  - `roles/logging.logWriter`
-- [ ] Store secrets in Secret Manager:
-  - `stripe-secret-key` (test mode)
-  - `stripe-webhook-secret` (test mode)
-- [ ] Set up Firebase Authentication (same providers as prod)
-- [ ] Run `scripts/seed-plans.js` against staging Firestore
-- [ ] Run `scripts/seed-superadmin.js` against staging Firestore
-- [ ] Run `scripts/seed-marketplace.js` against staging Firestore
-- [ ] Run `scripts/migrate-workspaces.js` against staging Firestore
+Production stays exactly as-is (`velync` GCP/Firebase project, `velync.web.app`,
+`velync-backend` Cloud Run service) — nothing here touches it. Everything
+below provisions a NEW, separate project for staging.
 
-### Credentials setup
-- [ ] Create a **Notion integration** (private) for staging — note the OAuth client ID/secret
-- [ ] Create a **TickTick dev application** for staging — note the client ID/secret
-- [ ] Create a **GCP OAuth consent screen + credentials** (Desktop app type) for Google Contacts
-- [ ] Get **Stripe test-mode** API keys and webhook secret
-- [ ] Generate `ENCRYPTION_KEY` via `openssl rand -hex 32`
+## A. One-time staging project setup
 
-### Deploy
-- [ ] `gcloud builds submit --config infrastructure/cloudbuild.yaml --project <staging-project>`
-- [ ] Set all env vars (see `infrastructure/staging-env-template.sh`) on the Cloud Run service
-- [ ] Note the staging URL (e.g. `https://velync-staging-<hash>.run.app`)
+### A1. Create the project
+- [ ] Create a **new, separate GCP project** (suggested id: `velync-staging` —
+      if you pick a different id, update `.firebaserc`'s `staging` alias and
+      the `STAGING_PROJECT_ID`/`STAGING_HOSTS`/`STAGING_API_BASE` placeholders
+      in `dashboard/public/index.html` to match)
+- [ ] Enable billing on it (separate from, or same billing account as, prod —
+      your choice; costs will be small for a staging environment)
+- [ ] Enable APIs: Firestore, Cloud Run, Artifact Registry, Secret Manager,
+      Vertex AI (Gemini), Cloud Build, Firebase Authentication, Firebase Hosting
+- [ ] Create a **Firestore database** (Native mode) in the staging project
+- [ ] `firebase login` (if not already) then `firebase projects:list` to
+      confirm the CLI can see the new project
+- [ ] Grant the Cloud Run runtime service account:
+      `roles/datastore.user`, `roles/aiplatform.user`, `roles/logging.logWriter`
 
-## A2. Run smoke tests
+### A2. Point the repo at it
+- [ ] Update `.firebaserc`'s `"staging"` project alias if you didn't use
+      `velync-staging` as the project id
+- [ ] Update the staging placeholders in `dashboard/public/index.html`
+      (search for `STAGING_PROJECT_ID`) — the real `apiKey`/`appId`/
+      `messagingSenderId` come from Firebase Console → Project Settings →
+      Your apps → Web app, once you register one
+- [ ] Register a Firebase Hosting site + a Web app for the staging project
+      (Firebase Console), which gives you those config values
 
-- [ ] `bash scripts/test-staging.sh` (basic endpoint health)
-- [ ] **Stripe webhook**: `stripe listen --forward-to <url>/api/billing/webhook`
-  - [ ] `stripe trigger checkout.session.completed` — verify workspace doc updates in Firestore
-  - [ ] `stripe trigger customer.subscription.updated` — verify subscription status sync
-  - [ ] `stripe trigger customer.subscription.deleted` — verify plan reverts to free
-  - [ ] `stripe trigger invoice.payment_failed` — verify status set to `past_due`
-- [ ] **Full checkout**: visit `/settings` → billing tab → click Upgrade → complete with test card `4242 4242 4242 4242 4242`
-  - [ ] Confirm config limit unlocks after upgrade
-- [ ] **Real sync**: connect real Notion + TickTick accounts, create a sync config, run it
-  - [ ] Confirm deletion-detection: modify a dest item directly, re-sync — it should NOT be deleted
-  - [ ] Force token expiry: manually set `expiresAt` to past in Firestore, trigger sync — confirm auto-refresh
-- [ ] **Distributed lock**: deploy with `--min-instances=2`, check logs for lease acquisition
-- [ ] **Plan enforcement**: try creating/activating more configs than Free tier allows
+### A3. Secrets (Secret Manager, staging project)
+Generate and store these — see `infrastructure/staging-env-template.sh` for
+exact `gcloud secrets create` commands:
+- [ ] `ENCRYPTION_KEY` — `openssl rand -hex 32`, **must differ from production's**
+- [ ] `SCHEDULER_SECRET` — `openssl rand -hex 32`, must differ from production's
+- [ ] `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, `LEMONSQUEEZY_WEBHOOK_SECRET`
+      — from a **TEST MODE** Lemon Squeezy store (Settings → Stores → toggle
+      Test mode), separate from the live production store
 
-## A3. Cost baseline
-- [ ] After 3+ days of staging usage, run `node scripts/cost-report.js --days 7`
-- [ ] Enable GCP BigQuery billing export and re-run: `node scripts/cost-report.js --days 7 --billing-dataset=<project.dataset.table>`
-- [ ] Compare actual costs against the pricing model, update `src/core/config.js` defaults if needed
+### A4. OAuth apps (staging redirect URIs)
+- [ ] **Notion**: new integration at notion.so/my-integrations
+- [ ] **TickTick**: new dev app at developer.ticktick.com
+- [ ] **Google**: new OAuth client (GCP Console → Credentials) in the
+      staging project, for Contacts access
+- [ ] Point each provider's redirect URI at
+      `https://<your-staging-hosting-domain>/auth-callback.html`
+- [ ] Firebase Authentication: enable the same sign-in providers as
+      production (Email/Password, Google) in the staging project's Auth settings
+- [ ] App Check / reCAPTCHA: create a new reCAPTCHA v3 site key for the
+      staging domain and update it in `dashboard/public/index.html`'s
+      staging Firebase config block if App Check should be enforced there too
+
+### A5. Seed staging data
+- [ ] `gcloud auth application-default login` (or set
+      `GOOGLE_APPLICATION_CREDENTIALS` to a staging service account key)
+- [ ] `npm run seed:staging` — seeds default plans (Free/Pro/Business),
+      the superadmin doc, and marketplace platforms/integrations. Refuses to
+      run if it resolves to the production project — see
+      `scripts/seed-staging.js`.
+- [ ] Log in to the staging site as the superadmin, go to Admin Panel →
+      Platforms tab, and fill in `clientId`/`clientSecret` for each platform
+      from Section A4 (these live in Firestore, not env vars — see
+      `infrastructure/staging-env-template.sh` for why)
+- [ ] Admin Panel → Plans tab: set `lsVariantIdMonthly` on Pro/Business to
+      the TEST MODE Lemon Squeezy variant ids
+
+## B. Day-to-day deploy (after A is done once)
+
+No git branching — same `main` branch as production, just a different
+`--project` target. See `PROMOTION_RUNBOOK.md` for the full workflow.
+
+- [ ] `npm run deploy:staging` — builds + deploys the backend (Cloud Build →
+      Cloud Run) and the frontend (Firebase Hosting) to the staging project
+      in one step
+- [ ] `bash scripts/test-staging.sh` (set `STAGING_URL`/`TEST_AUTH_TOKEN` first)
+      — basic endpoint health + plan-enforcement checks
+- [ ] For real live-integration validation (real OAuth, real Lemon Squeezy
+      webhook, distributed lock under >1 instance): see `P0-VALIDATION.md`
+
+## C. Cost baseline (optional, after a few days of staging usage)
+- [ ] `node scripts/cost-report.js --days 7` (run against the staging project)
+- [ ] Enable GCP BigQuery billing export and re-run with
+      `--billing-dataset=<project.dataset.table>` for real cost attribution

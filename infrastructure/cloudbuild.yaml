@@ -1,39 +1,49 @@
-# Velync — Cloud Build config for staging deployment
-# Trigger: push to main branch OR manual submission.
+# Velync — Cloud Build config for staging deployment.
+# Submitted manually (see scripts/deploy-staging.sh / `npm run deploy:staging`)
+# against the "staging" Firebase/GCP project — same `main` branch as
+# production, just a different --project target. No CI trigger is wired up.
 #
-# Prerequisites:
-#   1. Create a Cloud Run service named "velync-staging" in your GCP project
-#   2. Set all env vars from staging-env-template.sh in the Cloud Run service
+# Prerequisites (one-time, on the staging GCP project — see STAGING_CHECKLIST.md):
+#   1. Enable Cloud Run, Artifact Registry, Firestore, Vertex AI APIs
+#   2. Create the secrets referenced below in Secret Manager (encryption-key,
+#      scheduler-secret, lemonsqueezy-api-key, lemonsqueezy-store-id,
+#      lemonsqueezy-webhook-secret) — see infrastructure/staging-env-template.sh
 #   3. Ensure the Cloud Run service account has:
 #      - roles/datastore.user (Firestore access)
 #      - roles/aiplatform.user (Vertex AI / Gemini)
 #      - roles/logging.logWriter (Cloud Logging)
-#      - roles/run.viewer (for revision URLs)
+#      - roles/secretmanager.secretAccessor (read the secrets above)
 steps:
   # Build the container
   - name: gcr.io/cloud-builders/docker
     args:
       - build
       - -t
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/velync-staging/velync-staging:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/velync-staging/velync-staging:$BUILD_ID
       - -t
       - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/velync-staging/velync-staging:latest
       - .
 
-  # Push to Artifact Registry
+  # Push to Artifact Registry (both tags built above — --all-tags is required,
+  # a bare `docker push <repo>` with no tag only pushes :latest and silently
+  # skips the :$BUILD_ID tag the deploy step below needs)
   - name: gcr.io/cloud-builders/docker
     args:
       - push
+      - --all-tags
       - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/velync-staging/velync-staging
 
-  # Deploy to Cloud Run (staging)
+  # Deploy to Cloud Run (staging). Service name is "velync-backend" — matching
+  # production's service name exactly, even though this is a different GCP
+  # project — because firebase.json's hosting rewrite for /api/** hardcodes
+  # serviceId: velync-backend, and that file is shared between both projects.
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - velync-staging
-      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/velync-staging/velync-staging:$SHORT_SHA
+      - velync-backend
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/velync-staging/velync-staging:$BUILD_ID
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
@@ -43,8 +53,14 @@ steps:
       - --cpu=1
       - --memory=512Mi
       - --timeout=300
-      - --set-secrets=/etc/secrets/lemonsqueezy-api-key=lemonsqueezy-api-key:latest,/etc/secrets/lemonsqueezy-webhook-secret=lemonsqueezy-webhook-secret:latest
-      - --update-env-vars=LOG_LEVEL=info,EXTERNAL_API_TIMEOUT=15000,PORT=8080
+      # NOTE: Notion/TickTick/Google OAuth client id+secret are NOT env vars —
+      # they live in Firestore (`platforms`.clientId, `platform_secrets`.clientSecret,
+      # Admin-SDK-only) and are set via the Admin Panel's Platforms tab after
+      # seeding (see scripts/seed-staging.js + STAGING_CHECKLIST.md). Only
+      # genuinely env-var-based secrets (per src/core/config.js) go here.
+      - --set-secrets=ENCRYPTION_KEY=encryption-key:latest,SCHEDULER_SECRET=scheduler-secret:latest,LEMONSQUEEZY_API_KEY=lemonsqueezy-api-key:latest,LEMONSQUEEZY_STORE_ID=lemonsqueezy-store-id:latest,LEMONSQUEEZY_WEBHOOK_SECRET=lemonsqueezy-webhook-secret:latest
+      # PORT is reserved by Cloud Run (auto-injected) — do not set it here.
+      - --update-env-vars=LOG_LEVEL=info,EXTERNAL_API_TIMEOUT=15000,SCHEDULER_MODE=internal,APP_BASE_URL=https://velync-staging.web.app
 
 substitutions:
   _REGION: us-central1

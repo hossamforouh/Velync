@@ -1,60 +1,57 @@
 #!/usr/bin/env bash
-# Velync — Staging environment variables reference
-# Copy this to your staging Cloud Run env or .env.staging and fill in real values.
+# Velync — Staging environment variables reference.
 #
-# Usage:
-#   gcloud run deploy velync-staging \
-#     --source . \
-#     --env-vars-file env.staging.yaml
-#   (or set env vars individually in the Cloud Run UI/console)
+# These are consumed by infrastructure/cloudbuild.yaml via Secret Manager
+# (--set-secrets) for the actually-secret values, and plain --update-env-vars
+# for everything else. Field names below match src/core/config.js exactly.
+#
+# IMPORTANT: Notion / TickTick / Google OAuth client id + secret are NOT env
+# vars in this app — they're stored in Firestore (`platforms`.clientId is
+# admin-readable, `platform_secrets`.clientSecret is Admin-SDK-only) and set
+# via the Admin Panel's Platforms tab after seeding staging (see
+# scripts/seed-staging.js + STAGING_CHECKLIST.md). Don't add them here.
+#
+# Usage (create each secret once in the staging GCP project):
+#   echo -n "<value>" | gcloud secrets create encryption-key --data-file=- --project=<staging-project>
+#   echo -n "<value>" | gcloud secrets create scheduler-secret --data-file=- --project=<staging-project>
+#   echo -n "<value>" | gcloud secrets create lemonsqueezy-api-key --data-file=- --project=<staging-project>
+#   echo -n "<value>" | gcloud secrets create lemonsqueezy-store-id --data-file=- --project=<staging-project>
+#   echo -n "<value>" | gcloud secrets create lemonsqueezy-webhook-secret --data-file=- --project=<staging-project>
+# Then infrastructure/cloudbuild.yaml's --set-secrets flag wires them into
+# the Cloud Run service automatically on every `npm run deploy:staging`.
 
 # ─── Core ──────────────────────────────────────────────────────
-PORT=8080
+# ENCRYPTION_KEY: generate with `openssl rand -hex 32`. Must be DIFFERENT
+#   from production's — staging ciphertext must never be decryptable with
+#   the production key or vice versa.
+ENCRYPTION_KEY=<generate: openssl rand -hex 32 — DIFFERENT from prod>
 LOG_LEVEL=info
-ENCRYPTION_KEY=<generate: openssl rand -hex 32>
+EXTERNAL_API_TIMEOUT=15000
+APP_BASE_URL=https://velync-staging.web.app
+
+# ─── Scheduler ─────────────────────────────────────────────────
+SCHEDULER_MODE=internal
+SCHEDULER_SECRET=<generate: openssl rand -hex 32 — DIFFERENT from prod>
 
 # ─── Firebase Admin SDK ────────────────────────────────────────
-# Service account with Firestore + Vertex AI access (staging project).
-# Set via GOOGLE_APPLICATION_CREDENTIALS or default application credentials
-# in Cloud Run (the runtime service account). No env var needed if the
-# Cloud Run service account has the right IAM roles.
+# No env var needed — Cloud Run's runtime service account (with
+# roles/datastore.user + roles/aiplatform.user) provides Application
+# Default Credentials automatically, scoped to the staging project.
 
-# ─── OAuth — Notion ────────────────────────────────────────────
-NOTION_CLIENT_ID=<from Notion Integration>
-NOTION_CLIENT_SECRET=<from Notion Integration>
+# ─── Lemon Squeezy (billing) — TEST MODE ───────────────────────
+# Create a separate TEST MODE store in the Lemon Squeezy dashboard (Settings
+# → Stores → toggle "Test mode"), get its own API key + webhook secret, and
+# point its webhook (Settings → Webhooks) at:
+#   https://<staging-backend-url>/api/billing/webhook
+LEMONSQUEEZY_API_KEY=<test-mode API key from Lemon Squeezy dashboard>
+LEMONSQUEEZY_STORE_ID=<test-mode store id>
+LEMONSQUEEZY_WEBHOOK_SECRET=<test-mode webhook signing secret>
 
-# ─── OAuth — TickTick ──────────────────────────────────────────
-TICKTICK_CLIENT_ID=<from TickTick Dev>
-TICKTICK_CLIENT_SECRET=<from TickTick Dev>
-
-# ─── OAuth — Google (Contacts) ─────────────────────────────────
-GOOGLE_CLIENT_ID=<from GCP Credentials>
-GOOGLE_CLIENT_SECRET=<from GCP Credentials>
-
-# ─── Stripe (test mode) ────────────────────────────────────────
-STRIPE_SECRET_KEY=sk_test_<from Stripe Dashboard>
-STRIPE_WEBHOOK_SECRET=whsec_<from Stripe Dashboard — required for webhook verification>
-
-# ─── App URLs (used by Stripe checkout return URLs) ────────────
-APP_BASE_URL=https://velync-staging-<hash>.run.app
-
-# ─── Connector test tokens (legacy; most are now OAuth) ────────
-NOTION_INTEGRATION_TOKEN=ntn_<staging test token>
-TICKTICK_USERNAME=<test account email>
-TICKTICK_PASSWORD=<test account password>
-
-# ─── Gemini / Vertex AI (mapping suggestions) ──────────────────
-# Uses GOOGLE_APPLICATION_CREDENTIALS; no separate key needed.
-# The staging service account must have aiplatform.user role.
-
-# ─── Email (nodemailer) ────────────────────────────────────────
-# For invite emails, notifications.
-# Option A: Gmail SMTP
-# SMTP_HOST=smtp.gmail.com
-# SMTP_PORT=587
-# SMTP_USER=<your-email@gmail.com>
-# SMTP_PASS=<app-password>
-# Option B: Use a SendGrid / Mailgun integration
-
-# ─── External API timeout ──────────────────────────────────────
-EXTERNAL_API_TIMEOUT=15000
+# ─── Connector OAuth (Firestore-based, NOT env vars) ───────────
+# Set clientId/clientSecret per platform via the Admin Panel → Platforms tab
+# after running scripts/seed-staging.js. Register separate staging OAuth
+# apps with each provider (staging redirect URIs, e.g.
+# https://velync-staging.web.app/auth-callback.html):
+#   - Notion: https://www.notion.so/my-integrations
+#   - TickTick: https://developer.ticktick.com/
+#   - Google: GCP Console → APIs & Services → Credentials (staging project)
