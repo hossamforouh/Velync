@@ -29,6 +29,8 @@ const { maintenanceMode } = require('./middleware/maintenance');
 const ALLOWED_ORIGINS = [
   'https://velync.web.app',
   'https://velync.firebaseapp.com',
+  'https://velync-staging.web.app',
+  'https://velync-staging.firebaseapp.com',
   'http://localhost:5000',
   'http://localhost:3000',
   'http://127.0.0.1:5000',
