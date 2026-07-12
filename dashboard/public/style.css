@@ -2086,6 +2086,18 @@ header.legacy-header {
   transform: translateX(0);
 }
 
+/* For short, single-purpose panels (a handful of fields, or a read-only
+   detail view) — a full-viewport takeover is excessive and hides the
+   underlying list unnecessarily. Anchors to a fixed width on the right
+   instead, leaving the dimmed background list visible for context. Not
+   applied to genuinely complex panels (e.g. the New/Edit Config wizard),
+   which still warrant the full-width treatment. */
+.side-panel--compact {
+  left: auto;
+  width: 100%;
+  max-width: 560px;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -3052,6 +3064,10 @@ header.legacy-header {
 
   .side-panel {
     width: 100%;
+  }
+
+  .side-panel--compact {
+    max-width: 100%;
   }
 }
 
