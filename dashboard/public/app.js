@@ -771,6 +771,61 @@ try {
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ─── Global error reporting ────────────────────────────────────
+// Reports uncaught errors/rejections to the backend so admins can see them
+// (Admin Panel → Client Errors) instead of them only ever appearing in the
+// reporting user's own devtools console. Best-effort and capped: never
+// throws, never blocks the UI, and stops after a handful per page load so a
+// tight error loop can't flood the endpoint or the user's network.
+(function () {
+  const MAX_REPORTS = 10;
+  let reportCount = 0;
+  const seen = new Set();
+
+  function report(payload) {
+    if (reportCount >= MAX_REPORTS) return;
+    const dedupeKey = (payload.message || '') + '|' + (payload.stack || '').slice(0, 300);
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    reportCount++;
+    try {
+      const body = JSON.stringify({
+        ...payload,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        // Self-reported, not verified via a Bearer token — this endpoint is
+        // unauthenticated (errors can happen before login) and this data is
+        // diagnostic-only (admin-read-only), so an unverified uid is fine.
+        uid: (auth.currentUser && auth.currentUser.uid) || null,
+        workspaceId: window.currentWorkspaceId || null,
+      });
+      fetch(`${window.VELYNC_CONFIG.apiBase}/api/client-errors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+      }).catch(() => {});
+    } catch (_) { /* never let error reporting itself throw */ }
+  }
+
+  window.addEventListener('error', (e) => {
+    report({
+      type: 'error',
+      message: e.message || 'Unknown error',
+      stack: (e.error && e.error.stack) || '',
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (e) => {
+    const reason = e.reason;
+    report({
+      type: 'unhandledrejection',
+      message: (reason && reason.message) || String(reason),
+      stack: (reason && reason.stack) || '',
+    });
+  });
+})();
+
 // ─── Global Settings Initialization ───────────────────────────
 (async () => {
   try {
@@ -1168,18 +1223,21 @@ onAuthStateChanged(auth, async (user) => {
           { initAdminPlans },
           { initAdminWorkspaces },
           { initAdminSyncHealth },
+          { initAdminClientErrors },
         ] = await Promise.all([
           import('./js/admin-integrations.js'),
           import('./js/admin-platforms.js'),
           import('./js/admin-plans.js'),
           import('./js/admin-workspaces.js'),
           import('./js/admin-sync-health.js'),
+          import('./js/admin-client-errors.js'),
         ]);
         initAdminIntegrations(db, auth);
         initAdminPlatforms(db, auth);
         initAdminPlans(db, auth);
         initAdminWorkspaces(auth);
         initAdminSyncHealth(auth);
+        initAdminClientErrors(db, auth);
       }
     }
 

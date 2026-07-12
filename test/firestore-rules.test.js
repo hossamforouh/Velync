@@ -126,6 +126,13 @@ async function seedDocs(firestore) {
     timestamp: new Date().toISOString(),
   });
 
+  // Seed client_errors
+  await firestore.collection('client_errors').doc('test-error').set({
+    message: 'TypeError: x is not a function',
+    createdAt: new Date().toISOString(),
+    resolved: false,
+  });
+
   // Seed mail (for firestore-send-email extension)
   await firestore.collection('mail').doc('test-mail').set({
     to: 'test@test.com',
@@ -646,6 +653,32 @@ describe('/activity_logs/{logId}', () => {
   it('even superadmin cannot update or delete from the client', async () => {
     await assertFails(ctx.superAdmin().firestore().collection('activity_logs').doc('test-log').update({ action: 'resolved' }));
     await assertFails(ctx.superAdmin().firestore().collection('activity_logs').doc('test-log').delete());
+  });
+});
+
+// ─────────────────────────────────────────────
+// 15. /client_errors/{errorId}
+// ─────────────────────────────────────────────
+describe('/client_errors/{errorId}', () => {
+  it('only superadmin can read', async () => {
+    await assertSucceeds(ctx.superAdmin().firestore().collection('client_errors').doc('test-error').get());
+    await assertFails(ctx.stranger().firestore().collection('client_errors').doc('test-error').get());
+    await assertFails(ctx.owner().firestore().collection('client_errors').doc('test-error').get());
+    await assertFails(ctx.unauth().firestore().collection('client_errors').doc('test-error').get());
+  });
+
+  it('client writes are always denied — even the reporting endpoint only writes via Admin SDK', async () => {
+    await assertFails(ctx.unauth().firestore().collection('client_errors').add({
+      message: 'hack', createdAt: new Date().toISOString(),
+    }));
+    await assertFails(ctx.superAdmin().firestore().collection('client_errors').add({
+      message: 'hack', createdAt: new Date().toISOString(),
+    }));
+  });
+
+  it('even superadmin cannot update or delete from the client (resolve/delete go through the backend)', async () => {
+    await assertFails(ctx.superAdmin().firestore().collection('client_errors').doc('test-error').update({ resolved: true }));
+    await assertFails(ctx.superAdmin().firestore().collection('client_errors').doc('test-error').delete());
   });
 });
 

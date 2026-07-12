@@ -209,6 +209,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Frontend JS error reports. The reporting endpoint is intentionally
+    // public/unauthenticated (errors can happen before login), so writes
+    // are Admin-SDK-only here too — a client-writable collection fed by an
+    // unauthenticated endpoint would be trivially spoofable/floodable.
+    match /client_errors/{errorId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
     // ─── Credentials ──────────────────────────────────────────
     match /credentials/{documentId} {
       allow read: if false;

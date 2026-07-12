@@ -889,6 +889,7 @@
               <button class="admin-tab" data-target="admin-pane-sync-health">Sync Health</button>
               <button class="admin-tab" data-target="admin-pane-marketplace">Marketplace</button>
               <button class="admin-tab" data-target="admin-pane-activity">Audit Log</button>
+              <button class="admin-tab" data-target="admin-pane-client-errors">Client Errors</button>
             </div>
           </div>
 
@@ -1285,6 +1286,49 @@
                   <button id="admin-activity-load-more" class="btn btn-secondary btn-sm">Load More</button>
                 </div>
                 <div id="admin-activity-empty" style="display:none;padding:16px;text-align:center;color:var(--text-3);font-size:0.9rem;">No results match the current filters.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-pane" id="admin-pane-client-errors" style="display: none;">
+            <div class="surface-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h2 style="margin:0;">Client Errors</h2>
+                <div style="display:flex;gap:8px;">
+                  <button id="admin-clienterr-refresh" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">⟳ Refresh</button>
+                </div>
+              </div>
+              <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. Mark an entry resolved once you've addressed it, or delete it if it isn't actionable.</p>
+              <div id="admin-clienterr-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;">
+                <select id="admin-clienterr-filter-status" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;">
+                  <option value="unresolved">Unresolved</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="">All</option>
+                </select>
+                <input type="text" id="admin-clienterr-search" placeholder="Search message, URL, or uid..." style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;flex:1;min-width:180px;">
+              </div>
+              <div class="connections-table-wrap">
+                <table class="connections-table">
+                  <thead>
+                    <tr>
+                      <th>Occurred</th>
+                      <th>Message</th>
+                      <th>URL</th>
+                      <th>User</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-clienterr-tbody">
+                    <tr>
+                      <td colspan="6" style="text-align:center;padding:20px;">No client errors reported yet.</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div id="admin-clienterr-load-more-wrap" style="display:none;padding:16px;text-align:center;">
+                  <button id="admin-clienterr-load-more" class="btn btn-secondary btn-sm">Load More</button>
+                </div>
+                <div id="admin-clienterr-empty" style="display:none;padding:16px;text-align:center;color:var(--text-3);font-size:0.9rem;">No results match the current filters.</div>
               </div>
             </div>
           </div>
