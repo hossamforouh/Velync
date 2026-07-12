@@ -1,6 +1,9 @@
-// Bumped to v6 with the vendored-asset + offline-resilience changes — the
-// new name forces the activate handler to purge the v5 cache on next load.
-const CACHE_NAME = 'velync-cache-v6';
+// Bumped to v7 to force clients off stale precached index.html/style.css
+// after the Client Errors + side-panel-drawer changes — the new name makes
+// the activate handler purge the v6 cache on next load. Bump this string
+// on any deploy that changes cached shell assets (index.html/style.css/js)
+// and needs to reach already-open clients immediately.
+const CACHE_NAME = 'velync-cache-v7';
 
 // The app shell: everything needed to render the page and its icons/fonts
 // offline (minus the Firebase SDK, which is imported cross-origin from
