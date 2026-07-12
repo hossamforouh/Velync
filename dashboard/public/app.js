@@ -782,9 +782,19 @@ const db = getFirestore(app);
   let reportCount = 0;
   const seen = new Set();
 
+  // Strips embedded ISO-8601 timestamps before hashing for dedupe — some
+  // sources (Firebase's own console.error calls, e.g. AppCheck's ReCAPTCHA
+  // refresher) prepend a live timestamp to an otherwise-identical repeating
+  // message, which without this would give every occurrence a unique key
+  // and defeat dedupe entirely, burning through MAX_REPORTS on one error.
+  const ISO_TIMESTAMP_RE = /\[?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\]?\s*/g;
+  function normalizeForDedupe(s) {
+    return (s || '').replace(ISO_TIMESTAMP_RE, '');
+  }
+
   function report(payload) {
     if (reportCount >= MAX_REPORTS) return;
-    const dedupeKey = (payload.message || '') + '|' + (payload.stack || '').slice(0, 300);
+    const dedupeKey = normalizeForDedupe(payload.message) + '|' + normalizeForDedupe(payload.stack).slice(0, 300);
     if (seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
     reportCount++;
@@ -824,6 +834,52 @@ const db = getFirestore(app);
       stack: (reason && reason.stack) || '',
     });
   });
+
+  // Some libraries (notably Firebase's own App Check SDK) catch their own
+  // errors internally and only console.error() them — they never become an
+  // uncaught exception or unhandled rejection, so the listeners above can't
+  // see them. Hooking console.error catches these too. Shares the same
+  // dedupe/cap as above, so an error that retries on a timer (e.g. App
+  // Check's ReCAPTCHA refresher) only ever reports once per page load, not
+  // on every retry.
+  const originalConsoleError = console.error.bind(console);
+  console.error = function (...args) {
+    originalConsoleError(...args);
+    try {
+      const errArg = args.find((a) => a instanceof Error);
+      const message = args.map((a) => {
+        if (a instanceof Error) return a.message;
+        if (typeof a === 'string') return a;
+        try { return JSON.stringify(a); } catch (_) { return String(a); }
+      }).join(' ');
+      report({ type: 'console.error', message, stack: (errArg && errArg.stack) || '' });
+    } catch (_) { /* never let the hook itself throw */ }
+  };
+
+  // Failed same-origin /api/** calls — scoped deliberately, not global.
+  // Third-party SDK traffic (Firebase, reCAPTCHA, gstatic) fails/retries as
+  // part of normal SDK behavior and isn't actionable app code, so reporting
+  // on it would just be noise. Never reports on the error-reporting
+  // endpoint itself. Response/rejection behavior is passed through
+  // unchanged either way — this only observes, never intercepts.
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const isApiCall = url.includes('/api/') && !url.includes('/api/client-errors');
+    if (!isApiCall) return originalFetch(input, init);
+
+    const method = (init && init.method) || 'GET';
+    try {
+      const res = await originalFetch(input, init);
+      if (!res.ok) {
+        report({ type: 'fetch-error', message: `${method} ${url} -> HTTP ${res.status}` });
+      }
+      return res;
+    } catch (err) {
+      report({ type: 'fetch-error', message: `${method} ${url} -> ${err.message}`, stack: err.stack || '' });
+      throw err;
+    }
+  };
 })();
 
 // ─── Global Settings Initialization ───────────────────────────
