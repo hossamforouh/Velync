@@ -280,16 +280,22 @@ export function initAdminPlatforms(dbInstance, authInstance) {
   async function populateConnectorKeyOptions() {
     const select = document.getElementById('f-plat-connector-key');
     if (!select) return;
-    if (!cachedConnectorKeys) {
+    // Only cache a SUCCESSFUL, non-empty fetch. A transient failure (e.g. the
+    // backend's isSuperAdmin() 60s cache not yet reflecting a just-granted
+    // superadmin doc) must not permanently poison this for the rest of the
+    // page session — retry on every open until it actually succeeds.
+    if (!cachedConnectorKeys || cachedConnectorKeys.length === 0) {
       try {
-        cachedConnectorKeys = await apiRequest('/api/admin/connector-keys').then(r => r.connectorKeys || []);
+        const keys = await apiRequest('/api/admin/connector-keys').then(r => r.connectorKeys || []);
+        if (keys.length > 0) cachedConnectorKeys = keys;
       } catch (err) {
         console.error('Failed to load connector keys', err);
-        cachedConnectorKeys = [];
+        showToast('Failed to load connector keys — try reopening this form', 'error');
       }
     }
+    const keys = cachedConnectorKeys || [];
     select.innerHTML = '<option value="">— No connector (config only) —</option>' +
-      cachedConnectorKeys.map(k => `<option value="${escAttr(k)}">${escHtml(k)}</option>`).join('');
+      keys.map(k => `<option value="${escAttr(k)}">${escHtml(k)}</option>`).join('');
   }
 
   openModalRef = openModal;
