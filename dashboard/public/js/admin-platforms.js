@@ -126,6 +126,63 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     btnPrev.addEventListener('click', () => showStep(currentStep - 1));
   }
 
+  // Clickable stepper: jump back to an earlier step freely, or forward only
+  // if the current step passes validation (same gate as the Next button).
+  stepperItems.forEach((item) => {
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => {
+      const target = parseInt(item.dataset.step);
+      if (Number.isNaN(target) || target === currentStep) return;
+      if (target < currentStep || validateCurrentStep()) showStep(target);
+    });
+  });
+
+  // ── Live SVG logo preview ──────────────────────────────────
+  const logoInput = document.getElementById('f-plat-logo');
+  const logoPreview = document.getElementById('f-plat-logo-preview');
+
+  // Minimal sanitizer mirroring hub.js's sanitizeLogoHtml — strips
+  // script/embed tags and on*/javascript: handlers before rendering the
+  // preview. Input is superadmin-only, but the preview injects it as
+  // innerHTML, so scrub it anyway.
+  function sanitizeSvg(html) {
+    if (!html) return '';
+    try {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = html;
+      const DISALLOWED = new Set(['script', 'iframe', 'object', 'embed', 'link', 'style', 'meta']);
+      for (const el of Array.from(tpl.content.querySelectorAll('*'))) {
+        if (DISALLOWED.has(el.tagName.toLowerCase())) { el.remove(); continue; }
+        for (const attr of Array.from(el.attributes)) {
+          const n = attr.name.toLowerCase();
+          if (n.startsWith('on') || /^\s*javascript:/i.test(attr.value.trim())) el.removeAttribute(attr.name);
+        }
+      }
+      return tpl.innerHTML;
+    } catch (_) { return ''; }
+  }
+
+  function updateLogoPreview() {
+    if (!logoPreview) return;
+    const raw = ((logoInput && logoInput.value) || '').trim();
+    if (raw && raw.toLowerCase().includes('<svg')) {
+      logoPreview.innerHTML = sanitizeSvg(raw);
+      const svg = logoPreview.querySelector('svg');
+      if (svg) {
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+      }
+    } else {
+      logoPreview.innerHTML = 'SVG';
+    }
+  }
+  if (logoInput) logoInput.addEventListener('input', updateLogoPreview);
+  // updateLogoPreview is hoisted within this init scope, so openModal()
+  // (defined later in the same scope) calls it directly after populating or
+  // clearing the textarea.
+
   function resetTabs() { showStep(0); }
 
   function toCamelCase(str) {
@@ -340,6 +397,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       document.getElementById('f-plat-doc-id').value = platform.id;
       document.getElementById('f-plat-name').value = platform.name || '';
       document.getElementById('f-plat-logo').value = platform.logo || '';
+      updateLogoPreview();
       document.getElementById('f-plat-connector-key').value = platform.connectorKey || '';
       document.getElementById('f-plat-tier').value = platform.tier || 'basic';
       document.getElementById('f-plat-auth-type').value = platform.authType || 'manual';
@@ -369,6 +427,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       document.getElementById('f-plat-doc-id').value = '';
       document.getElementById('f-plat-name').value = '';
       document.getElementById('f-plat-logo').value = '';
+      updateLogoPreview();
       document.getElementById('f-plat-connector-key').value = '';
       document.getElementById('f-plat-tier').value = 'basic';
       document.getElementById('f-plat-auth-type').value = 'manual';
@@ -733,7 +792,7 @@ function renderPlatformTable() {
     const msg = platSearchTerm
       ? `No platforms match "${escHtml(platSearchTerm)}"`
       : 'No platforms found.';
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;">${msg}</td></tr>`;
     const loadMoreWrap = document.getElementById('admin-plat-load-more-wrap');
     if (loadMoreWrap) loadMoreWrap.style.display = 'none';
     const countEl = document.getElementById('admin-plat-count');
@@ -743,8 +802,16 @@ function renderPlatformTable() {
 
   sorted.forEach(p => {
     const checked = platSelectedIds.has(p.id) ? 'checked' : '';
-    const authTypeDisplay = p.authType === 'oauth' ? 'OAuth 2.0' : (p.authType === 'manual' ? 'Manual' : '<span style="color:var(--text-3)">None</span>');
-    const badgeHtml = `<span class="conn-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">${escHtml(p.name)}</span>`;
+    const authTypeDisplay = p.authType === 'oauth'
+      ? `<span class="badge badge-info">OAuth 2.0</span>`
+      : (p.authType === 'manual' ? `<span class="badge">Manual</span>` : `<span class="badge" style="opacity:0.55;">None</span>`);
+    // Name + the platform id folded underneath as a small monospace subtitle,
+    // replacing the former standalone ID column.
+    const nameCell = `
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <span class="conn-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; width:fit-content;">${escHtml(p.name)}</span>
+        <span style="font-family:monospace;font-size:0.72rem;color:var(--text-3);">${escHtml(p.key || p.id)}</span>
+      </div>`;
     const intCount = integrationCountByPlatform[p.id] || 0;
     const tier = p.tier || 'basic';
     const tierHtml = tier === 'premium'
@@ -754,9 +821,8 @@ function renderPlatformTable() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td data-label="Select"><input type="checkbox" class="plat-row-check" data-id="${p.id}" ${checked} /></td>
-      <td data-label="ID" style="font-weight:500;">${escHtml(p.key || p.id)}</td>
-      <td data-label="Name">${badgeHtml}</td>
-      <td data-label="Auth Type" style="font-size:0.9rem;color:var(--text-2);">${authTypeDisplay}</td>
+      <td data-label="Name">${nameCell}</td>
+      <td data-label="Auth Type">${authTypeDisplay}</td>
       <td data-label="Tier">${tierHtml}</td>
       <td data-label="Integrations" style="text-align:center;">${intCount}</td>
       <td data-label="Actions" class="col-actions">

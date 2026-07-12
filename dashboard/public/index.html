@@ -1125,7 +1125,6 @@
                   <thead>
                     <tr>
                       <th style="width:36px;"><input type="checkbox" id="admin-plat-select-all" title="Select all" /></th>
-                      <th data-sort="key">ID</th>
                       <th data-sort="name">Name</th>
                       <th data-sort="authType">Auth Type</th>
                       <th data-sort="tier">Tier</th>
@@ -1135,7 +1134,7 @@
                   </thead>
                   <tbody id="admin-platforms-tbody">
                     <tr>
-                      <td colspan="7" style="text-align:center; padding: 20px;">Loading...</td>
+                      <td colspan="6" style="text-align:center; padding: 20px;">Loading...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1376,7 +1375,11 @@
                   </div>
                   <div class="form-row">
                     <label for="f-plat-logo">Platform Logo (SVG) *</label>
-                    <textarea id="f-plat-logo" rows="3" placeholder="<svg>...</svg>" required></textarea>
+                    <div style="display:flex;gap:12px;align-items:flex-start;">
+                      <div id="f-plat-logo-preview" title="Live preview"
+                        style="flex-shrink:0;width:48px;height:48px;border-radius:10px;border:1px solid var(--border);background:var(--bg-3);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--text-3);font-size:0.65rem;text-align:center;">SVG</div>
+                      <textarea id="f-plat-logo" rows="3" placeholder="<svg>...</svg>" required style="flex:1;"></textarea>
+                    </div>
                   </div>
                   <div class="form-row">
                     <label for="f-plat-connector-key">Connector Key</label>
