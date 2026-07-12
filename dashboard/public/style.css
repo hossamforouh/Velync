@@ -1399,6 +1399,18 @@ header.legacy-header {
   margin: 0;
 }
 
+/* Admin table checkboxes (Platforms/Integrations select-all + per-row) —
+   match the branded checkbox style used on the sign-up form (accent-color +
+   16px) instead of the browser default grey box. */
+.connections-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+  margin: 0;
+  vertical-align: middle;
+}
+
 /* Status column */
 .configs-table th:nth-child(3) {
   width: 100px;
