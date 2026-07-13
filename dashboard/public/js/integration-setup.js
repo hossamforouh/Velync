@@ -1,6 +1,6 @@
 import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, where } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
-import { saveConnection, connections, loadConnections } from './connections.js';
+import { saveConnection, connections, loadConnections, initiateDirectOAuthFlow } from './connections.js';
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
 
@@ -11,6 +11,8 @@ let currentIntegration = null;
 let currentStep = 1;
 let platformsMap = {};
 let sidePanelObserver = null;
+let currentP1Id = null;
+let currentP2Id = null;
 
 // Setup Integration Flow
 function closeSetupView() {
@@ -82,6 +84,9 @@ function populateSetupView(p1Id, p2Id) {
   const view = document.getElementById('view-integration-setup');
   if (!view || !currentIntegration) return;
 
+  currentP1Id = p1Id;
+  currentP2Id = p2Id;
+
   const p1Name = platformsMap[p1Id]?.name || 'Platform 1';
   const p2Name = platformsMap[p2Id]?.name || 'Platform 2';
   const p1Logo = platformsMap[p1Id]?.logo || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>';
@@ -121,6 +126,12 @@ function populateSetupView(p1Id, p2Id) {
   const status2 = document.getElementById('setup-dest-status');
   if (status2) { status2.textContent = isP2Connected ? 'Connected' : 'Not Connected'; status2.className = `setup-platform-status ${isP2Connected ? 'connected' : 'disconnected'}`; }
 
+  // Inline "Connect" button per platform — lets the user resolve a missing
+  // connection right here instead of discovering it only after opening the
+  // full config wizard.
+  wireConnectButton('setup-source-connect', p1Id, isP1Connected);
+  wireConnectButton('setup-dest-connect', p2Id, isP2Connected);
+
   // Empty connection notice
   const connNotice = document.getElementById('setup-connection-notice');
   if (connections.length === 0) {
@@ -153,4 +164,88 @@ function populateSetupView(p1Id, p2Id) {
   });
 }
 
+// Shows/hides the inline "Connect" button next to a platform card based on
+// its current connection status, and wires it to run the same OAuth-popup
+// flow the Connections page uses (initiateDirectOAuthFlow) — lets the user
+// resolve a missing connection right here instead of only discovering it
+// after opening the full config wizard.
+function wireConnectButton(btnId, platformId, isConnected) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+
+  if (isConnected) {
+    btn.style.display = 'none';
+    btn.onclick = null;
+    return;
+  }
+
+  btn.style.display = 'inline-block';
+  btn.disabled = false;
+  btn.textContent = 'Connect';
+  btn.onclick = () => connectSetupPlatform(platformId, btn);
+}
+
+async function connectSetupPlatform(platformId, btn) {
+  const platform = platformsMap[platformId];
+  if (!platform) return;
+
+  // Manual/API-key platforms (no authUrl) have no popup flow to drive from
+  // here — direct the user to the full Connections page rather than hang on
+  // "Connecting…" indefinitely (mirrors onboarding.js#connectPlatform).
+  if (!platform.authType || platform.authType !== 'oauth' || !platform.authUrl) {
+    showToast(`${platform.name || 'This platform'} isn't an OAuth connection — add it from the Connections page.`, 'info');
+    return;
+  }
+
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+
+  const baseLabel = 'My ' + (platform.name || platformId);
+  const existingLabels = connections.map(c => c.label).filter(Boolean);
+  let label = baseLabel;
+  let idx = 1;
+  while (existingLabels.includes(label)) {
+    idx++;
+    label = `${baseLabel} (${idx})`;
+  }
+
+  try {
+    const opened = await initiateDirectOAuthFlow(platform, label);
+    if (!opened) throw new Error('Could not open the connection popup — check your popup blocker and try again.');
+
+    await waitForSetupConnectionRefresh(platformId);
+    // Re-render so the status badge flips to "Connected" and this button hides.
+    populateSetupView(currentP1Id, currentP2Id);
+  } catch (err) {
+    showToast('Connection failed: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+// initiateDirectOAuthFlow() (connections.js) dispatches a window
+// 'connections-refreshed' CustomEvent once the popup's OAuth exchange
+// finishes — { detail: { newConnectionId, platformId } } on success, or no
+// detail at all if the popup was closed/failed before completing.
+async function waitForSetupConnectionRefresh(expectedPlatformId) {
+  return new Promise((resolve, reject) => {
+    const handler = (event) => {
+      const detail = event.detail;
+      if (detail && detail.newConnectionId && detail.platformId === expectedPlatformId) {
+        window.removeEventListener('connections-refreshed', handler);
+        resolve(detail.newConnectionId);
+      } else {
+        window.removeEventListener('connections-refreshed', handler);
+        reject(new Error('OAuth was not completed'));
+      }
+    };
+    window.addEventListener('connections-refreshed', handler);
+
+    setTimeout(() => {
+      window.removeEventListener('connections-refreshed', handler);
+      reject(new Error('OAuth timed out'));
+    }, 300000);
+  });
+}
 

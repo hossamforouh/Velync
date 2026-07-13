@@ -1,9 +1,9 @@
-// Bumped to v9 for the Client Errors page overhaul (grouping, bulk delete,
-// CSV export, details/AI-prompt panel) — the new name makes the activate
-// handler purge the v8 cache on next load. Bump this string on any deploy
-// that changes cached shell assets (index.html/style.css/js) and needs to
-// reach already-open clients immediately.
-const CACHE_NAME = 'velync-cache-v9';
+// Bumped to v10 for the inline "Connect" button on the Marketplace
+// integration-setup preview page — the new name makes the activate handler
+// purge the v9 cache on next load. Bump this string on any deploy that
+// changes cached shell assets (index.html/style.css/js) and needs to reach
+// already-open clients immediately.
+const CACHE_NAME = 'velync-cache-v10';
 
 // The app shell: everything needed to render the page and its icons/fonts
 // offline (minus the Firebase SDK, which is imported cross-origin from
