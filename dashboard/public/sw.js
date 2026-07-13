@@ -1,9 +1,9 @@
-// Bumped to v7 to force clients off stale precached index.html/style.css
-// after the Client Errors + side-panel-drawer changes — the new name makes
-// the activate handler purge the v6 cache on next load. Bump this string
-// on any deploy that changes cached shell assets (index.html/style.css/js)
-// and needs to reach already-open clients immediately.
-const CACHE_NAME = 'velync-cache-v7';
+// Bumped to v8 for the confirmDialog/Client-Secret/tooltip-portal fixes —
+// the new name makes the activate handler purge the v7 cache on next load.
+// Bump this string on any deploy that changes cached shell assets
+// (index.html/style.css/js) and needs to reach already-open clients
+// immediately.
+const CACHE_NAME = 'velync-cache-v8';
 
 // The app shell: everything needed to render the page and its icons/fonts
 // offline (minus the Firebase SDK, which is imported cross-origin from

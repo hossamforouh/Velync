@@ -1999,11 +1999,26 @@ header.legacy-header {
   color: var(--primary);
   outline: none;
 }
+/* The inline .info-tip-bubble markup is never shown in place — it's only
+   a template that js/app.js's initInfoTips() clones into a fixed-position
+   portal on document.body (see .info-tip-portal below). Positioning it
+   here instead would clip it against any scrollable ancestor (e.g. a
+   side-panel's .panel-body), which is exactly the bug this replaced. */
 .info-tip .info-tip-bubble {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  display: none;
+}
+
+/* Portal root: a single fixed-position container appended to <body>,
+   sibling to nothing that could clip or under-stack it. */
+.info-tip-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 5000;
+  pointer-events: none;
+}
+.info-tip-bubble--portal {
+  position: fixed;
   width: max-content;
   max-width: 260px;
   background: var(--bg-3);
@@ -2017,25 +2032,21 @@ header.legacy-header {
   text-align: left;
   white-space: normal;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.15s ease;
-  z-index: 100;
-  pointer-events: none;
 }
-.info-tip .info-tip-bubble::after {
+.info-tip-bubble--portal::after {
   content: "";
   position: absolute;
   top: 100%;
-  left: 50%;
+  left: var(--info-tip-arrow-left, 50%);
   transform: translateX(-50%);
   border: 5px solid transparent;
   border-top-color: var(--border);
 }
-.info-tip:hover .info-tip-bubble,
-.info-tip:focus-visible .info-tip-bubble {
-  opacity: 1;
-  visibility: visible;
+.info-tip-bubble--portal.info-tip-bubble--flip::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--border);
 }
 
 .conn-dialog-oauth-note {

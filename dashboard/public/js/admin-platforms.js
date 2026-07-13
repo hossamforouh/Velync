@@ -2,6 +2,7 @@ import { collection, onSnapshot, query, orderBy, getDocs, where, limit, startAft
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
 import { getSkeletonTableHTML, setButtonLoading } from './loading-components.js';
+import { confirmDialog } from './confirm.js';
 
 let firestoreDb = null;
 let auth = null;
@@ -548,10 +549,25 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     const oauthGroup = document.getElementById('oauth-fields-group');
     const manualGroup = document.getElementById('manual-fields-group');
     if (!oauthGroup || !manualGroup) return;
+    // Client Secret needs different required-ness than the rest of this
+    // group: it's write-only (the server never sends a saved secret back to
+    // the browser), so on Edit it must stay optional — blank means "keep the
+    // stored value" — even when authType is oauth. On Create there's nothing
+    // to keep, so it IS required for oauth. isEditing is derived from the
+    // hidden doc-id field openModal() sets, so this stays correct no matter
+    // how many times the user toggles authType while the panel is open.
+    const secretInput = document.getElementById('f-plat-client-secret');
+    const isEditing = !!document.getElementById('f-plat-doc-id').value;
     if (authType === 'oauth') {
       oauthGroup.classList.remove('hidden');
       manualGroup.classList.add('hidden');
-      oauthGroup.querySelectorAll('input').forEach(i => i.setAttribute('required', 'true'));
+      oauthGroup.querySelectorAll('input').forEach(i => {
+        if (i === secretInput) {
+          if (isEditing) i.removeAttribute('required'); else i.setAttribute('required', 'true');
+        } else {
+          i.setAttribute('required', 'true');
+        }
+      });
     } else {
       oauthGroup.classList.add('hidden');
       manualGroup.classList.remove('hidden');
@@ -704,7 +720,12 @@ function wirePlatformControls() {
     bulkDeleteBtn.addEventListener('click', async () => {
       const ids = Array.from(platSelectedIds);
       if (ids.length === 0) return;
-      if (!confirm(`Delete ${ids.length} platform(s)? This cannot be undone.`)) return;
+      const ok = await confirmDialog({
+        title: 'Delete platforms?',
+        message: `Delete ${ids.length} platform(s)? This cannot be undone.`,
+        confirmText: 'Delete',
+      });
+      if (!ok) return;
 
       bulkDeleteBtn.disabled = true;
       bulkDeleteBtn.textContent = 'Deleting...';
@@ -890,9 +911,11 @@ async function showDeleteModal(id, displayName) {
   }
 
   if (depCount > 0) {
-    const proceed = confirm(
-      `"${displayName}" is used by ${depCount} integration(s). Deleting it will orphan those references. Proceed anyway?`
-    );
+    const proceed = await confirmDialog({
+      title: 'Platform is in use',
+      message: `"${displayName}" is used by ${depCount} integration(s). Deleting it will orphan those references. Proceed anyway?`,
+      confirmText: 'Delete Anyway',
+    });
     if (!proceed) return;
   }
 

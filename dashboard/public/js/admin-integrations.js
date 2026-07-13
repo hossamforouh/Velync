@@ -1,6 +1,7 @@
 import { collection, collectionGroup, onSnapshot, query, orderBy, where, getDocs, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { getSkeletonTableHTML, setButtonLoading } from './loading-components.js';
 import { showToast } from './toast.js';
+import { confirmDialog } from './confirm.js';
 
 let firestoreDb = null;
 let authInstance = null;
@@ -600,7 +601,12 @@ function wireAdminControls() {
     bulkDeleteBtn.addEventListener('click', async () => {
       const ids = Array.from(intSelectedIds);
       if (ids.length === 0) return;
-      if (!confirm(`Delete ${ids.length} integration(s)? This cannot be undone.`)) return;
+      const ok = await confirmDialog({
+        title: 'Delete integrations?',
+        message: `Delete ${ids.length} integration(s)? This cannot be undone.`,
+        confirmText: 'Delete',
+      });
+      if (!ok) return;
 
       bulkDeleteBtn.disabled = true;
       bulkDeleteBtn.textContent = 'Deleting...';

@@ -905,6 +905,85 @@ const db = getFirestore(app);
   }
 })();
 
+// ─── Info-tip tooltips (global, event-delegated) ───────────────
+// `.info-tip-bubble` is authored inline next to its icon for markup
+// convenience, but CSS-only `position:absolute` bubbles get clipped by
+// any scrollable/overflow ancestor (e.g. a side-panel's `.panel-body`)
+// when the icon sits near that ancestor's edge. Instead of positioning
+// in place, move the bubble to a single fixed-position portal on
+// `document.body` and place it with getBoundingClientRect() — that
+// escapes every ancestor's overflow/stacking context regardless of
+// which page or panel the tooltip lives in.
+(function initInfoTips() {
+  let portal = null;
+  let activeTip = null;
+
+  function getPortal() {
+    if (!portal) {
+      portal = document.createElement('div');
+      portal.className = 'info-tip-portal';
+      document.body.appendChild(portal);
+    }
+    return portal;
+  }
+
+  function showTip(tip) {
+    const bubbleSrc = tip.querySelector('.info-tip-bubble');
+    if (!bubbleSrc) return;
+    const p = getPortal();
+    p.innerHTML = '';
+    const bubble = document.createElement('div');
+    bubble.className = 'info-tip-bubble info-tip-bubble--portal';
+    bubble.innerHTML = bubbleSrc.innerHTML;
+    p.appendChild(bubble);
+
+    const r = tip.getBoundingClientRect();
+    bubble.style.visibility = 'hidden';
+    bubble.style.opacity = '1';
+    const bw = bubble.offsetWidth;
+    const bh = bubble.offsetHeight;
+    let left = r.left + r.width / 2 - bw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - bw - 8));
+    let top = r.top - bh - 8;
+    let arrowBelow = true;
+    if (top < 8) {
+      top = r.bottom + 8;
+      arrowBelow = false;
+    }
+    bubble.style.left = `${left}px`;
+    bubble.style.top = `${top}px`;
+    bubble.classList.toggle('info-tip-bubble--flip', !arrowBelow);
+    const arrowLeft = r.left + r.width / 2 - left;
+    bubble.style.setProperty('--info-tip-arrow-left', `${arrowLeft}px`);
+    bubble.style.visibility = 'visible';
+    activeTip = tip;
+  }
+
+  function hideTip() {
+    if (portal) portal.innerHTML = '';
+    activeTip = null;
+  }
+
+  document.addEventListener('mouseover', (e) => {
+    const tip = e.target.closest && e.target.closest('.info-tip');
+    if (tip) showTip(tip);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const tip = e.target.closest && e.target.closest('.info-tip');
+    if (tip && tip === activeTip) hideTip();
+  });
+  document.addEventListener('focusin', (e) => {
+    const tip = e.target.closest && e.target.closest('.info-tip');
+    if (tip) showTip(tip);
+  });
+  document.addEventListener('focusout', (e) => {
+    const tip = e.target.closest && e.target.closest('.info-tip');
+    if (tip && tip === activeTip) hideTip();
+  });
+  window.addEventListener('scroll', hideTip, true);
+  window.addEventListener('resize', hideTip);
+})();
+
 // ─── State ────────────────────────────────────────────────────
 let configs = [];
 let pendingDeleteId = null;
