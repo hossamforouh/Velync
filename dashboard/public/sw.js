@@ -1,9 +1,9 @@
-// Bumped to v8 for the confirmDialog/Client-Secret/tooltip-portal fixes —
-// the new name makes the activate handler purge the v7 cache on next load.
-// Bump this string on any deploy that changes cached shell assets
-// (index.html/style.css/js) and needs to reach already-open clients
-// immediately.
-const CACHE_NAME = 'velync-cache-v8';
+// Bumped to v9 for the Client Errors page overhaul (grouping, bulk delete,
+// CSV export, details/AI-prompt panel) — the new name makes the activate
+// handler purge the v8 cache on next load. Bump this string on any deploy
+// that changes cached shell assets (index.html/style.css/js) and needs to
+// reach already-open clients immediately.
+const CACHE_NAME = 'velync-cache-v9';
 
 // The app shell: everything needed to render the page and its icons/fonts
 // offline (minus the Firebase SDK, which is imported cross-origin from

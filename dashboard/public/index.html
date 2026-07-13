@@ -1300,12 +1300,14 @@
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                 <h2 style="margin:0;">Client Errors</h2>
                 <div style="display:flex;gap:8px;">
-                  <button id="admin-clienterr-refresh" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">⟳ Refresh</button>
+                  <button id="admin-clienterr-export" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Export CSV</button>
+                  <button id="admin-clienterr-bulk-delete-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;color:var(--rose);display:none;">Delete Selected</button>
+                  <button id="admin-clienterr-refresh" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Refresh</button>
                 </div>
               </div>
-              <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. <strong>Open</strong>: needs attention. <strong>Resolved</strong>: a fix has shipped, awaiting verification. <strong>Closed</strong>: verified fixed.</p>
+              <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. <strong>Open</strong>: needs attention. <strong>Resolved</strong>: a fix has shipped, awaiting verification. <strong>Closed</strong>: verified fixed. Repeated occurrences of the same error are grouped into a single row.</p>
               <div id="admin-clienterr-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;">
-                <select id="admin-clienterr-filter-status" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;">
+                <select id="admin-clienterr-filter-status" class="select-arrow" style="padding:7px 36px 7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;">
                   <option value="open">Open</option>
                   <option value="resolved">Resolved</option>
                   <option value="closed">Closed</option>
@@ -1317,6 +1319,7 @@
                 <table class="connections-table">
                   <thead>
                     <tr>
+                      <th style="width:32px;"><input type="checkbox" id="admin-clienterr-select-all"></th>
                       <th>Occurred</th>
                       <th>Message</th>
                       <th>URL</th>
@@ -1326,18 +1329,20 @@
                     </tr>
                   </thead>
                   <tbody id="admin-clienterr-tbody">
-                    <tr>
-                      <td colspan="6" style="text-align:center;padding:20px;">No client errors reported yet.</td>
-                    </tr>
                   </tbody>
                 </table>
                 <div id="admin-clienterr-load-more-wrap" style="display:none;padding:16px;text-align:center;">
                   <button id="admin-clienterr-load-more" class="btn btn-secondary btn-sm">Load More</button>
                 </div>
-                <div id="admin-clienterr-empty" style="display:none;padding:16px;text-align:center;color:var(--text-3);font-size:0.9rem;">No results match the current filters.</div>
               </div>
             </div>
           </div>
+
+          <!-- ── Client Error Detail Panel ────────────────────── -->
+          <div class="panel-overlay" id="clienterr-detail-overlay"></div>
+          <aside class="side-panel side-panel--compact log-detail-panel" id="clienterr-detail-panel">
+            <!-- Populated by admin-client-errors.js -->
+          </aside>
         </section>
 
 
@@ -2347,7 +2352,7 @@
   <!-- Self-hosted (was unpkg) so an icon CDN outage can't break rendering. -->
   <script src="/vendor/feather.min.js?v=4.29.2"></script>
 
-  <script type="module" src="app.js?v=8"></script>
+  <script type="module" src="app.js?v=9"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       // Guard: if feather somehow failed to load (e.g. blocked by an
