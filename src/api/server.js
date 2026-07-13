@@ -25,6 +25,7 @@ const internalRoutes = require('./routes/internal');
 const usageRoutes = require('./routes/usage');
 const adminUsageRoutes = require('./routes/admin-usage');
 const clientErrorsRoutes = require('./routes/client-errors');
+const adminDataRoutes = require('./routes/admin-data');
 const { maintenanceMode } = require('./middleware/maintenance');
 
 const ALLOWED_ORIGINS = [
@@ -129,6 +130,7 @@ function createApp() {
   app.use('/api', usageRoutes);
   app.use('/api', adminUsageRoutes);
   app.use('/api', clientErrorsRoutes);
+  app.use('/api', adminDataRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not Found', requestId: req.requestId });

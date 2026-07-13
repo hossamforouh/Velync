@@ -1106,6 +1106,8 @@
                 <h2 style="margin: 0;">Platforms</h2>
                 <div style="display:flex;gap:8px;">
                   <button id="admin-plat-refresh-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Refresh</button>
+                  <button class="btn btn-secondary" data-export="platforms" style="padding:8px 12px;font-size:13px;" title="Download all platforms as a JSON file">Export</button>
+                  <button class="btn btn-secondary" data-import="platforms" style="padding:8px 12px;font-size:13px;" title="Upload a platforms JSON file to add/overwrite records">Import</button>
                   <button id="admin-plat-bulk-delete-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;color:var(--danger);display:none;">Delete Selected</button>
                   <button id="btn-admin-add-platform" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">+ New Platform</button>
                 </div>
@@ -1154,6 +1156,8 @@
                   <button id="admin-plans-refresh-btn" class="btn btn-secondary btn-sm" type="button" title="Refresh" style="padding:6px 10px;">
                     <svg id="admin-plans-refresh-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                   </button>
+                  <button class="btn btn-secondary btn-sm" data-export="plans" type="button" title="Download all plans as a JSON file" style="padding:6px 10px;">Export</button>
+                  <button class="btn btn-secondary btn-sm" data-import="plans" type="button" title="Upload a plans JSON file to add/overwrite records" style="padding:6px 10px;">Import</button>
                   <button id="btn-new-plan" class="btn btn-primary btn-sm" type="button">+ New Plan</button>
                 </div>
               </div>
@@ -1189,7 +1193,9 @@
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="margin: 0;">Marketplace Integrations</h2>
                 <div style="display:flex;gap:8px;">
-                  <button id="admin-int-refresh-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">⟳ Refresh</button>
+                  <button id="admin-int-refresh-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Refresh</button>
+                  <button class="btn btn-secondary" data-export="integrations" style="padding:8px 12px;font-size:13px;" title="Download all marketplace integrations as a JSON file">Export</button>
+                  <button class="btn btn-secondary" data-import="integrations" style="padding:8px 12px;font-size:13px;" title="Upload an integrations JSON file to add/overwrite records">Import</button>
                   <button id="admin-int-bulk-delete-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;color:var(--danger);display:none;">Delete Selected</button>
                   <button id="btn-admin-add-integration" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">+ Add New</button>
                 </div>
@@ -1382,19 +1388,17 @@
                     </div>
                   </div>
                   <div class="form-row">
-                    <label for="f-plat-connector-key">Connector Key</label>
+                    <label for="f-plat-connector-key">Connector Key<span class="info-tip" tabindex="0" role="note" aria-label="Which backend connector code powers syncs for this platform. Required for real syncing — leave blank only for a purely informational entry.">i<span class="info-tip-bubble">Which backend connector code actually powers syncs for this platform. Required for real syncing/entity-fetching — leave blank only for a purely informational entry.</span></span></label>
                     <select id="f-plat-connector-key">
                       <option value="">— No connector (config only) —</option>
                     </select>
-                    <small class="form-row-hint">Which backend connector code actually powers syncs for this platform. Required for real syncing/entity-fetching to work — leave blank only for a purely informational entry.</small>
                   </div>
                   <div class="form-row">
-                    <label for="f-plat-tier">Plan Tier *</label>
+                    <label for="f-plat-tier">Plan Tier *<span class="info-tip" tabindex="0" role="note" aria-label="Which plans can use this connector. A workspace can only connect if their plan's Connector Tiers (Admin → Plans) includes this tier.">i<span class="info-tip-bubble">Which plans can use this connector — a workspace can only connect to it if their plan's "Connector Tiers" (Admin → Plans) includes this tier.</span></span></label>
                     <select id="f-plat-tier" required>
                       <option value="basic">Basic</option>
                       <option value="premium">Premium</option>
                     </select>
-                    <small class="form-row-hint">Which plans can use this connector — a workspace can only connect to it if their plan's "Connector Tiers" (Admin → Plans) includes this tier.</small>
                   </div>
                 </div>
 
@@ -1421,10 +1425,10 @@
                       <input id="f-plat-client-id" type="text" placeholder="Your app's Client ID" autocomplete="off" />
                     </div>
                     <div class="form-row">
-                      <label for="f-plat-client-secret">Client Secret <span id="f-plat-client-secret-required">*</span></label>
+                      <label for="f-plat-client-secret">Client Secret <span id="f-plat-client-secret-required">*</span><span class="info-tip" tabindex="0" role="note" aria-label="For security, a saved secret is stored write-only and is never sent back to the browser, so this field is always blank when editing. Leave it blank to keep the stored secret, or type a new value to replace it.">i<span class="info-tip-bubble">For security, a saved secret is stored <strong>write-only</strong> — it's never sent back to the browser, so this field is always blank when editing. Leave it blank to keep the stored secret, or enter a new value to replace it.</span></span></label>
                       <input id="f-plat-client-secret" type="password" autocomplete="new-password"
                         placeholder="Your app's Client Secret" />
-                      <small id="f-plat-client-secret-hint" style="display:none;color:var(--text-3);">Leave blank to keep the current value.</small>
+                      <small id="f-plat-client-secret-hint" style="display:none;color:var(--text-3);">🔒 A secret is securely stored. Leave blank to keep it, or enter a new value to replace it.</small>
                     </div>
                   </div>
 

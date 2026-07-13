@@ -1280,6 +1280,7 @@ onAuthStateChanged(auth, async (user) => {
           { initAdminWorkspaces },
           { initAdminSyncHealth },
           { initAdminClientErrors },
+          { initAdminData },
         ] = await Promise.all([
           import('./js/admin-integrations.js'),
           import('./js/admin-platforms.js'),
@@ -1287,6 +1288,7 @@ onAuthStateChanged(auth, async (user) => {
           import('./js/admin-workspaces.js'),
           import('./js/admin-sync-health.js'),
           import('./js/admin-client-errors.js'),
+          import('./js/admin-data.js'),
         ]);
         initAdminIntegrations(db, auth);
         initAdminPlatforms(db, auth);
@@ -1294,6 +1296,7 @@ onAuthStateChanged(auth, async (user) => {
         initAdminWorkspaces(auth);
         initAdminSyncHealth(auth);
         initAdminClientErrors(db, auth);
+        initAdminData(auth);
       }
     }
 
