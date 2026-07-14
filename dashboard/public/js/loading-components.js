@@ -112,15 +112,19 @@ export function getEmptySpinnerHTML(text = 'Loading...') {
 }
 
 /**
- * Sets the loading state on a button.
+ * Sets the loading state on a button — the one spinner+label treatment
+ * every admin action button (Save, Refresh, Export, Import, Delete
+ * Selected, ...) should use, so loading feedback looks the same everywhere
+ * instead of some buttons getting a spinner and others just swapping text.
  * Uses a data attribute to store the original text if not provided.
  * @param {HTMLElement} btn - The button element
  * @param {boolean} isLoading - Whether the button is loading
  * @param {string} originalText - The original text to restore (optional)
+ * @param {string} loadingLabel - Text shown next to the spinner while loading (optional, defaults to "Saving...")
  */
-export function setButtonLoading(btn, isLoading, originalText = null) {
+export function setButtonLoading(btn, isLoading, originalText = null, loadingLabel = 'Saving...') {
   if (!btn) return;
-  
+
   if (isLoading) {
     if (!btn.dataset.originalText) {
       btn.dataset.originalText = originalText || btn.textContent.trim();
@@ -128,11 +132,12 @@ export function setButtonLoading(btn, isLoading, originalText = null) {
     // Prevent multiple clicks
     btn.disabled = true;
     // Set fixed width to prevent layout shift if possible, or just add spinner
-    btn.innerHTML = `<span class="spinner btn-spinner" style="width: 16px; height: 16px; border-width: 2px; margin-right: 8px; display: inline-block; vertical-align: middle;"></span> <span style="vertical-align: middle;">Saving...</span>`;
+    btn.innerHTML = `<span class="spinner btn-spinner" style="width: 16px; height: 16px; border-width: 2px; margin-right: 8px; display: inline-block; vertical-align: middle;"></span> <span style="vertical-align: middle;">${loadingLabel}</span>`;
   } else {
     btn.disabled = false;
     if (btn.dataset.originalText) {
       btn.textContent = btn.dataset.originalText;
+      delete btn.dataset.originalText;
     } else if (originalText) {
       btn.textContent = originalText;
     }

@@ -192,11 +192,20 @@ describe('POST/PUT/DELETE /api/admin/integrations', () => {
   it('creates an integration', async () => {
     const { status, body } = await apiFetch('/api/admin/integrations', {
       method: 'POST',
-      body: JSON.stringify({ name: 'TestIntegration', status: 'active' }),
+      body: JSON.stringify({ name: 'TestIntegration', status: 'Active' }),
     });
     assert.strictEqual(status, 200);
     assert.ok(body.id);
     integrationId = body.id;
+  });
+
+  it('rejects an integration status outside Active/Coming Soon/Disabled', async () => {
+    const { status, body } = await apiFetch('/api/admin/integrations', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'BadStatusIntegration', status: 'active' }),
+    });
+    assert.strictEqual(status, 400);
+    assert.match(body.error, /Validation failed/);
   });
 
   it('updates an integration', async () => {

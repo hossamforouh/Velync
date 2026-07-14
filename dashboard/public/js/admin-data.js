@@ -1,5 +1,6 @@
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
+import { setButtonLoading } from './loading-components.js';
 
 let authInstance = null;
 
@@ -29,8 +30,7 @@ async function authFetch(path, options = {}) {
 }
 
 async function exportCollection(slug, btn) {
-  const original = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
+  setButtonLoading(btn, true, null, 'Exporting…');
   try {
     const payload = await authFetch(`/api/admin/export/${slug}`);
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -47,7 +47,7 @@ async function exportCollection(slug, btn) {
   } catch (err) {
     showToast('Export failed: ' + err.message, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = original; }
+    setButtonLoading(btn, false);
   }
 }
 
@@ -89,8 +89,7 @@ async function importCollection(slug, btn) {
   });
   if (!ok) return;
 
-  const original = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
+  setButtonLoading(btn, true, null, 'Importing…');
   try {
     const result = await authFetch(`/api/admin/import/${slug}`, {
       method: 'POST',
@@ -102,7 +101,7 @@ async function importCollection(slug, btn) {
   } catch (err) {
     showToast('Import failed: ' + err.message, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = original; }
+    setButtonLoading(btn, false);
   }
 }
 

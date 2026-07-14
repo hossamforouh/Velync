@@ -608,8 +608,7 @@ function wireAdminControls() {
       });
       if (!ok) return;
 
-      bulkDeleteBtn.disabled = true;
-      bulkDeleteBtn.textContent = 'Deleting...';
+      setButtonLoading(bulkDeleteBtn, true, 'Delete Selected', 'Deleting…');
       let success = 0;
       for (const id of ids) {
         try {
@@ -619,8 +618,7 @@ function wireAdminControls() {
           console.warn(`Failed to delete ${id}:`, err);
         }
       }
-      bulkDeleteBtn.disabled = false;
-      bulkDeleteBtn.textContent = 'Delete Selected';
+      setButtonLoading(bulkDeleteBtn, false);
       intSelectedIds.clear();
       updateBulkDeleteBtn();
       showToast(`Deleted ${success} integration(s)`, 'info');
@@ -631,11 +629,13 @@ function wireAdminControls() {
   // Refresh
   const refreshBtn = document.getElementById('admin-int-refresh-btn');
   if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
+    refreshBtn.addEventListener('click', async () => {
       _invalidateCache('marketplace');
       _invalidateCache('overview');
       _invalidateCache('activity');
-      loadIntegrationsPage(true);
+      setButtonLoading(refreshBtn, true, 'Refresh', 'Refreshing…');
+      await loadIntegrationsPage(true);
+      setButtonLoading(refreshBtn, false);
     });
   }
 
@@ -681,10 +681,28 @@ function renderAdminTable() {
   tbody.innerHTML = '';
 
   if (sorted.length === 0) {
-    const msg = searchTerm
-      ? `No integrations match "${escHtml(searchTerm)}"`
-      : 'No integrations found.';
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;">${msg}</td></tr>`;
+    tbody.innerHTML = `
+      <tr class="table-empty-row">
+        <td colspan="7">
+          <div style="padding: 32px 16px; text-align: center;">
+            <div style="margin-bottom: 12px;">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+            </div>
+            <h3 style="margin-bottom: 6px; color: var(--text-1);">${searchTerm ? 'No matching integrations' : 'No integrations yet'}</h3>
+            <p style="color: var(--text-3); font-size: 0.88rem; margin-bottom: 0;">
+              ${searchTerm
+                ? `No integrations match "${escHtml(searchTerm)}". Try a different search term.`
+                : 'Click "+ Add New" to create the first Marketplace integration.'}
+            </p>
+          </div>
+        </td>
+      </tr>`;
+    // Selection state and its checkbox must reset here too — this branch used
+    // to return before the select-all sync below ran, so deleting every
+    // selected row left the header checkbox visually checked even though
+    // nothing was selected anymore.
+    const selectAllEmpty = document.getElementById('admin-int-select-all');
+    if (selectAllEmpty) selectAllEmpty.checked = false;
     const loadMoreWrap = document.getElementById('admin-int-load-more-wrap');
     if (loadMoreWrap) loadMoreWrap.style.display = 'none';
     const countEl = document.getElementById('admin-int-count');
@@ -704,7 +722,7 @@ function renderAdminTable() {
       <td data-label="Platform A">${escHtml(p1Name)}</td>
       <td data-label="Platform B">${escHtml(p2Name)}</td>
       <td data-label="Status">
-        <span class="badge ${intg.status === 'Active' ? 'badge-success' : 'badge-warning'}">${escHtml(intg.status)}</span>
+        <span class="badge ${statusBadgeClass(intg.status)}">${escHtml(intg.status)}</span>
       </td>
       <td data-label="Actions" class="col-actions">
         <div class="row-actions-group">
@@ -801,8 +819,7 @@ if (btnDelConfirm) {
     if (!integrationToDelete) return;
     const id = integrationToDelete;
 
-    btnDelConfirm.disabled = true;
-    btnDelConfirm.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span><span style="vertical-align:middle;">Deleting...</span>';
+    setButtonLoading(btnDelConfirm, true, 'Delete', 'Deleting…');
 
     try {
       const { deletedData } = await apiRequest(`/api/admin/integrations/${id}`, { method: 'DELETE' });
@@ -822,8 +839,7 @@ if (btnDelConfirm) {
       console.error("Delete failed", err);
       showToast("Failed to delete integration: " + err.message, 'error');
     } finally {
-      btnDelConfirm.disabled = false;
-      btnDelConfirm.textContent = 'Delete';
+      setButtonLoading(btnDelConfirm, false);
     }
   });
 }
@@ -986,6 +1002,12 @@ async function loadActivityLog(reset = false) {
 })();
 
 // ─── Utilities ──────────────────────────────────────────────
+function statusBadgeClass(status) {
+  if (status === 'Active') return 'badge-success';
+  if (status === 'Disabled') return 'badge-danger';
+  return 'badge-warning'; // Coming Soon (and any legacy/unrecognized value)
+}
+
 function escHtml(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')

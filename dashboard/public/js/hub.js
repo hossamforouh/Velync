@@ -124,7 +124,10 @@ export async function renderHubView(db, onNavigate) {
       }
     }
 
-    allIntegrations = integrationsData.integrations;
+    // 'Disabled' integrations are admin-managed but not offered to users —
+    // filtered out here (once, before caching) rather than in every render
+    // path, so nothing downstream needs to know the status exists.
+    allIntegrations = integrationsData.integrations.filter(i => i.status !== 'Disabled');
 
     // Check which integrations have active configs in this workspace
     connectedIds = new Set();

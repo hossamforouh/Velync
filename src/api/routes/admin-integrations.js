@@ -24,6 +24,9 @@ const requireSuperAdmin = async (req, res, next) => {
 };
 
 const INTEGRATION_FIELDS = ['name', 'description', 'status', 'tags', 'platform1', 'platform2'];
+// 'Disabled' is filtered out of the public Marketplace listing client-side
+// (dashboard/public/js/hub.js) — it still exists here so admins can manage it.
+const INTEGRATION_STATUSES = ['Active', 'Coming Soon', 'Disabled'];
 
 function pickIntegrationFields(body) {
   const data = {};
@@ -36,6 +39,7 @@ function pickIntegrationFields(body) {
 // Create a new integration
 router.post('/admin/integrations', verifyAuth, requireSuperAdmin, [
   body('name').isString().trim().notEmpty(),
+  body('status').optional().isIn(INTEGRATION_STATUSES),
 ], validate, async (req, res) => {
   try {
     const data = pickIntegrationFields(req.body);
@@ -54,6 +58,7 @@ router.post('/admin/integrations', verifyAuth, requireSuperAdmin, [
 // Update an existing integration
 router.put('/admin/integrations/:integrationId', verifyAuth, requireSuperAdmin, [
   body('name').optional().isString().trim().isLength({ min: 1 }),
+  body('status').optional().isIn(INTEGRATION_STATUSES),
 ], validate, async (req, res) => {
   try {
     const { integrationId } = req.params;
