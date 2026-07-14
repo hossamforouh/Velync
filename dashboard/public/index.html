@@ -888,7 +888,6 @@
               <button class="admin-tab" data-target="admin-pane-platforms">Platforms</button>
               <button class="admin-tab" data-target="admin-pane-plans">Plans</button>
               <button class="admin-tab" data-target="admin-pane-workspaces">Workspaces</button>
-              <button class="admin-tab" data-target="admin-pane-sync-health">Sync Health</button>
               <button class="admin-tab" data-target="admin-pane-marketplace">Marketplace</button>
               <button class="admin-tab" data-target="admin-pane-activity">Audit Log</button>
               <button class="admin-tab" data-target="admin-pane-client-errors">Client Errors</button>
@@ -923,28 +922,6 @@
             <div style="text-align:center;margin-top:16px;">
               <button id="admin-ws-load-more" class="btn btn-secondary btn-sm" type="button" style="display:none;">Load more</button>
             </div>
-          </div>
-
-          <!-- Sync Health Pane -->
-          <div class="admin-pane" id="admin-pane-sync-health" style="display:none;">
-            <div class="stats-bar" style="margin-bottom:24px;">
-              <div class="stat-pill"><span class="dot violet"></span><span>Recent Runs: <strong id="admin-sh-total">—</strong></span></div>
-              <div class="stat-pill"><span class="dot green"></span><span>Success: <strong id="admin-sh-success">—</strong></span></div>
-              <div class="stat-pill"><span class="dot red"></span><span>Errors: <strong id="admin-sh-errors">—</strong></span></div>
-              <div class="stat-pill"><span class="dot cyan"></span><span>Success Rate: <strong id="admin-sh-rate">—</strong></span></div>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
-              <h3 style="margin:0;font-size:1rem;">Recent Executions</h3>
-              <button id="admin-sh-refresh" class="btn btn-secondary btn-sm" type="button">⟳ Refresh</button>
-            </div>
-            <table class="connections-table" id="admin-sh-table">
-              <thead>
-                <tr><th>Config</th><th>Workspace</th><th>Status</th><th>Started</th><th>Results</th><th>Error</th></tr>
-              </thead>
-              <tbody id="admin-sh-tbody">
-                <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
-              </tbody>
-            </table>
           </div>
 
           <!-- Overview Pane -->
@@ -1050,6 +1027,36 @@
                 </h3>
                 <div id="admin-daily-volume" style="min-height:40px;">
                   <span style="color:var(--text-3);font-size:0.9rem;">Loading...</span>
+                </div>
+              </div>
+
+              <!-- Recent Executions (merged in from the former standalone
+                   "Sync Health" tab — the summary stats above already cover
+                   the 24h/7d numbers that tab duplicated; this collapsible
+                   section keeps only the one thing it added that Overview
+                   didn't have: the per-run log table. Collapsed by default
+                   and fetched lazily so it doesn't slow down Overview's
+                   initial load. -->
+              <div class="surface-card" style="margin-bottom:24px;padding:20px;">
+                <button id="admin-sh-toggle" type="button" style="all:unset;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;">
+                  <h3 style="margin:0;font-size:1rem;display:flex;align-items:center;gap:8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    Recent Executions
+                  </h3>
+                  <svg id="admin-sh-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform 0.15s ease;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div id="admin-sh-body" style="display:none;margin-top:16px;">
+                  <div style="text-align:right;margin-bottom:10px;">
+                    <button id="admin-sh-refresh" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+                  </div>
+                  <table class="connections-table" id="admin-sh-table">
+                    <thead>
+                      <tr><th>Config</th><th>Workspace</th><th>Status</th><th>Started</th><th>Results</th><th>Error</th></tr>
+                    </thead>
+                    <tbody id="admin-sh-tbody">
+                      <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

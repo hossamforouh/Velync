@@ -1,7 +1,11 @@
 import { showToast } from './toast.js';
 
-// Admin → Sync Health tab. Reads /api/admin/sync-health (bounded, server-side)
-// and shows a status summary plus the most recent execution logs across all workspaces.
+// Admin → Overview → "Recent Executions" (merged from the former standalone
+// Sync Health tab — its summary stats duplicated numbers Overview's own
+// stats bar already showed; this collapsible section keeps the one thing it
+// added that Overview didn't have, the per-run execution log table, and
+// stays lazily loaded so it doesn't add cost to Overview's initial paint.
+// Reads /api/admin/sync-health (bounded, server-side).
 
 let auth = null;
 let hasLoaded = false;
@@ -9,8 +13,17 @@ let hasLoaded = false;
 export function initAdminSyncHealth(authInstance) {
   auth = authInstance;
 
-  const tab = document.querySelector('.admin-tab[data-target="admin-pane-sync-health"]');
-  if (tab) tab.addEventListener('click', () => { if (!hasLoaded) load(); });
+  const toggleBtn = document.getElementById('admin-sh-toggle');
+  const body = document.getElementById('admin-sh-body');
+  const icon = document.getElementById('admin-sh-toggle-icon');
+  if (toggleBtn && body) {
+    toggleBtn.addEventListener('click', () => {
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : 'block';
+      if (icon) icon.style.transform = isOpen ? '' : 'rotate(180deg)';
+      if (!isOpen && !hasLoaded) load();
+    });
+  }
 
   const refresh = document.getElementById('admin-sh-refresh');
   if (refresh) refresh.addEventListener('click', () => load());
@@ -29,17 +42,10 @@ async function apiGet(path) {
 async function load() {
   hasLoaded = true;
   const tbody = document.getElementById('admin-sh-tbody');
+  if (!tbody) return;
   try {
-    const { summary, recent } = await apiGet('/api/admin/sync-health?limit=100');
+    const { recent } = await apiGet('/api/admin/sync-health?limit=100');
 
-    const success = summary.byStatus.success || 0;
-    const errors = (summary.byStatus.error || 0) + (summary.byStatus.failed || 0);
-    setText('admin-sh-total', summary.total);
-    setText('admin-sh-success', success);
-    setText('admin-sh-errors', errors);
-    setText('admin-sh-rate', summary.total > 0 ? `${Math.round((success / summary.total) * 100)}%` : '—');
-
-    if (!tbody) return;
     if (!recent.length) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">No recent executions.</td></tr>';
       return;
@@ -61,7 +67,7 @@ async function load() {
     }
   } catch (err) {
     showToast('Failed to load sync health: ' + err.message, 'error');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--rose);">${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--rose);">${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -69,10 +75,6 @@ function num(v) { return Number(v) || 0; }
 function fmtDate(t) {
   if (!t) return '—';
   try { return new Date(t).toLocaleString(); } catch { return String(t); }
-}
-function setText(id, v) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = (v === null || v === undefined) ? '—' : v;
 }
 function esc(s) {
   return String(s ?? '')

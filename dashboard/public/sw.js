@@ -1,9 +1,10 @@
-// Bumped to v10 for the inline "Connect" button on the Marketplace
-// integration-setup preview page — the new name makes the activate handler
-// purge the v9 cache on next load. Bump this string on any deploy that
-// changes cached shell assets (index.html/style.css/js) and needs to reach
-// already-open clients immediately.
-const CACHE_NAME = 'velync-cache-v10';
+// Bumped to v11 for merging the standalone admin "Sync Health" tab into
+// Overview as a collapsible "Recent Executions" section — the new name
+// makes the activate handler purge the v10 cache on next load. Bump this
+// string on any deploy that changes cached shell assets
+// (index.html/style.css/js) and needs to reach already-open clients
+// immediately.
+const CACHE_NAME = 'velync-cache-v11';
 
 // The app shell: everything needed to render the page and its icons/fonts
 // offline (minus the Firebase SDK, which is imported cross-origin from
