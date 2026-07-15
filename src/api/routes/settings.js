@@ -185,8 +185,16 @@ router.post('/revoke-sessions', verifyAuth, async (req, res) => {
       authVersion: FieldValue.increment(1),
       lastSessionRevokedAt: new Date().toISOString()
     }, { merge: true });
+    // revokeRefreshTokens above kills every existing refresh token for this
+    // user, including the one the CURRENT browser holds — simply refreshing
+    // the existing token isn't enough to keep this device signed in (its
+    // refresh token is dead too), only a brand-new sign-in is. Hand back a
+    // custom token so the client can immediately re-establish its own
+    // session past the revocation timestamp while every other device stays
+    // logged out.
+    const customToken = await getAuth().createCustomToken(req.user.uid);
     logger.info('settings', 'Sessions revoked', { user: req.user.uid });
-    return res.json({ success: true, message: 'All sessions revoked. You will need to log in again on other devices.' });
+    return res.json({ success: true, customToken, message: 'All other sessions revoked. You will need to log in again on other devices.' });
   } catch (err) {
     logger.error('settings', 'Failed to revoke sessions', { error: err.message });
     return res.status(500).json({ error: err.message });

@@ -288,4 +288,38 @@ describe('GET /workspace/invites', () => {
     assert.strictEqual(status, 200);
     assert.deepStrictEqual(body.invites, []);
   });
+
+  it('excludes a workspace the caller already owns or belongs to, even if their email is still in invitedEmails', async () => {
+    // Regression test: a stale invitedEmails entry for a workspace the user
+    // already owns/is a member of used to render as a "Workspace Invitation"
+    // popup indistinguishable from a self-invite. The route must filter
+    // these out rather than relying on the join handler alone.
+    await db.collection('workspaces').doc(WORKSPACE_ID).update({
+      invitedEmails: [`${OWNER_UID}@wstest.com`],
+    });
+    asUser(OWNER_UID, `${OWNER_UID}@wstest.com`);
+    const { status, body } = await apiFetch('/api/workspace/invites');
+    assert.strictEqual(status, 200);
+    assert.ok(!body.invites.some(w => w.id === WORKSPACE_ID), 'workspace the caller already owns must not appear as a pending invite');
+  });
+});
+
+describe('POST /workspace/join is idempotent for existing members', () => {
+  it('clears a stale self-invite and succeeds instead of erroring, when the caller is already a member', async () => {
+    const staleWsId = 'ws-test-stale-invite';
+    await db.collection('workspaces').doc(staleWsId).set({
+      name: 'Already Joined', ownerId: MEMBER_UID, members: [MEMBER_UID],
+      invitedEmails: [`${MEMBER_UID}@wstest.com`],
+    });
+    asUser(MEMBER_UID, `${MEMBER_UID}@wstest.com`);
+    const { status, body } = await apiFetch('/api/workspace/join', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId: staleWsId }),
+    });
+    assert.strictEqual(status, 200);
+    assert.strictEqual(body.success, true);
+    const wsSnap = await db.collection('workspaces').doc(staleWsId).get();
+    assert.deepStrictEqual(wsSnap.data().invitedEmails, [], 'stale invite entry should be cleared');
+    assert.deepStrictEqual(wsSnap.data().members, [MEMBER_UID], 'members array should be unchanged, not duplicated');
+  });
 });

@@ -4,7 +4,7 @@
    ============================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendEmailVerification, setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithCustomToken, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendEmailVerification, setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app-check.js";
 import { initLogs } from "./js/logs.js";
@@ -2053,8 +2053,17 @@ onAuthStateChanged(auth, async (user) => {
            // List accepted members
            if (tenant.members) {
              for (const uid of tenant.members) {
-               const uSnap = await getDoc(doc(db, 'users', uid));
-               const uData = uSnap.exists() ? uSnap.data() : { email: 'Unknown' };
+               // A member's user doc can be unreadable under the current
+               // Firestore rules if their own `workspaceId` field points at a
+               // different workspace than the one being viewed (it drifts
+               // from the `members` array on every workspace switch/join).
+               // Degrade that one row to "Unknown User" instead of letting it
+               // throw and wipe out the whole list.
+               let uData = { email: 'Unknown' };
+               try {
+                 const uSnap = await getDoc(doc(db, 'users', uid));
+                 if (uSnap.exists()) uData = uSnap.data();
+               } catch (_) { /* not readable under current rules */ }
                const isOwner = tenant.ownerId === uid;
                const initials = uData.email ? uData.email.substring(0, 2).toUpperCase() : 'U';
                const makeOwnerBtn = (isCurrentUserOwner && !isOwner)
@@ -2173,8 +2182,10 @@ onAuthStateChanged(auth, async (user) => {
       async function loadNotifPrefs() {
         try {
           const snap = await getDoc(doc(db, 'users', user.uid));
-          if (!snap.exists()) return;
-          const prefs = snap.data().notificationPrefs || {};
+          const prefs = snap.exists() ? snap.data().notificationPrefs : null;
+          // No saved preferences yet (new user) — keep the sensible ON-by-default
+          // toggles already set in the HTML instead of forcing everything off.
+          if (!prefs) return;
           notifToggles.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.checked = prefs[id] === true;
@@ -2219,8 +2230,27 @@ onAuthStateChanged(auth, async (user) => {
             });
             if (!res.ok) throw new Error(await res.text());
             const data = await res.json();
+            // Revoking sessions invalidates every refresh token for this user,
+            // including the one this browser is holding — a plain token
+            // refresh can't survive that (its refresh token is dead too), so
+            // re-sign-in with the one-time custom token the backend just
+            // minted for us. That's a brand-new session issued after the
+            // revocation timestamp, so it survives while every other device
+            // stays logged out.
+            let staySignedIn = true;
+            try {
+              if (data.customToken) {
+                await signInWithCustomToken(auth, data.customToken);
+              } else {
+                await auth.currentUser.getIdToken(true);
+              }
+            } catch (_) {
+              staySignedIn = false;
+            }
             if (sessionsMsg) {
-              sessionsMsg.textContent = data.message;
+              sessionsMsg.textContent = staySignedIn
+                ? data.message
+                : data.message + ' You may need to sign in again here too.';
               sessionsMsg.style.color = '#34d399';
             }
             showToast('All other sessions revoked', 'success');

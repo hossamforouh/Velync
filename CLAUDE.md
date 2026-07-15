@@ -7,6 +7,18 @@ with Claude (chat) across many rounds — referenced below as "the prior review.
 
 ---
 
+## STANDING RULES (always follow these)
+
+1. **Explain things in easy, simple English.** The user is not a developer. 
+   Do not use technical jargon without explaining what it means in plain 
+   words first.
+
+2. **NEVER touch, deploy to, or make changes on the production environment** 
+   until the user explicitly says "yes, do it on production." If ever unsure 
+   whether something affects production, stop and ask first.
+
+---
+
 ## What Velync is
 
 A SaaS platform for syncing data bidirectionally between third-party 

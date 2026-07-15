@@ -171,6 +171,12 @@ router.post('/workspace/join', verifyAuth, [
     const ws = await wsRef.get();
     if (!ws.exists) return res.status(404).json({ success: false, error: 'Workspace not found' });
     const data = ws.data();
+    // Already a member (e.g. a stale invite lingering after they joined some
+    // other way) — just clear it out instead of erroring or re-adding them.
+    if (data.ownerId === req.user.uid || data.members?.includes(req.user.uid)) {
+      await wsRef.update({ invitedEmails: FieldValue.arrayRemove(userEmail) });
+      return res.json({ success: true });
+    }
     if (!data.invitedEmails?.includes(userEmail)) {
       return res.status(403).json({ success: false, error: 'Not invited' });
     }
@@ -264,7 +270,12 @@ router.get('/workspace/invites', verifyAuth, async (req, res) => {
     const snap = await db.collection('workspaces')
       .where('invitedEmails', 'array-contains', email)
       .get();
-    const invites = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Exclude workspaces the caller already owns or belongs to — an invite
+    // to a workspace you're already in is stale, not a real pending invite,
+    // and surfacing it looks like (and has been mistaken for) a self-invite.
+    const invites = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(w => w.ownerId !== req.user.uid && !(w.members || []).includes(req.user.uid));
     res.json({ success: true, invites });
   } catch (err) {
     logger.error('workspace', 'Failed to fetch invites', { error: err.message });
