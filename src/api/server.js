@@ -26,6 +26,7 @@ const usageRoutes = require('./routes/usage');
 const adminUsageRoutes = require('./routes/admin-usage');
 const clientErrorsRoutes = require('./routes/client-errors');
 const adminDataRoutes = require('./routes/admin-data');
+const webhooksRoutes = require('./routes/webhooks');
 const { maintenanceMode } = require('./middleware/maintenance');
 
 const ALLOWED_ORIGINS = [
@@ -72,12 +73,16 @@ function createApp() {
     next();
   });
 
-  // Body parser with size limit — skip for the billing webhook (needs raw body)
+  // Body parser with size limit — skip for webhook paths (need raw body for
+  // signature verification: billing's Lemon Squeezy webhook, and the
+  // provider-webhook ingress under /api/webhooks/*).
   app.use('/api/billing/webhook', express.raw({ type: 'application/json', limit: config.maxRequestBodySize }));
-  // Must NOT run express.json() on the webhook path or it will consume the raw body stream,
-  // causing the HMAC signature check in lemonSqueezy.js to fail.
+  app.use('/api/webhooks', express.raw({ type: 'application/json', limit: config.maxRequestBodySize }));
+  // Must NOT run express.json() on either webhook path or it will consume the
+  // raw body stream, causing the HMAC signature checks (lemonSqueezy.js,
+  // notion.js) to fail.
   app.use((req, res, next) => {
-    if (req.path === '/api/billing/webhook') return next();
+    if (req.path === '/api/billing/webhook' || req.path.startsWith('/api/webhooks/')) return next();
     express.json({ limit: config.maxRequestBodySize })(req, res, next);
   });
 
@@ -90,6 +95,18 @@ function createApp() {
     message: { error: 'Too many requests, please try again later.' },
   });
   app.use(globalLimiter);
+
+  // /api/webhooks/* is a new public unauthenticated attack surface (see
+  // WEBHOOK_SYNC_PLAN.md §5 Stage 3) — tighter than the global limiter since
+  // legitimate traffic here is one third-party service, not end users.
+  const webhookLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' },
+  });
+  app.use('/api/webhooks', webhookLimiter);
 
   app.get('/', (req, res) => {
     res.send('Velync Integration Platform is running.');
@@ -131,6 +148,7 @@ function createApp() {
   app.use('/api', adminUsageRoutes);
   app.use('/api', clientErrorsRoutes);
   app.use('/api', adminDataRoutes);
+  app.use('/api', webhooksRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not Found', requestId: req.requestId });

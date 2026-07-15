@@ -115,6 +115,7 @@ function renderPlans() {
       <td data-label="Status">
         <span class="badge ${p.isActive ? 'badge-success' : 'badge-warning'}">${p.isActive ? 'Active' : 'Inactive'}</span>
         ${p.isDefault ? '<span class="badge badge-info" style="margin-left:4px;">Default</span>' : ''}
+        ${p.webhookSyncEnabled ? '<span class="badge badge-info" style="margin-left:4px;" title="Notion-sourced configs get webhook-triggered real-time sync">⚡ Real-time</span>' : ''}
       </td>
       <td data-label="Actions" class="col-actions">
         <button class="row-action-btn edit-plan-btn" data-id="${p.id}" type="button" title="Edit Plan">
@@ -155,6 +156,7 @@ function openPlanEditor(plan) {
   document.getElementById('f-plan-log-retention').value = plan ? plan.logRetentionDays : 7;
   document.getElementById('f-plan-connector-tiers').value = plan ? (plan.connectorTiers || ['basic']).join(', ') : 'basic';
   document.getElementById('f-plan-is-default').checked = plan ? !!plan.isDefault : false;
+  document.getElementById('f-plan-webhook-sync').checked = plan ? !!plan.webhookSyncEnabled : false;
 
   navigateTo('admin-plan-editor');
   window.scrollTo(0, 0);
@@ -181,6 +183,7 @@ async function onSavePlan(e) {
     logRetentionDays: parseInt(document.getElementById('f-plan-log-retention').value) || 7,
     connectorTiers: document.getElementById('f-plan-connector-tiers').value.split(',').map(s => s.trim()).filter(Boolean),
     isDefault: document.getElementById('f-plan-is-default').checked,
+    webhookSyncEnabled: document.getElementById('f-plan-webhook-sync').checked,
   };
 
   if (!data.name) {

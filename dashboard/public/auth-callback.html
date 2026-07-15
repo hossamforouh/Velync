@@ -6,10 +6,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>
-    window.VELYNC_CONFIG = {
-      apiBase: window.VELYNC_API_URL || 'https://velync-backend-632548720073.us-central1.run.app',
-      projectId: 'velync',
-    };
+    // Environment-aware config, mirroring index.html's hostname-based
+    // detection — this page previously hardcoded production's apiBase/
+    // projectId unconditionally, which was silently wrong on staging (dead
+    // for today's flow since auth-callback.js never reads VELYNC_CONFIG, but
+    // exactly the kind of stale hardcoded-environment value this project has
+    // been bitten by before; fixed to stay correct if that ever changes).
+    (function () {
+      var STAGING_PROJECT_ID = 'velync-staging';
+      var STAGING_HOSTS = ['velync-staging.web.app', 'velync-staging.firebaseapp.com'];
+      var STAGING_API_BASE = 'https://velync-backend-7ficeiyopq-uc.a.run.app';
+      var isStaging = STAGING_HOSTS.indexOf(window.location.hostname) !== -1;
+      window.VELYNC_CONFIG = isStaging ? {
+        apiBase: window.VELYNC_API_URL || STAGING_API_BASE,
+        projectId: STAGING_PROJECT_ID,
+      } : {
+        apiBase: window.VELYNC_API_URL || 'https://velync-backend-632548720073.us-central1.run.app',
+        projectId: 'velync',
+      };
+    })();
   </script>
   <style>
     body {

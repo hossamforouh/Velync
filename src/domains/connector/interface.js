@@ -65,6 +65,44 @@ class Connector {
   getDisplayTitle(item) {
     return item.title || item.name || 'Untitled';
   }
+
+  // ─── Optional webhook capability (static — see WEBHOOK_SYNC_PLAN.md) ───
+  // These are static, not instance methods: an inbound webhook arrives
+  // before we know which user/connection it belongs to (that's the whole
+  // point of parsing it), so there's no `credentials` to instantiate a
+  // connector with yet. The registry already exposes the class itself
+  // (getConnector(platformId)), so callers use these as
+  // `getConnector('notion').verifyWebhookSignature(...)`.
+
+  /** Does this connector support webhook-triggered sync? */
+  static supportsWebhooks() {
+    return false;
+  }
+
+  /**
+   * Verify an inbound webhook's signature against the raw request body.
+   * Returns `false` (not throw) when unsupported, so a caller that forgets
+   * to check supportsWebhooks() first fails closed (rejects the request)
+   * instead of crashing the handler.
+   * @param {Buffer|string} rawBody - unparsed request body
+   * @param {string} signatureHeader
+   * @param {string} secret
+   * @returns {boolean}
+   */
+  static verifyWebhookSignature(rawBody, signatureHeader, secret) {
+    return false;
+  }
+
+  /**
+   * Normalize a verified webhook payload into a platform-agnostic shape so
+   * the reverse-lookup/dispatch code never touches platform-specific
+   * fields.
+   * @param {object} payload - parsed JSON body (only call after verifying)
+   * @returns {{ workspaceId: string, entityId: string, entityType: string, eventType: string }}
+   */
+  static parseWebhookEvent(payload) {
+    throw new Error('parseWebhookEvent() not supported by this connector');
+  }
 }
 
 module.exports = { Connector };

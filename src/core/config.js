@@ -24,6 +24,10 @@ const config = {
   lemonSqueezyApiKey: process.env.LEMONSQUEEZY_API_KEY || '',
   lemonSqueezyStoreId: process.env.LEMONSQUEEZY_STORE_ID || '',
   lemonSqueezyWebhookSecret: process.env.LEMONSQUEEZY_WEBHOOK_SECRET || '',
+  notionWebhookSecret: process.env.NOTION_WEBHOOK_SECRET || '',
+  // Debounce window for coalescing a burst of webhook events into one sync
+  // run (WEBHOOK_SYNC_PLAN.md §5 Stage 4). Overridable for tests.
+  webhookDebounceMs: parseInt(process.env.WEBHOOK_DEBOUNCE_MS, 10) || 20_000,
   appBaseUrl: process.env.APP_BASE_URL || 'https://velync.web.app',
   // Scheduler: 'internal' = in-process node-cron (default, needs an always-on instance);
   // 'external' = driven by Cloud Scheduler hitting POST /api/internal/scheduler/tick.

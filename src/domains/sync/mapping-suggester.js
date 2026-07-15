@@ -1,9 +1,15 @@
 const { GoogleGenAI, Type } = require('@google/genai');
 const logger = require('../../core/logger');
+const config = require('../../core/config');
 
 // Initialize the Google Gen AI client using Vertex AI.
 // This allows Cloud Run to use its default service account (ADC) without needing a GEMINI_API_KEY.
-const ai = new GoogleGenAI({ vertexai: true, project: 'velync', location: 'us-central1' });
+// Project resolves from GOOGLE_CLOUD_PROJECT (config.firebase.projectId) so this
+// targets whichever GCP project the backend is actually running in — staging vs
+// production — instead of being hardcoded to one. Falls back to the literal
+// 'velync' only if that env var isn't set (preserves prior behavior on any
+// deploy target that hasn't had GOOGLE_CLOUD_PROJECT added to it yet).
+const ai = new GoogleGenAI({ vertexai: true, project: config.firebase.projectId || 'velync', location: 'us-central1' });
 
 /**
  * Suggests field mappings between a source schema and a destination schema using Gemini.

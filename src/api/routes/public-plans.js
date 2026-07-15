@@ -25,6 +25,7 @@ router.get('/plans', async (req, res) => {
         maxItemsPerRun: d.maxItemsPerRun,
         logRetentionDays: d.logRetentionDays,
         connectorTiers: d.connectorTiers || ['basic'],
+        webhookSyncEnabled: !!d.webhookSyncEnabled,
         features: d.features || [],
         highlighted: !!d.highlighted,
         isActive: d.isActive !== false,

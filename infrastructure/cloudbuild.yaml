@@ -7,7 +7,11 @@
 #   1. Enable Cloud Run, Artifact Registry, Firestore, Vertex AI APIs
 #   2. Create the secrets referenced below in Secret Manager (encryption-key,
 #      scheduler-secret, lemonsqueezy-api-key, lemonsqueezy-store-id,
-#      lemonsqueezy-webhook-secret) — see infrastructure/staging-env-template.sh
+#      lemonsqueezy-webhook-secret, notion-webhook-secret) — see
+#      infrastructure/staging-env-template.sh and NOTION_WEBHOOK_RUNBOOK.md
+#      for notion-webhook-secret specifically (Notion's dashboard issues the
+#      value after the verification handshake; nothing in this repo
+#      generates it).
 #   3. Ensure the Cloud Run service account has:
 #      - roles/datastore.user (Firestore access)
 #      - roles/aiplatform.user (Vertex AI / Gemini)
@@ -58,9 +62,14 @@ steps:
       # Admin-SDK-only) and are set via the Admin Panel's Platforms tab after
       # seeding (see scripts/seed-staging.js + STAGING_CHECKLIST.md). Only
       # genuinely env-var-based secrets (per src/core/config.js) go here.
-      - --set-secrets=ENCRYPTION_KEY=encryption-key:latest,SCHEDULER_SECRET=scheduler-secret:latest,LEMONSQUEEZY_API_KEY=lemonsqueezy-api-key:latest,LEMONSQUEEZY_STORE_ID=lemonsqueezy-store-id:latest,LEMONSQUEEZY_WEBHOOK_SECRET=lemonsqueezy-webhook-secret:latest
+      - --set-secrets=ENCRYPTION_KEY=encryption-key:latest,SCHEDULER_SECRET=scheduler-secret:latest,LEMONSQUEEZY_API_KEY=lemonsqueezy-api-key:latest,LEMONSQUEEZY_STORE_ID=lemonsqueezy-store-id:latest,LEMONSQUEEZY_WEBHOOK_SECRET=lemonsqueezy-webhook-secret:latest,NOTION_WEBHOOK_SECRET=notion-webhook-secret:latest
       # PORT is reserved by Cloud Run (auto-injected) — do not set it here.
-      - --update-env-vars=LOG_LEVEL=info,EXTERNAL_API_TIMEOUT=15000,SCHEDULER_MODE=internal,APP_BASE_URL=https://velync-staging.web.app
+      # GOOGLE_CLOUD_PROJECT is NOT auto-injected by Cloud Run (unlike
+      # App Engine/Cloud Functions) — without it, src/domains/sync/mapping-suggester.js's
+      # Vertex AI client falls back to a hardcoded literal (currently
+      # production's project id), which 403s here since staging's service
+      # account has no IAM grant on production's Vertex AI resources.
+      - --update-env-vars=LOG_LEVEL=info,EXTERNAL_API_TIMEOUT=15000,SCHEDULER_MODE=internal,APP_BASE_URL=https://velync-staging.web.app,GOOGLE_CLOUD_PROJECT=${PROJECT_ID}
 
 substitutions:
   _REGION: us-central1

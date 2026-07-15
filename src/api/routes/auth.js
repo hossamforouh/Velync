@@ -104,12 +104,19 @@ router.post('/oauth/exchange', verifyAuth, oauthExchangeLimiter, [
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
     // Create connected_accounts doc FIRST so we have its ID to key credentials
+    // providerWorkspaceId is denormalized here (also stored on credentials
+    // below) because connected_accounts is a real per-connection doc and
+    // Firestore-queryable, unlike credentials (doc-per-uid, map-keyed,
+    // Admin-SDK-only) — the webhook reverse-lookup needs to query "which
+    // connection belongs to this provider workspace?" (see
+    // WEBHOOK_SYNC_PLAN.md §5 Stage 2 / src/domains/sync/webhookLookup.js).
     const connRef = await db.collection('connected_accounts').add({
       provider: platformId,
       label: label || platform?.name || 'OAuth Connection',
       userId: uid,
       workspaceId: resolvedWsId,
       authType: 'oauth',
+      providerWorkspaceId: data.workspace_id || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       attributes: {},

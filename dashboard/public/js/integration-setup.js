@@ -121,6 +121,15 @@ function populateSetupView(p1Id, p2Id) {
   const isP1Connected = connections.some(c => c.provider === p1Id);
   const isP2Connected = connections.some(c => c.provider === p2Id);
 
+  // [DIAG] temporary — captured to client_errors via the console.error hook.
+  try {
+    console.error('[DIAG populateSetupView] connCount=' + connections.length
+      + ' providers=' + connections.map(c => c.provider).join('|')
+      + ' p1Id=' + p1Id + ' p2Id=' + p2Id
+      + ' isP1=' + isP1Connected + ' isP2=' + isP2Connected
+      + ' wsId=' + window.currentWorkspaceId);
+  } catch (_) {}
+
   const status1 = document.getElementById('setup-source-status');
   if (status1) { status1.textContent = isP1Connected ? 'Connected' : 'Not Connected'; status1.className = `setup-platform-status ${isP1Connected ? 'connected' : 'disconnected'}`; }
   const status2 = document.getElementById('setup-dest-status');
@@ -226,23 +235,36 @@ async function connectSetupPlatform(platformId, btn) {
 
 // initiateDirectOAuthFlow() (connections.js) dispatches a window
 // 'connections-refreshed' CustomEvent once the popup's OAuth exchange
-// finishes — { detail: { newConnectionId, platformId } } on success, or no
-// detail at all if the popup was closed/failed before completing.
+// finishes — { detail: { newConnectionId, platformId } } on success, or
+// { detail: { platformId, failed: true } } on a failure/abandoned popup for
+// THIS specific attempt.
+//
+// 'connections-refreshed' is also dispatched from ~10 other places in
+// connections.js for entirely unrelated actions (delete, edit, save, reauth,
+// etc.) — this used to be a real bug: the handler below removed itself and
+// resolved/rejected on the very FIRST such event it ever saw, so an
+// unrelated dispatch firing during the OAuth wait window would be misread
+// as "this connect attempt failed," reject the promise, and skip the
+// populateSetupView() re-render below even though the connection had
+// genuinely just been saved — the status only ever caught up on a full page
+// reload. Now only reacts to an event carrying THIS platformId (either a
+// real success or an explicit failure) and ignores everything else.
 async function waitForSetupConnectionRefresh(expectedPlatformId) {
   return new Promise((resolve, reject) => {
     const handler = (event) => {
       const detail = event.detail;
-      if (detail && detail.newConnectionId && detail.platformId === expectedPlatformId) {
-        window.removeEventListener('connections-refreshed', handler);
+      if (!detail || detail.platformId !== expectedPlatformId) return; // not this attempt — ignore
+      window.removeEventListener('connections-refreshed', handler);
+      clearTimeout(timeoutId);
+      if (detail.newConnectionId) {
         resolve(detail.newConnectionId);
       } else {
-        window.removeEventListener('connections-refreshed', handler);
         reject(new Error('OAuth was not completed'));
       }
     };
     window.addEventListener('connections-refreshed', handler);
 
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       window.removeEventListener('connections-refreshed', handler);
       reject(new Error('OAuth timed out'));
     }, 300000);

@@ -47,6 +47,15 @@ LEMONSQUEEZY_API_KEY=<test-mode API key from Lemon Squeezy dashboard>
 LEMONSQUEEZY_STORE_ID=<test-mode store id>
 LEMONSQUEEZY_WEBHOOK_SECRET=<test-mode webhook signing secret>
 
+# ─── Notion webhook fast-path — see NOTION_WEBHOOK_RUNBOOK.md ──
+# Unlike the secrets above, this one is NOT self-generated (no
+# `openssl rand`) — it's issued by Notion's integration dashboard only after
+# completing the one-time subscription + verification handshake described in
+# NOTION_WEBHOOK_RUNBOOK.md. Leave unset until that runbook has been done at
+# least once for this environment; the webhook ingress route 503s cleanly
+# without it (no impact on cron-based sync).
+NOTION_WEBHOOK_SECRET=<signing secret shown after completing NOTION_WEBHOOK_RUNBOOK.md>
+
 # ─── Connector OAuth (Firestore-based, NOT env vars) ───────────
 # Set clientId/clientSecret per platform via the Admin Panel → Platforms tab
 # after running scripts/seed-staging.js. Register separate staging OAuth

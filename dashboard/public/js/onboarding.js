@@ -351,22 +351,27 @@ async function connectPlatform(stepNum, btn, finishBtn) {
 
 // initiateDirectOAuthFlow() (connections.js) dispatches a window
 // 'connections-refreshed' CustomEvent once the popup's OAuth exchange
-// finishes — { detail: { newConnectionId, platformId } } on success, or no
-// detail at all if the popup was closed/failed before completing.
+// finishes — { detail: { newConnectionId, platformId } } on success, or
+// { detail: { platformId, failed: true } } on a failure/abandoned popup for
+// THIS specific attempt.
+//
+// 'connections-refreshed' is also dispatched from ~10 other places in
+// connections.js for entirely unrelated actions (delete, edit, save, reauth,
+// etc.). This used to reject on the very FIRST such event seen regardless of
+// relevance, so an unrelated dispatch during the wait window could falsely
+// report "OAuth was not completed" even when the connection had genuinely
+// just been saved. Now only reacts to an event carrying THIS platformId.
 async function waitForConnectionRefresh(expectedPlatformId) {
   return new Promise((resolve, reject) => {
     const handler = (event) => {
       const detail = event.detail;
-      if (detail && detail.newConnectionId && detail.platformId === expectedPlatformId) {
-        window.removeEventListener('connections-refreshed', handler);
+      if (!detail || detail.platformId !== expectedPlatformId) return; // not this attempt — ignore
+      window.removeEventListener('connections-refreshed', handler);
+      clearTimeout(timeoutId);
+      if (detail.newConnectionId) {
         const conn = connections.find(c => c.id === detail.newConnectionId);
         resolve({ connectionId: detail.newConnectionId, label: conn?.label });
       } else {
-        // Any other 'connections-refreshed' firing while we're waiting means
-        // this attempt didn't produce our connection (popup closed, wrong
-        // platform, or the exchange failed) — treat it as a failure rather
-        // than hanging forever.
-        window.removeEventListener('connections-refreshed', handler);
         reject(new Error('OAuth was not completed'));
       }
     };
@@ -374,7 +379,7 @@ async function waitForConnectionRefresh(expectedPlatformId) {
     listenerCleanups.push(() => window.removeEventListener('connections-refreshed', handler));
 
     // Timeout after 5 minutes
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       window.removeEventListener('connections-refreshed', handler);
       reject(new Error('OAuth timed out'));
     }, 300000);

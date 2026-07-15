@@ -10,6 +10,11 @@
       "extensionInstances": {
         "firestore-send-email": "061c629c704b4fa652f6c15f4c0ad7ae6736938e540c3dc585431837d528be78"
       }
+    },
+    "velync-staging": {
+      "extensionInstances": {
+        "firestore-send-email": "8157c0893c6796ec7ffd6c1e1d2eeebc4137d6cf68b438a170c12619960cc698"
+      }
     }
   }
 }

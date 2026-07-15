@@ -748,16 +748,24 @@ const firebaseConfig = (window.VELYNC_CONFIG && window.VELYNC_CONFIG.firebase) |
 
 const app = initializeApp(firebaseConfig);
 let appCheck;
-try {
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+// Site key is environment-driven (see index.html's VELYNC_CONFIG). It's null
+// on any environment without its own reCAPTCHA v3 key registered for that
+// exact domain (e.g. staging) — initializing App Check with a wrong-domain
+// key otherwise floods appCheck/recaptcha-error and stalls Firestore client
+// reads. When null, skip App Check entirely (enforcement is off there).
+const recaptchaSiteKey = (window.VELYNC_CONFIG && window.VELYNC_CONFIG.recaptchaSiteKey) || null;
+if (recaptchaSiteKey) {
+  try {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+      isTokenAutoRefreshEnabled: true
+    });
+  } catch (e) {
+    console.warn("App Check initialization failed.", e);
   }
-  appCheck = initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider('6LdILigtAAAAAGO0Sn27U_bVMd83hGSjNpC16Mv6'),
-    isTokenAutoRefreshEnabled: true
-  });
-} catch (e) {
-  console.warn("App Check initialization failed.", e);
 }
 
 // Initialize Analytics
@@ -1968,6 +1976,14 @@ onAuthStateChanged(auth, async (user) => {
           if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load plan');
 
           const { plan, usage } = data;
+          // Cached globally so renderCards() (a synchronous render loop) can
+          // read the workspace's webhookSyncEnabled flag without an await —
+          // used to show honest "real-time" vs "checked every N min" text
+          // per config (WEBHOOK_SYNC_PLAN.md §5 Stage 6). Re-render once the
+          // plan is known in case cards already rendered with the default text.
+          const plchanged = JSON.stringify(window._currentPlan) !== JSON.stringify(plan);
+          window._currentPlan = plan;
+          if (plchanged && typeof renderCards === 'function' && configs.length > 0) renderCards();
           const used = usage.activeConfigs;
           const max = plan.maxActiveConfigs;
           const unlimited = !max || max <= 0;
@@ -3058,10 +3074,15 @@ function renderCards() {
     }
     const lastRun = cfg.lastRunAt ? fmtDate(cfg.lastRunAt) : '—';
 
-    // Parse the cron schedule into a readable text format
+    // Parse the cron schedule into a readable text format. Only Notion has
+    // webhook push support today (WEBHOOK_SYNC_PLAN.md §3) — never imply
+    // real-time for TickTick/Google Contacts sources even if the plan has
+    // webhookSyncEnabled, since those platforms can't push regardless of plan.
     let scheduleText = 'Every 5 Minutes';
     if (!configIsActive(cfg)) {
       scheduleText = '<span style="opacity: 0.5;">Disabled</span>';
+    } else if (p1Id === 'notion' && window._currentPlan?.webhookSyncEnabled) {
+      scheduleText = '<span title="Changes in the source Notion database sync within seconds via webhook. Falls back to the interval below if a webhook is ever missed.">⚡ Real-time</span>';
     } else if (cfg.cronSchedule) {
       const [cVal, cUnit] = parseCron(cfg.cronSchedule);
       let displayUnit = cUnit.charAt(0).toUpperCase() + cUnit.slice(1);
@@ -3525,6 +3546,23 @@ function populateConnectionDropdowns(connections, id = null, p1Provider = null, 
     if (cfg) {
       if (cfg.platform1ConnectionId) fSourceConnection.value = cfg.platform1ConnectionId;
       if (cfg.platform2ConnectionId) fDestConnection.value = cfg.platform2ConnectionId;
+    }
+  } else {
+    // New config: if a platform's connection list is unambiguous (exactly
+    // one saved account for that provider — e.g. the user just connected it
+    // from the Marketplace setup preview), auto-select it so they don't have
+    // to re-pick a platform they just connected. Left unselected whenever
+    // there's more than one account for that provider — genuinely ambiguous,
+    // not something to guess at. Dispatches 'change' so schema-loading
+    // (handleConnectionChange) runs exactly as it would for a manual pick —
+    // setting .value alone doesn't fire that listener.
+    if (p1Conns.length === 1) {
+      fSourceConnection.value = p1Conns[0].id;
+      fSourceConnection.dispatchEvent(new Event('change'));
+    }
+    if (p2Conns.length === 1) {
+      fDestConnection.value = p2Conns[0].id;
+      fDestConnection.dispatchEvent(new Event('change'));
     }
   }
 }

@@ -83,6 +83,7 @@ export async function loadConnections(reset = false) {
       connections = [];
     }
 
+    const __diagWsId = window.currentWorkspaceId;
     const [connSnap, platforms] = await Promise.all([
       getDocs(query(
         collection(getDb(), 'connected_accounts'),
@@ -93,6 +94,12 @@ export async function loadConnections(reset = false) {
       )),
       fetchPlatformsCached(),
     ]);
+    // [DIAG] temporary — captured to client_errors via the console.error hook.
+    try {
+      console.error('[DIAG loadConnections] reset=' + reset + ' wsId=' + __diagWsId
+        + ' rawDocs=' + connSnap.size + ' fromCache=' + (connSnap.metadata && connSnap.metadata.fromCache)
+        + ' providers=' + connSnap.docs.map(d => d.data().provider).join('|'));
+    } catch (_) {}
 
     platformDetails = {};
     let colorIdx = 0;
@@ -129,6 +136,7 @@ export async function loadConnections(reset = false) {
 
     return connections;
   } catch (err) {
+    console.error('[DIAG loadConnections THREW] wsId=' + window.currentWorkspaceId + ' msg=' + err.message + ' code=' + err.code);
     console.error('[connections] Failed to load:', err);
     showToast('Failed to load connections: ' + err.message, 'error');
     return [];
@@ -439,6 +447,12 @@ function wireToolbar() {
 
 /* ── Wire Dropdown Menus ───────────────────────────────────── */
 
+// Menus are `position: absolute` by default (see .row-actions-menu in
+// style.css), which gets clipped by the table's own scroll boundary for
+// rows near the bottom — same root cause app.js's Flows table already
+// fixed for its own row-actions menu (switch to `position: fixed`,
+// computed from the button's rect, flipping upward when there's no room
+// below). Mirrored here rather than left un-fixed on this page too.
 function wireDropdownMenus() {
   document.querySelectorAll('.btn-row-more').forEach(btn => {
     if (btn.dataset.connWired) return;
@@ -450,6 +464,7 @@ function wireDropdownMenus() {
       const isOpen = menu.classList.contains('open');
       closeAllConnMenus();
       if (!isOpen) {
+        positionConnMenu(btn, menu);
         menu.classList.add('open');
         btn.classList.add('open');
       }
@@ -457,8 +472,35 @@ function wireDropdownMenus() {
   });
 }
 
+function positionConnMenu(btn, menu) {
+  const btnRect = btn.getBoundingClientRect();
+  const wrapper = document.getElementById('conn-grid-table-wrapper');
+  const wrapperRect = wrapper ? wrapper.getBoundingClientRect() : { right: window.innerWidth };
+  const menuWidth = menu.offsetWidth || 180;
+  const menuHeight = menu.offsetHeight || 100;
+  const left = Math.max(0, Math.min(btnRect.right - menuWidth, wrapperRect.right - menuWidth));
+  const spaceBelow = window.innerHeight - btnRect.bottom - 4;
+
+  menu.style.position = 'fixed';
+  menu.style.left = left + 'px';
+  if (spaceBelow >= menuHeight) {
+    menu.style.top = btnRect.bottom + 4 + 'px';
+    menu.style.bottom = 'auto';
+  } else {
+    menu.style.top = 'auto';
+    menu.style.bottom = window.innerHeight - btnRect.top + 4 + 'px';
+  }
+}
+
+function resetConnMenuPosition(menu) {
+  menu.style.position = '';
+  menu.style.left = '';
+  menu.style.top = '';
+  menu.style.bottom = '';
+}
+
 function closeAllConnMenus() {
-  document.querySelectorAll('.row-actions-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.row-actions-menu.open').forEach(m => { m.classList.remove('open'); resetConnMenuPosition(m); });
   document.querySelectorAll('.btn-row-more.open').forEach(b => b.classList.remove('open'));
 }
 
@@ -1205,13 +1247,19 @@ export async function initiateDirectOAuthFlow(platform, label) {
       } catch (err) {
         console.error('[direct-oauth] Exchange failed:', err);
         showToast('Connection failed: ' + err.message, 'error');
-        window.dispatchEvent(new CustomEvent('connections-refreshed'));
+        // Tagged with platformId + failed so a listener waiting on THIS
+        // specific attempt (see integration-setup.js's
+        // waitForSetupConnectionRefresh) can tell this apart from the many
+        // OTHER unrelated actions that dispatch this same generic event
+        // (delete, edit, reauth, etc.) — a bare untagged dispatch here used
+        // to get misread as "this attempt failed" by any such listener.
+        window.dispatchEvent(new CustomEvent('connections-refreshed', { detail: { platformId: platform.id, failed: true } }));
       }
     } else if (event.data.type === 'oauth-error') {
       clearInterval(popupCloseCheck);
       window.removeEventListener('message', messageHandler);
       showToast('Connection failed: ' + event.data.error, 'error');
-      window.dispatchEvent(new CustomEvent('connections-refreshed'));
+      window.dispatchEvent(new CustomEvent('connections-refreshed', { detail: { platformId: platform.id, failed: true } }));
     }
   };
 
@@ -1221,7 +1269,7 @@ export async function initiateDirectOAuthFlow(platform, label) {
     if (popup.closed) {
       clearInterval(popupCloseCheck);
       window.removeEventListener('message', messageHandler);
-      window.dispatchEvent(new CustomEvent('connections-refreshed'));
+      window.dispatchEvent(new CustomEvent('connections-refreshed', { detail: { platformId: platform.id, failed: true } }));
     }
   }, 1000);
 

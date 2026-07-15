@@ -62,6 +62,7 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
   body('isActive').optional().isBoolean(),
   body('isDefault').optional().isBoolean(),
   body('lsVariantIdMonthly').optional().isString(),
+  body('webhookSyncEnabled').optional().isBoolean(),
 ], validate, async (req, res) => {
   try {
     const { planId } = req.params;
@@ -69,7 +70,7 @@ router.put('/admin/plans/:planId', verifyAuth, requireSuperAdmin, [
       'name', 'description', 'priceMonthly',
       'maxActiveConfigs', 'minSyncIntervalMinutes', 'maxItemsPerRun',
       'connectorTiers', 'logRetentionDays', 'sortOrder',
-      'isActive', 'isDefault', 'lsVariantIdMonthly',
+      'isActive', 'isDefault', 'lsVariantIdMonthly', 'webhookSyncEnabled',
     ];
     const fields = {};
     for (const key of allowed) {
@@ -173,6 +174,7 @@ router.post('/admin/plans', verifyAuth, requireSuperAdmin, [
       maxItemsPerRun: rest.maxItemsPerRun ?? 100,
       connectorTiers: rest.connectorTiers || ['basic'],
       logRetentionDays: rest.logRetentionDays ?? 7,
+      webhookSyncEnabled: rest.webhookSyncEnabled === true,
       sortOrder: await nextSortOrder(),
       isActive: rest.isActive !== undefined ? rest.isActive : true,
       isDefault: rest.isDefault === true,

@@ -1,10 +1,15 @@
-// Bumped to v12 for the Marketplace Integrations fixes (stale select-all
-// checkbox after delete, empty state, unified button-loading spinner,
-// Active/Coming Soon/Disabled status) — the new name makes the activate
-// handler purge the v11 cache on next load. Bump this string on any deploy
-// that changes cached shell assets (index.html/style.css/js) and needs to
-// reach already-open clients immediately.
-const CACHE_NAME = 'velync-cache-v12';
+// Bumped to v17: fixed a real bug where the Marketplace setup page's
+// "Connected" status (and onboarding's platform-connect step) could
+// silently fail to refresh after a genuinely successful OAuth connect — an
+// unrelated 'connections-refreshed' event (dispatched from ~10 other
+// unrelated actions in connections.js) firing during the wait window would
+// get misread as "this attempt failed," so the view only ever caught up on
+// a full page reload. Also fixed auth-callback.html's hardcoded-to-
+// production VELYNC_CONFIG. The new name makes the activate handler purge
+// the v16 cache on next load. Bump this string on any deploy that changes
+// cached shell assets (index.html/style.css/js) and needs to reach
+// already-open clients immediately.
+const CACHE_NAME = 'velync-cache-v18';
 
 // The app shell: everything needed to render the page and its icons/fonts
 // offline (minus the Firebase SDK, which is imported cross-origin from

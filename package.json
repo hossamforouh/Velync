@@ -36,7 +36,12 @@
     "test:rate-limit-scoping": "npx firebase emulators:exec --only firestore \"node --test test/rate-limit-scoping.test.js\"",
     "test:client-errors": "npx firebase emulators:exec --only firestore \"node --test test/client-errors.test.js\"",
     "test:admin-data": "npx firebase emulators:exec --only firestore \"node --test test/admin-data.test.js\"",
-    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin && npm run test:admin-platforms && npm run test:logs-fixes && npm run test:connections-fixes && npm run test:notifications && npm run test:sync-configs-fixes && npm run test:connector-resolution && npm run test:billing-fixes && npm run test:workspace-fixes && npm run test:profile-settings-fixes && npm run test:auth-fail-closed && npm run test:encryption && npm run test:config-deletion && npm run test:dispatcher && npm run test:superadmin && npm run test:admin-plans-fixes && npm run test:admin-workspace-plan && npm run test:usage && npm run test:public-marketplace && npm run test:rate-limit-scoping && npm run test:client-errors && npm run test:admin-data"
+    "test:notion-webhook": "node --test test/notion-webhook.test.js",
+    "test:webhook-lookup": "npx firebase emulators:exec --only firestore \"node --test test/webhook-lookup.test.js\"",
+    "test:webhooks": "npx firebase emulators:exec --only firestore \"node --test test/webhooks.test.js\"",
+    "test:webhook-debounce": "npx firebase emulators:exec --only firestore \"node --test test/webhook-debounce.test.js\"",
+    "test:webhooks-unconfigured": "npx firebase emulators:exec --only firestore \"node --test test/webhooks-unconfigured.test.js\"",
+    "test:all": "npm test && npm run test:rules && npm run test:engine && npm run test:admin && npm run test:admin-platforms && npm run test:logs-fixes && npm run test:connections-fixes && npm run test:notifications && npm run test:sync-configs-fixes && npm run test:connector-resolution && npm run test:billing-fixes && npm run test:workspace-fixes && npm run test:profile-settings-fixes && npm run test:auth-fail-closed && npm run test:encryption && npm run test:config-deletion && npm run test:dispatcher && npm run test:superadmin && npm run test:admin-plans-fixes && npm run test:admin-workspace-plan && npm run test:usage && npm run test:public-marketplace && npm run test:rate-limit-scoping && npm run test:client-errors && npm run test:admin-data && npm run test:notion-webhook && npm run test:webhook-lookup && npm run test:webhooks && npm run test:webhook-debounce && npm run test:webhooks-unconfigured"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",
