@@ -40,7 +40,15 @@ export async function initBilling(dbInstance, authInstance) {
       return;
     }
 
-    const { plan, subscription, usage } = data;
+    const { subscription, usage } = data;
+    // Defend against a plan doc (or the backend's own Free fallback) missing
+    // one of these fields — better a sane default than the literal string
+    // "undefined" showing up in the UI.
+    const plan = {
+      maxActiveConfigs: 1, minSyncIntervalMinutes: 30, maxItemsPerRun: 100,
+      logRetentionDays: 7, connectorTiers: ['basic'],
+      ...data.plan,
+    };
 
     // Keep the avatar's paid-plan badge in sync with whatever this tab just
     // fetched — reuses this response instead of a second round trip.
@@ -150,8 +158,8 @@ export async function initBilling(dbInstance, authInstance) {
           ${p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}<span style="font-size:0.85rem;font-weight:400;">/mo</span>`}
         </div>
         <ul style="margin:0 0 12px;padding:0 0 0 16px;font-size:0.85rem;color:var(--text-2);">
-          <li>${p.maxActiveConfigs} configs</li>
-          <li>${p.minSyncIntervalMinutes} min interval</li>
+          <li>${p.maxActiveConfigs ?? 1} configs</li>
+          <li>${p.minSyncIntervalMinutes ?? 30} min interval</li>
           <li>${p.maxItemsPerRun} items/run</li>
           <li>${(p.connectorTiers || []).join(', ')} connectors</li>
         </ul>

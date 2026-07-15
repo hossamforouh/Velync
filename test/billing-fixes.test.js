@@ -323,6 +323,14 @@ describe('GET /billing/plan backfills a missing planId', () => {
     const { status, body } = await apiFetch('/api/billing/plan');
     assert.strictEqual(status, 200);
     assert.strictEqual(body.plan.id, 'free');
+    // No 'plans/free' doc exists in this test DB, so this hits the
+    // fallback plan object — every field the UI renders must be present,
+    // or it prints the literal string "undefined" (a real bug found and
+    // fixed: the fallback used to only set {id, name, priceMonthly}).
+    assert.strictEqual(body.plan.maxActiveConfigs, 1);
+    assert.strictEqual(body.plan.minSyncIntervalMinutes, 30);
+    assert.strictEqual(body.plan.maxItemsPerRun, 100);
+    assert.strictEqual(body.plan.logRetentionDays, 7);
 
     const wsDoc = await db.collection('workspaces').doc(wsId).get();
     assert.strictEqual(wsDoc.data().planId, 'free');

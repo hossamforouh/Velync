@@ -100,7 +100,11 @@ router.get('/billing/plan', verifyAuth, async (req, res) => {
     if (!planDoc.exists) {
       logger.warn('billing', `Workspace "${workspaceId}" references unknown planId "${planId}" — falling back to Free display`);
     }
-    const plan = planDoc.exists ? { id: planDoc.id, ...planDoc.data() } : { id: 'free', name: 'Free', priceMonthly: 0 };
+    const plan = planDoc.exists ? { id: planDoc.id, ...planDoc.data() } : {
+      id: 'free', name: 'Free', priceMonthly: 0,
+      maxActiveConfigs: 1, minSyncIntervalMinutes: 30, maxItemsPerRun: 100,
+      logRetentionDays: 7, connectorTiers: ['basic'],
+    };
 
     const activeSnap = await db.collection('workspaces').doc(workspaceId)
       .collection('sync_configs').where('status', '==', 'active').get();
