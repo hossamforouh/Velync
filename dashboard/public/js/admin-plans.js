@@ -1,5 +1,6 @@
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
+import { setButtonLoading } from './loading-components.js';
 
 let auth = null;
 let allPlans = [];
@@ -192,8 +193,7 @@ async function onSavePlan(e) {
   }
 
   const btnSave = document.getElementById('btn-plan-save');
-  btnSave.disabled = true;
-  btnSave.textContent = 'Saving...';
+  setButtonLoading(btnSave, true, 'Save');
 
   try {
     if (isNew) {
@@ -209,8 +209,7 @@ async function onSavePlan(e) {
   } catch (err) {
     showToast('Failed to save plan: ' + err.message, 'error');
   } finally {
-    btnSave.disabled = false;
-    btnSave.textContent = 'Save';
+    setButtonLoading(btnSave, false, 'Save');
   }
 }
 

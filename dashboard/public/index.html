@@ -431,7 +431,6 @@
                 <span id="dropdown-user-email" class="dropdown-email"></span>
               </div>
             </div>
-            <div class="dropdown-divider"></div>
             <a href="#" class="dropdown-item" id="menu-settings">
               <span class="icon"><i data-feather="settings"></i></span> Settings
             </a>
@@ -1890,7 +1889,12 @@
   </div>
 
   <!-- ── Delete Workspace Confirm Modal ────────────────────────── -->
-  <div class="modal-overlay" id="delete-ws-modal">
+  <!-- z-index above #settings-modal (2000): this modal is opened from
+       inside the Settings panel and must render on top of it, not behind
+       it — both share the base .modal-overlay z-index, and this one comes
+       earlier in the DOM, so without an explicit bump it was rendering
+       fully invisible underneath the (also-open) Settings panel. -->
+  <div class="modal-overlay" id="delete-ws-modal" style="z-index: 2100;">
     <div class="modal" role="dialog" aria-modal="true" style="max-width: 480px;">
       <h3 style="color: var(--rose);"><i data-feather="alert-triangle"></i> Delete Workspace</h3>
       <div id="delete-ws-step-confirm">
@@ -2085,7 +2089,17 @@
           <p class="settings-subtitle">Manage your subscription and billing details.</p>
 
           <div id="billing-plan-display">
-            <div style="color:var(--text-3);font-size:0.9rem;">Loading plan info...</div>
+            <div class="card skeleton-card" style="padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg);">
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div class="skeleton-line" style="width: 48px; height: 48px; border-radius: 12px;"></div>
+                <div style="flex: 1;">
+                  <div class="skeleton-line long" style="height: 18px; margin-bottom: 8px;"></div>
+                  <div class="skeleton-line short" style="height: 14px;"></div>
+                </div>
+              </div>
+              <div class="skeleton-line" style="width: 100%; height: 14px; margin-bottom: 8px;"></div>
+              <div class="skeleton-line" style="width: 80%; height: 14px;"></div>
+            </div>
           </div>
 
           <div id="billing-subscription-area" style="margin-top:24px;"></div>

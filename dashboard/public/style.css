@@ -3876,6 +3876,22 @@ header.legacy-header {
   animation: spin 1s linear infinite;
 }
 
+/* Small spinner for inside buttons — most save/action buttons use a colored
+   (often violet-gradient) background, so the default .spinner's violet ring
+   nearly disappears against it. This overrides to a white-based ring that
+   reads clearly on any button color. */
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

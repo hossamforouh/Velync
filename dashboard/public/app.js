@@ -4436,7 +4436,7 @@ async function saveConfig(e, isSubmit = false) {
   if (btnSubmit) btnSubmit.disabled = true;
   
   const originalText = targetBtn ? targetBtn.innerHTML : '';
-  if (targetBtn) targetBtn.innerHTML = '<span class="spinner btn-spinner" style="width: 16px; height: 16px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></span><span style="vertical-align: middle;">' + (isSubmit ? 'Submitting...' : 'Saving...') + '</span>';
+  if (targetBtn) targetBtn.innerHTML = '<span class="btn-spinner"></span><span style="vertical-align: middle;">' + (isSubmit ? 'Submitting...' : 'Saving...') + '</span>';
 
   try {
     // ── Resolve which document to update ──────────────────────

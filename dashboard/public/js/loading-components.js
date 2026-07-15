@@ -132,7 +132,7 @@ export function setButtonLoading(btn, isLoading, originalText = null, loadingLab
     // Prevent multiple clicks
     btn.disabled = true;
     // Set fixed width to prevent layout shift if possible, or just add spinner
-    btn.innerHTML = `<span class="spinner btn-spinner" style="width: 16px; height: 16px; border-width: 2px; margin-right: 8px; display: inline-block; vertical-align: middle;"></span> <span style="vertical-align: middle;">${loadingLabel}</span>`;
+    btn.innerHTML = `<span class="btn-spinner"></span> <span style="vertical-align: middle;">${loadingLabel}</span>`;
   } else {
     btn.disabled = false;
     if (btn.dataset.originalText) {

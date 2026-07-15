@@ -1,6 +1,7 @@
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
 import { updatePlanBadge } from './plan-badge.js';
+import { getSkeletonCardHTML } from './loading-components.js';
 
 let firestoreDb = null;
 let auth = null;
@@ -23,6 +24,8 @@ export async function initBilling(dbInstance, authInstance) {
   const subArea = document.getElementById('billing-subscription-area');
   const checkoutArea = document.getElementById('billing-checkout-area');
   if (!display) return;
+
+  display.innerHTML = getSkeletonCardHTML();
 
   try {
     const token = await auth.currentUser.getIdToken();
