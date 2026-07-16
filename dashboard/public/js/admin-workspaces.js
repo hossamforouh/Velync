@@ -1,6 +1,6 @@
 import { showToast } from './toast.js';
 import { fmtCost, renderUsageStatCardsHtml } from './usage-format.js';
-import { getSkeletonCardGridHTML, getSkeletonTableHTML } from './loading-components.js';
+import { getSkeletonCardGridHTML, getSkeletonTableHTML, getEmptyStateRowHTML } from './loading-components.js';
 
 // Admin → Workspaces management tab.
 // Powered by the server-side admin endpoints (/api/admin/stats + /api/admin/workspaces),
@@ -53,7 +53,19 @@ export function initAdminWorkspaces(authInstance) {
   const modalClose = document.getElementById('ws-usage-modal-close');
   if (modalClose) modalClose.addEventListener('click', closeUsageModal);
   if (modalOverlay) modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeUsageModal(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeUsageModal(); });
+
+  const planModalOverlay = document.getElementById('ws-plan-modal-overlay');
+  const planModalCancel = document.getElementById('ws-plan-modal-cancel');
+  const planModalConfirm = document.getElementById('ws-plan-modal-confirm');
+  if (planModalCancel) planModalCancel.addEventListener('click', closePlanModal);
+  if (planModalOverlay) planModalOverlay.addEventListener('click', (e) => { if (e.target === planModalOverlay) closePlanModal(); });
+  if (planModalConfirm) planModalConfirm.addEventListener('click', confirmPlanChange);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    closeUsageModal();
+    closePlanModal();
+  });
 }
 
 async function apiGet(path) {
@@ -78,44 +90,70 @@ async function apiPatch(path, body) {
   return data;
 }
 
+let planModalWorkspace = null;
+let planModalCell = null;
+
 async function openPlanEditor(tr, workspace) {
   const cell = tr.querySelector('.plan-display')?.closest('td');
   if (!cell) return;
-  const originalHtml = cell.innerHTML;
 
-  cell.innerHTML = `<span style="color:var(--text-3);font-size:0.82rem;">Loading…</span>`;
+  const overlay = document.getElementById('ws-plan-modal-overlay');
+  const nameEl = document.getElementById('ws-plan-modal-name');
+  const select = document.getElementById('ws-plan-modal-select');
+  const confirmBtn = document.getElementById('ws-plan-modal-confirm');
+  if (!overlay || !select) return;
+
+  planModalWorkspace = workspace;
+  planModalCell = cell;
+  nameEl.textContent = workspace.name || workspace.id;
+  select.innerHTML = `<option>Loading…</option>`;
+  select.disabled = true;
+  confirmBtn.disabled = true;
+  overlay.classList.add('open');
+
   try {
     if (!plansCache) plansCache = await apiGet('/api/admin/plans');
+    select.innerHTML = plansCache.map(p => `<option value="${p.id}" ${p.id === workspace.planId ? 'selected' : ''}>${p.name}</option>`).join('');
+    select.disabled = false;
+    confirmBtn.disabled = false;
   } catch (err) {
     showToast('Failed to load plans: ' + err.message, 'error');
-    cell.innerHTML = originalHtml;
-    return;
+    closePlanModal();
   }
+}
 
-  cell.innerHTML = `
-    <div style="display:flex;align-items:center;gap:4px;">
-      <select class="admin-input plan-select" style="padding:4px 6px;font-size:0.82rem;">
-        ${plansCache.map(p => `<option value="${p.id}" ${p.id === workspace.planId ? 'selected' : ''}>${p.name}</option>`).join('')}
-      </select>
-      <button class="row-action-btn btn-confirm-plan" type="button" title="Save">✓</button>
-      <button class="row-action-btn btn-cancel-plan" type="button" title="Cancel">✕</button>
-    </div>
-  `;
+function closePlanModal() {
+  const overlay = document.getElementById('ws-plan-modal-overlay');
+  if (overlay) overlay.classList.remove('open');
+  planModalWorkspace = null;
+  planModalCell = null;
+}
 
-  cell.querySelector('.btn-cancel-plan').addEventListener('click', () => { cell.innerHTML = originalHtml; });
-  cell.querySelector('.btn-confirm-plan').addEventListener('click', async () => {
-    const newPlanId = cell.querySelector('.plan-select').value;
-    if (newPlanId === workspace.planId) { cell.innerHTML = originalHtml; return; }
-    try {
-      await apiPatch(`/api/admin/workspaces/${workspace.id}/plan`, { planId: newPlanId });
-      workspace.planId = newPlanId;
-      cell.innerHTML = `<span class="badge badge-info plan-display">${esc(newPlanId)}</span>`;
-      showToast(`Workspace moved to "${newPlanId}"`, 'success');
-    } catch (err) {
-      showToast('Failed to change plan: ' + err.message, 'error');
-      cell.innerHTML = originalHtml;
-    }
-  });
+async function confirmPlanChange() {
+  const workspace = planModalWorkspace;
+  const cell = planModalCell;
+  const select = document.getElementById('ws-plan-modal-select');
+  const confirmBtn = document.getElementById('ws-plan-modal-confirm');
+  if (!workspace || !cell || !select) return;
+
+  const newPlanId = select.value;
+  if (newPlanId === workspace.planId) { closePlanModal(); return; }
+
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Saving…';
+  try {
+    await apiPatch(`/api/admin/workspaces/${workspace.id}/plan`, { planId: newPlanId });
+    workspace.planId = newPlanId;
+    const display = cell.querySelector('.plan-display');
+    if (display) display.textContent = newPlanId;
+    showToast(`Workspace moved to "${newPlanId}"`, 'success');
+    closePlanModal();
+  } catch (err) {
+    showToast('Failed to change plan: ' + err.message, 'error');
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Save';
+  }
 }
 
 // Opens a modal with a stat-card breakdown of one workspace's usage/cost for
@@ -190,7 +228,14 @@ async function loadWorkspaces(reset) {
     const { items, nextCursor } = await apiGet('/api/admin/workspaces?' + params.toString());
 
     if (reset && items.length === 0) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">${searchTerm ? 'No workspaces match your search.' : 'No workspaces.'}</td></tr>`;
+      if (tbody) tbody.innerHTML = getEmptyStateRowHTML({
+        colspan: 7,
+        iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
+        title: searchTerm ? 'No matching workspaces' : 'No workspaces yet',
+        message: searchTerm
+          ? `No workspaces match "${esc(searchTerm)}". Try a different search term.`
+          : 'Workspaces will show up here once users sign up.',
+      });
     } else if (tbody) {
       // On a reset load, the skeleton rows set above are still sitting in the
       // DOM — appendChild() below would stack real rows underneath them

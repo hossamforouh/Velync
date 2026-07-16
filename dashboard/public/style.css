@@ -35,6 +35,12 @@
   /* Amber 400 */
   --green: #34D399;
   /* Emerald 400 */
+  --orange: #FB923C;
+  /* Orange 400 */
+  --yellow: #FACC15;
+  /* Yellow 400 */
+  --red: #F87171;
+  /* Red 400 */
 
   --primary: #818CF8;
   --secondary: #6366F1;
@@ -846,6 +852,22 @@ header.legacy-header {
 
 .stat-pill .dot.rose {
   background: var(--rose);
+}
+
+.stat-pill .dot.cyan {
+  background: var(--cyan);
+}
+
+.stat-pill .dot.orange {
+  background: var(--orange);
+}
+
+.stat-pill .dot.yellow {
+  background: var(--yellow);
+}
+
+.stat-pill .dot.red {
+  background: var(--red);
 }
 
 .stat-pill strong {

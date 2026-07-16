@@ -1181,8 +1181,8 @@
                 <h2 style="margin: 0;">Plans &amp; Pricing</h2>
                 <div style="display:flex;gap:8px;align-items:center;">
                   <button id="admin-plans-refresh-btn" class="btn btn-secondary btn-sm" type="button">Refresh</button>
-                  <button class="btn btn-secondary btn-sm" data-export="plans" type="button" title="Download all plans as a JSON file" style="padding:6px 10px;">Export</button>
-                  <button class="btn btn-secondary btn-sm" data-import="plans" type="button" title="Upload a plans JSON file to add/overwrite records" style="padding:6px 10px;">Import</button>
+                  <button class="btn btn-secondary btn-sm" data-export="plans" type="button" title="Download all plans as a JSON file">Export</button>
+                  <button class="btn btn-secondary btn-sm" data-import="plans" type="button" title="Upload a plans JSON file to add/overwrite records">Import</button>
                   <button id="btn-new-plan" class="btn btn-primary btn-sm" type="button">+ New Plan</button>
                 </div>
               </div>
@@ -1290,8 +1290,8 @@
                   <option value="activate">Activate</option>
                   <option value="deactivate">Deactivate</option>
                 </select>
-                <input type="date" id="admin-activity-filter-date-from" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;" title="From date">
-                <input type="date" id="admin-activity-filter-date-to" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;" title="To date">
+                <input type="date" id="admin-activity-filter-date-from" class="logs-date-input" title="From date">
+                <input type="date" id="admin-activity-filter-date-to" class="logs-date-input" title="To date">
                 <input type="text" id="admin-activity-search" placeholder="Search user or target..." style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;flex:1;min-width:180px;">
               </div>
               <div class="connections-table-wrap">
@@ -2389,6 +2389,22 @@
       <div class="modal-actions">
         <button class="btn btn-secondary" id="plat-del-modal-cancel">Cancel</button>
         <button class="btn btn-danger" id="plat-del-modal-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Change Workspace Plan Modal ──────────────────────────── -->
+  <div class="modal-overlay" id="ws-plan-modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ws-plan-modal-title">
+      <h3 id="ws-plan-modal-title">Change Plan</h3>
+      <p>Move <strong id="ws-plan-modal-name"></strong> to a different plan.</p>
+      <div class="form-group">
+        <label for="ws-plan-modal-select">Plan</label>
+        <select id="ws-plan-modal-select" class="admin-input"></select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="ws-plan-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="ws-plan-modal-confirm">Save</button>
       </div>
     </div>
   </div>
