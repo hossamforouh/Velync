@@ -2984,6 +2984,10 @@ header.legacy-header {
   font-weight: 600;
 }
 
+.modal .form-group {
+  margin-bottom: 24px;
+}
+
 .modal-actions {
   display: flex;
   gap: 10px;
