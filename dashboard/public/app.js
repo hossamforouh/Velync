@@ -1672,8 +1672,14 @@ onAuthStateChanged(auth, async (user) => {
       const settingsStrengthLabel = document.getElementById('settings-strength-label');
       const settingsReqs = document.getElementById('settings-password-reqs');
       if (settingsNewPw && settingsStrengthFill && settingsStrengthLabel && settingsReqs) {
-        settingsNewPw.addEventListener('input', () => {
+        const refreshSettingsStrength = () => {
           updatePasswordStrengthUI(settingsStrengthFill, settingsStrengthLabel, settingsReqs, settingsNewPw.value);
+        };
+        settingsNewPw.addEventListener('input', refreshSettingsStrength);
+        // Autofill doesn't fire 'input' in Chromium/WebKit — see the
+        // :-webkit-autofill CSS trick in style.css.
+        settingsNewPw.addEventListener('animationstart', (e) => {
+          if (e.animationName === 'onAutoFillStart') refreshSettingsStrength();
         });
       }
 
@@ -1700,6 +1706,11 @@ onAuthStateChanged(auth, async (user) => {
         };
         settingsConfirmPw.addEventListener('input', updateMatch);
         settingsNewPw.addEventListener('input', updateMatch);
+        // Autofill doesn't fire 'input' in Chromium/WebKit — see the
+        // :-webkit-autofill CSS trick in style.css.
+        const onAutofillMatch = (e) => { if (e.animationName === 'onAutoFillStart') updateMatch(); };
+        settingsConfirmPw.addEventListener('animationstart', onAutofillMatch);
+        settingsNewPw.addEventListener('animationstart', onAutofillMatch);
       }
 
       // Save Workspace Logic
@@ -2591,9 +2602,15 @@ document.querySelectorAll('.password-toggle').forEach(btn => {
   const label = document.getElementById('auth-strength-label');
   const reqs = document.getElementById('auth-password-reqs');
   if (!pwInput || !fill || !label || !reqs) return;
-  pwInput.addEventListener('input', () => {
+  const refreshStrength = () => {
     if (document.getElementById('auth-password-strength').style.display === 'none') return;
     updatePasswordStrengthUI(fill, label, reqs, pwInput.value);
+  };
+  pwInput.addEventListener('input', refreshStrength);
+  // Autofill (browser suggestion or a password manager) doesn't fire 'input'
+  // in Chromium/WebKit browsers — see the :-webkit-autofill CSS trick above.
+  pwInput.addEventListener('animationstart', (e) => {
+    if (e.animationName === 'onAutoFillStart') refreshStrength();
   });
 })();
 

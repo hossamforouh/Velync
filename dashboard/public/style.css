@@ -3884,6 +3884,18 @@ header.legacy-header {
   }
 }
 
+/* Browser/password-manager autofill doesn't reliably fire 'input' events —
+   this is the standard cross-browser trick to detect it anyway: autofilled
+   fields get the :-webkit-autofill pseudo-class, so binding a (visually
+   inert) animation to it lets JS listen for 'animationstart' as an autofill
+   signal. Used by the password-strength/match checkers so an autofilled
+   password isn't silently left unevaluated. */
+@keyframes onAutoFillStart { from {} to {} }
+input:-webkit-autofill {
+  animation-name: onAutoFillStart;
+  animation-duration: 0.001s;
+}
+
 /* ── Custom Data Grid Enhancements ───────────────────────────── */
 .configs-table.standard-density th,
 .configs-table.standard-density td {
