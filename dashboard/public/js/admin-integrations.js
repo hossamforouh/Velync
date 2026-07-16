@@ -1,5 +1,5 @@
 import { collection, collectionGroup, onSnapshot, query, orderBy, where, getDocs, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
-import { getSkeletonTableHTML, setButtonLoading } from './loading-components.js';
+import { getSkeletonTableHTML, getEmptySpinnerHTML, setButtonLoading } from './loading-components.js';
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
 
@@ -330,10 +330,21 @@ async function loadAdminOverview() {
   }
 }
 
+const OVERVIEW_MINI_PANEL_IDS = [
+  'admin-platform-popularity', 'admin-top-errors', 'admin-connections-dist',
+  'admin-stale-configs', 'admin-daily-volume',
+];
+
 function setOverviewLoading(loading) {
   if (loading) {
     document.querySelectorAll('#admin-overview-content [data-stat]').forEach(el => {
       el.textContent = '…';
+    });
+    // These 5 mini-panels otherwise sit on index.html's static "Loading..."
+    // text for however long the overview fetch takes, with no shimmer.
+    OVERVIEW_MINI_PANEL_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = getEmptySpinnerHTML('Loading...');
     });
   }
 }

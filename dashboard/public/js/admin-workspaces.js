@@ -1,5 +1,6 @@
 import { showToast } from './toast.js';
 import { fmtCost, renderUsageStatCardsHtml } from './usage-format.js';
+import { getSkeletonCardGridHTML, getSkeletonTableHTML } from './loading-components.js';
 
 // Admin → Workspaces management tab.
 // Powered by the server-side admin endpoints (/api/admin/stats + /api/admin/workspaces),
@@ -123,7 +124,7 @@ async function openUsageModal(workspace) {
 
   title.textContent = workspace.name || workspace.id;
   subtitle.textContent = 'Loading…';
-  body.innerHTML = '<p style="text-align:center;padding:30px;color:var(--text-3);">Loading usage…</p>';
+  body.innerHTML = getSkeletonCardGridHTML(4);
   overlay.classList.add('open');
 
   try {
@@ -169,7 +170,7 @@ async function loadWorkspaces(reset) {
   if (reset) {
     cursor = null;
     rowsShown = 0;
-    if (tbody) tbody.innerHTML = '';
+    if (tbody) tbody.innerHTML = getSkeletonTableHTML(7, 5);
   }
 
   try {

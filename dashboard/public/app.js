@@ -19,7 +19,7 @@ import './js/integration-setup.js';
 import { showToast } from './js/toast.js';
 import { confirmDialog, alertDialog, threeWayConfirmDialog } from './js/confirm.js';
 import { startLoad, endLoad, isLoading } from './js/loading.js';
-import { getSkeletonFormHTML, setButtonLoading } from './js/loading-components.js';
+import { getSkeletonFormHTML, getSkeletonTableHTML, getEmptySpinnerHTML, setButtonLoading } from './js/loading-components.js';
 
 /** Show a plan-limit toast with an Upgrade button that opens billing settings */
 function showPlanError(msg) {
@@ -3266,6 +3266,26 @@ function renderCards() {
   updateMultiSelectBar();
 }
 
+// Mirrors the tailored 8-column shimmer skeleton index.html ships with for
+// this table's very first paint (matches this table's actual column shapes
+// better than the generic getSkeletonTableHTML) — reused here so a retry
+// after an error, or any load that starts from an empty table, gets the
+// same branded skeleton instead of sitting on the error/empty row until
+// the fetch resolves.
+function getSyncConfigsSkeletonRowHTML() {
+  return `
+    <tr>
+      <td class="col-checkbox"><div class="skeleton-line" style="width: 16px; height: 16px; border-radius: 4px;"></div></td>
+      <td data-label="Name"><div class="skeleton-line long" style="height: 18px; width: 200px; border-radius: 6px;"></div></td>
+      <td data-label="Apps"><div style="display: flex; gap: 8px; justify-content: flex-end;"><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div><div class="skeleton-line" style="width: 28px; height: 28px; border-radius: 6px;"></div></div></td>
+      <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
+      <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 150px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+      <td data-label="Last Run"><div class="skeleton-line" style="width: 80px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+      <td data-label="Owner"><div class="skeleton-line" style="width: 100px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
+      <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
+    </tr>`;
+}
+
 // ─── Load configs ─────────────────────────────────────────────
 async function loadConfigs(silent = false) {
   const loadKey = 'loadConfigs';
@@ -3275,6 +3295,14 @@ async function loadConfigs(silent = false) {
     refreshIcon.style.transform = 'rotate(360deg)';
     refreshIcon.style.transition = 'transform 0.5s';
     setTimeout(() => { refreshIcon.style.transform = ''; refreshIcon.style.transition = ''; }, 600);
+  }
+
+  // Only show the skeleton when the table is starting from empty (first
+  // load, or a retry after an error) — a manual refresh of an already-
+  // populated table keeps showing the current rows until the new ones are
+  // ready, avoiding an unnecessary flicker.
+  if (!silent && configs.length === 0 && tableBody) {
+    tableBody.innerHTML = getSyncConfigsSkeletonRowHTML().repeat(4);
   }
 
   try {
@@ -3603,7 +3631,7 @@ function handleConnectionChange(prefix) {
   const conn = _connectionsCache.find(c => c.id === connId);
   if (!conn) return;
 
-  container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text-3);"><span class="spinner" style="width:16px;height:16px;border-width:2px;margin-right:8px;"></span> Loading fields...</div>';
+  container.innerHTML = getEmptySpinnerHTML('Loading fields...');
   window.renderSchemaForPlatform(conn.provider, containerId, prefix, {});
 }
 
@@ -3922,7 +3950,7 @@ async function loadDefaultMappingsPreset() {
     return; // Preserve existing state if connections and specific dynamic contexts haven't changed
   }
 
-  mappingsContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-3); font-size: 0.9rem; animation: pulse-loading 1.5s infinite;"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i> Generating intelligent mapping suggestions...</div>';
+  mappingsContainer.innerHTML = getEmptySpinnerHTML('Generating intelligent mapping suggestions...');
   if (window.feather) window.feather.replace();
 
   try {

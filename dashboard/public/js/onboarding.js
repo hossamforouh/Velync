@@ -4,7 +4,7 @@
  */
 import { initiateDirectOAuthFlow, connections } from './connections.js';
 import { showToast } from './toast.js';
-import { setButtonLoading } from './loading-components.js';
+import { setButtonLoading, getEmptySpinnerHTML } from './loading-components.js';
 
 let currentStep = 1;
 let onboardState = { p1: null, p2: null, connection1: null, connection2: null };
@@ -85,7 +85,7 @@ function renderStep1() {
     <h3 style="margin:0 0 4px;font-size:1.05rem;">1. Connect your first account</h3>
     <p style="margin:0 0 16px;color:var(--text-3);font-size:0.88rem;">Pick a platform to connect. You'll need at least one source and one destination.</p>
     <div id="step1-connection-list">
-      <div style="text-align:center;padding:20px;color:var(--text-3);font-size:0.9rem;">Loading available platforms…</div>
+      ${getEmptySpinnerHTML('Loading available platforms…')}
     </div>
     <div class="onboarding-actions">
       <div></div>
@@ -153,7 +153,7 @@ function goStep2(db, auth, onComplete) {
     <h3 style="margin:0 0 4px;font-size:1.05rem;">2. Connect a second account</h3>
     <p style="margin:0 0 16px;color:var(--text-3);font-size:0.88rem;">Choose another platform to sync with. Different from the first one.</p>
     <div id="step2-connection-list">
-      <div style="text-align:center;padding:20px;color:var(--text-3);font-size:0.9rem;">Loading available platforms…</div>
+      ${getEmptySpinnerHTML('Loading available platforms…')}
     </div>
     <div class="onboarding-actions">
       <button class="onboarding-btn onboarding-btn-secondary" id="btn-step2-back">← Back</button>
@@ -262,7 +262,7 @@ async function bindStep3(db, auth, onComplete) {
         <h3 style="margin:0 0 4px;font-size:1.05rem;">2. Connect a second account</h3>
         <p style="margin:0 0 16px;color:var(--text-3);font-size:0.88rem;">Choose another platform to sync with. Different from the first one.</p>
         <div id="step2-connection-list">
-          <div style="text-align:center;padding:20px;color:var(--text-3);font-size:0.9rem;">Loading available platforms…</div>
+          ${getEmptySpinnerHTML('Loading available platforms…')}
         </div>
         <div class="onboarding-actions">
           <button class="onboarding-btn onboarding-btn-secondary" id="btn-step2-back">← Back</button>

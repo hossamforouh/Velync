@@ -1,4 +1,5 @@
 import { showToast } from './toast.js';
+import { getSkeletonTableHTML } from './loading-components.js';
 
 // Admin → Overview → "Recent Executions" (merged from the former standalone
 // Sync Health tab — its summary stats duplicated numbers Overview's own
@@ -43,6 +44,7 @@ async function load() {
   hasLoaded = true;
   const tbody = document.getElementById('admin-sh-tbody');
   if (!tbody) return;
+  tbody.innerHTML = getSkeletonTableHTML(6, 4);
   try {
     const { recent } = await apiGet('/api/admin/sync-health?limit=100');
 

@@ -1,7 +1,7 @@
 import { collection, query, orderBy, limit, startAfter, getDocs } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
-import { setButtonLoading } from './loading-components.js';
+import { setButtonLoading, getSkeletonTableHTML } from './loading-components.js';
 
 let firestoreDb = null;
 let authInstance = null;
@@ -272,7 +272,7 @@ async function loadClientErrors(reset = false) {
     clientErrSelectedIds.clear();
     clientErrExpandedGroups.clear();
     clientErrAutoContinueCount = 0;
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;">Loading...</td></tr>';
+    tbody.innerHTML = getSkeletonTableHTML(7, 4);
   }
 
   try {

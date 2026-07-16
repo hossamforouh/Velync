@@ -1,6 +1,6 @@
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
-import { setButtonLoading } from './loading-components.js';
+import { setButtonLoading, getSkeletonTableHTML } from './loading-components.js';
 
 let auth = null;
 let allPlans = [];
@@ -68,6 +68,7 @@ async function loadPlans(isManualRefresh = false) {
     icon.style.transition = 'transform 0.5s';
     icon.style.transform = 'rotate(360deg)';
   }
+  if (!allPlans.length) tbody.innerHTML = getSkeletonTableHTML(7, 4);
 
   try {
     allPlans = await apiRequest('/api/admin/plans');

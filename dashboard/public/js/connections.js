@@ -9,7 +9,7 @@ import { getFirestore, collection, getDocs, query, where, orderBy, limit, startA
 import { getAuth } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
 
-import { getSkeletonRowHTML, setButtonLoading } from './loading-components.js';
+import { getSkeletonRowHTML, getEmptySpinnerHTML, setButtonLoading } from './loading-components.js';
 import { confirmDialog } from './confirm.js';
 import { showToast } from './toast.js';
 
@@ -631,7 +631,7 @@ async function openAddConnectionDialog(presetProvider = null) {
   overlay.id = 'conn-dialog-overlay';
   overlay.className = 'conn-dialog-overlay';
 
-  overlay.innerHTML = `<div class="conn-dialog-loading"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i>Loading providers...</div>`;
+  overlay.innerHTML = getEmptySpinnerHTML('Loading providers...');
   if (window.feather) feather.replace();
   document.body.appendChild(overlay);
 
@@ -892,7 +892,7 @@ async function openEditConnectionDialog(conn) {
   overlay.id = 'conn-dialog-overlay';
   overlay.className = 'conn-dialog-overlay';
 
-  overlay.innerHTML = `<div class="conn-dialog-loading"><i data-feather="loader" class="spin" style="width:16px; height:16px; margin-right:8px; vertical-align:middle;"></i>Loading...</div>`;
+  overlay.innerHTML = getEmptySpinnerHTML('Loading...');
   if (window.feather) feather.replace();
   document.body.appendChild(overlay);
 
