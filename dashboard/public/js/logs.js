@@ -1,5 +1,6 @@
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
+import { setButtonLoading } from './loading-components.js';
 import {
   collection, query, where, orderBy, limit, getDocs, startAfter
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
@@ -226,15 +227,9 @@ async function renderTable() {
 async function loadMore() {
   if (!hasMore) return;
   const loadMoreBtn = document.getElementById('logs-load-more-btn');
-  if (loadMoreBtn) {
-    loadMoreBtn.disabled = true;
-    loadMoreBtn.textContent = 'Loading...';
-  }
+  if (loadMoreBtn) setButtonLoading(loadMoreBtn, true, 'Load More', 'Loading...');
   await fetchLogs(false);
-  if (loadMoreBtn) {
-    loadMoreBtn.disabled = false;
-    loadMoreBtn.textContent = 'Load More';
-  }
+  if (loadMoreBtn) setButtonLoading(loadMoreBtn, false, 'Load More');
   updateLoadMoreVisibility();
 }
 
@@ -558,10 +553,7 @@ function closeLogDetail() {
 async function retrySync(configId, btn) {
   if (!configId) return;
   const originalText = btn ? btn.textContent : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Retrying...';
-  }
+  if (btn) setButtonLoading(btn, true, originalText, 'Retrying...');
   try {
     const token = currentAuth && currentAuth.currentUser ? await currentAuth.currentUser.getIdToken() : null;
     const res = await fetch(`${window.VELYNC_CONFIG.apiBase}/api/sync-configs/${configId}/run`, {
@@ -576,10 +568,7 @@ async function retrySync(configId, btn) {
   } catch (err) {
     showToast('Failed to retry sync: ' + err.message, 'error');
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = originalText;
-    }
+    if (btn) setButtonLoading(btn, false, originalText);
   }
 }
 

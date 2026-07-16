@@ -9,7 +9,7 @@ import { getFirestore, collection, getDocs, query, where, orderBy, limit, startA
 import { getAuth } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
 
-import { getSkeletonRowHTML } from './loading-components.js';
+import { getSkeletonRowHTML, setButtonLoading } from './loading-components.js';
 import { confirmDialog } from './confirm.js';
 import { showToast } from './toast.js';
 
@@ -415,12 +415,10 @@ function wireToolbar() {
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener('click', async () => {
       if (!hasMore) return;
-      loadMoreBtn.disabled = true;
-      loadMoreBtn.textContent = 'Loading...';
+      setButtonLoading(loadMoreBtn, true, 'Load More', 'Loading...');
       await loadConnections(false);
       await renderConnectionsView();
-      loadMoreBtn.disabled = false;
-      loadMoreBtn.textContent = 'Load More';
+      setButtonLoading(loadMoreBtn, false, 'Load More');
     });
   }
 

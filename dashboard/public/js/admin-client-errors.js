@@ -1,6 +1,7 @@
 import { collection, query, orderBy, limit, startAfter, getDocs } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
+import { setButtonLoading } from './loading-components.js';
 
 let firestoreDb = null;
 let authInstance = null;
@@ -329,19 +330,8 @@ async function loadClientErrors(reset = false) {
   }
 }
 
-function setBtnLoading(btn, label) {
-  btn.disabled = true;
-  btn.dataset.originalHtml = btn.innerHTML;
-  btn.innerHTML = `<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:5px;"></span><span style="vertical-align:middle;">${escHtml(label)}</span>`;
-}
-
-function restoreBtn(btn) {
-  btn.disabled = false;
-  if (btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
-}
-
 async function setStatusForIds(ids, newStatus, btn) {
-  setBtnLoading(btn, 'Updating...');
+  setButtonLoading(btn, true, null, 'Updating...');
   try {
     await Promise.all(ids.map(id => apiRequest(`/api/admin/client-errors/${id}/status`, {
       method: 'PATCH',
@@ -351,12 +341,12 @@ async function setStatusForIds(ids, newStatus, btn) {
     loadClientErrors(true);
   } catch (err) {
     showToast('Failed to update: ' + err.message, 'error');
-    restoreBtn(btn);
+    setButtonLoading(btn, false);
   }
 }
 
 async function deleteIds(ids, btn) {
-  setBtnLoading(btn, 'Deleting...');
+  setButtonLoading(btn, true, null, 'Deleting...');
   try {
     let success = 0;
     for (const id of ids) {
@@ -371,7 +361,7 @@ async function deleteIds(ids, btn) {
     loadClientErrors(true);
   } catch (err) {
     showToast('Failed to delete: ' + err.message, 'error');
-    restoreBtn(btn);
+    setButtonLoading(btn, false);
   }
 }
 

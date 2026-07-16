@@ -727,8 +727,7 @@ function wirePlatformControls() {
       });
       if (!ok) return;
 
-      bulkDeleteBtn.disabled = true;
-      bulkDeleteBtn.textContent = 'Deleting...';
+      setButtonLoading(bulkDeleteBtn, true, 'Delete Selected', 'Deleting...');
       let success = 0;
       for (const id of ids) {
         try {
@@ -738,8 +737,7 @@ function wirePlatformControls() {
           console.warn(`Failed to delete platform ${id}:`, err);
         }
       }
-      bulkDeleteBtn.disabled = false;
-      bulkDeleteBtn.textContent = 'Delete Selected';
+      setButtonLoading(bulkDeleteBtn, false, 'Delete Selected');
       platSelectedIds.clear();
       updatePlatBulkDeleteBtn();
       showToast(`Deleted ${success} platform(s)`, 'info');

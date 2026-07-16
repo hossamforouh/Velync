@@ -683,8 +683,7 @@ function showPendingInvitesModal(invites, token) {
 
   overlay.querySelectorAll('.accept-invite-action').forEach(btn => {
     btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      btn.textContent = 'Joining...';
+      setButtonLoading(btn, true, 'Accept', 'Joining...');
       try {
         const r = await fetch('/api/workspace/join', {
           method: 'POST',
@@ -705,16 +704,14 @@ function showPendingInvitesModal(invites, token) {
         }
       } catch (err) {
         showToast('Failed to join: ' + err.message, 'error');
-        btn.disabled = false;
-        btn.textContent = 'Accept';
+        setButtonLoading(btn, false, 'Accept');
       }
     });
   });
 
   overlay.querySelectorAll('.decline-invite-action').forEach(btn => {
     btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      btn.textContent = 'Declining...';
+      setButtonLoading(btn, true, 'Decline', 'Declining...');
       try {
         const r = await fetch('/api/workspace/decline-invite', {
           method: 'POST',
@@ -726,8 +723,7 @@ function showPendingInvitesModal(invites, token) {
         removeRow(btn.dataset.id);
       } catch (err) {
         showToast('Failed to decline: ' + err.message, 'error');
-        btn.disabled = false;
-        btn.textContent = 'Decline';
+        setButtonLoading(btn, false, 'Decline');
       }
     });
   });
@@ -1898,8 +1894,7 @@ onAuthStateChanged(auth, async (user) => {
             return showInviteMsg('You cannot invite yourself', true);
           }
           
-          btnSendInvite.disabled = true;
-          btnSendInvite.textContent = 'Sending...';
+          setButtonLoading(btnSendInvite, true, 'Send Invite', 'Sending...');
           try {
             const token = await user.getIdToken();
             const inviteRes = await fetch('/api/workspace/invite', {
@@ -1910,8 +1905,7 @@ onAuthStateChanged(auth, async (user) => {
             if (!inviteRes.ok) {
               const errData = await inviteRes.json();
               if (inviteRes.status === 409) {
-                btnSendInvite.disabled = false;
-                btnSendInvite.textContent = 'Send Invite';
+                setButtonLoading(btnSendInvite, false, 'Send Invite');
                 return showInviteMsg('User is already invited', true);
               }
               throw new Error(errData.error || 'Failed to send invite');
@@ -1928,8 +1922,7 @@ onAuthStateChanged(auth, async (user) => {
           } catch (err) {
             showInviteMsg('Failed to send invite: ' + err.message, true);
           } finally {
-            btnSendInvite.disabled = false;
-            btnSendInvite.textContent = 'Send Invite';
+            setButtonLoading(btnSendInvite, false, 'Send Invite');
           }
         });
       }
@@ -2113,8 +2106,7 @@ onAuthStateChanged(auth, async (user) => {
                  confirmClass: 'btn-danger'
                });
                if (!confirmed) return;
-               btn.disabled = true;
-               btn.textContent = 'Transferring...';
+               setButtonLoading(btn, true, 'Make Owner', 'Transferring...');
                try {
                  const token = await auth.currentUser.getIdToken();
                  const res = await fetch('/api/workspace/transfer-ownership', {
@@ -2128,8 +2120,7 @@ onAuthStateChanged(auth, async (user) => {
                  loadCollaborators();
                } catch (err) {
                  showToast('Failed to transfer ownership: ' + err.message, 'error');
-                 btn.disabled = false;
-                 btn.textContent = 'Make Owner';
+                 setButtonLoading(btn, false, 'Make Owner');
                }
              });
            });
@@ -2220,8 +2211,7 @@ onAuthStateChanged(auth, async (user) => {
 
       if (btnRevokeSessions) {
         btnRevokeSessions.addEventListener('click', async () => {
-          btnRevokeSessions.disabled = true;
-          btnRevokeSessions.textContent = 'Revoking...';
+          setButtonLoading(btnRevokeSessions, true, 'Logout All Other Devices', 'Revoking...');
           try {
             const token = await auth.currentUser.getIdToken();
             const res = await fetch('/api/settings/revoke-sessions', {
@@ -2257,8 +2247,7 @@ onAuthStateChanged(auth, async (user) => {
           } catch (err) {
             if (sessionsMsg) { sessionsMsg.textContent = 'Failed: ' + err.message; sessionsMsg.style.color = '#f43f5e'; }
           } finally {
-            btnRevokeSessions.disabled = false;
-            btnRevokeSessions.textContent = 'Logout All Other Devices';
+            setButtonLoading(btnRevokeSessions, false, 'Logout All Other Devices');
           }
         });
       }
@@ -2271,8 +2260,7 @@ onAuthStateChanged(auth, async (user) => {
 
       if (btnExportData) {
         btnExportData.addEventListener('click', async () => {
-          btnExportData.disabled = true;
-          btnExportData.textContent = 'Exporting...';
+          setButtonLoading(btnExportData, true, 'Export My Data', 'Exporting...');
           try {
             const token = await auth.currentUser.getIdToken();
             const res = await fetch('/api/settings/export-data', { headers: { 'Authorization': `Bearer ${token}` } });
@@ -2294,8 +2282,7 @@ onAuthStateChanged(auth, async (user) => {
           } catch (err) {
             if (exportMsg) { exportMsg.textContent = 'Export failed: ' + err.message; exportMsg.style.color = '#f43f5e'; }
           } finally {
-            btnExportData.disabled = false;
-            btnExportData.textContent = 'Export My Data';
+            setButtonLoading(btnExportData, false, 'Export My Data');
           }
         });
       }
@@ -2317,8 +2304,7 @@ onAuthStateChanged(auth, async (user) => {
           });
           if (!doubleConfirm) return;
 
-          btnDeleteAccount.disabled = true;
-          btnDeleteAccount.textContent = 'Deleting...';
+          setButtonLoading(btnDeleteAccount, true, 'Delete My Account', 'Deleting...');
           try {
             const token = await auth.currentUser.getIdToken();
             const res = await fetch('/api/settings/delete-account', {
@@ -2333,8 +2319,7 @@ onAuthStateChanged(auth, async (user) => {
             }, data.fullyDeleted === false ? 4000 : 2000);
           } catch (err) {
             if (deleteAccountMsg) { deleteAccountMsg.textContent = 'Failed: ' + err.message; deleteAccountMsg.style.color = '#f43f5e'; }
-            btnDeleteAccount.disabled = false;
-            btnDeleteAccount.textContent = 'Delete My Account';
+            setButtonLoading(btnDeleteAccount, false, 'Delete My Account');
           }
         });
       }
@@ -2709,9 +2694,8 @@ authForm.addEventListener('submit', async (e) => {
   authError.style.color = '#EF4444';
   authError.style.borderColor = 'rgba(239, 68, 68, 0.2)';
   
-  btnAuthSubmit.disabled = true;
   const originalText = btnAuthSubmit.textContent;
-  btnAuthSubmit.textContent = isResetMode ? 'Sending...' : (isSignUpMode ? 'Creating Account...' : 'Signing In...');
+  setButtonLoading(btnAuthSubmit, true, originalText, isResetMode ? 'Sending...' : (isSignUpMode ? 'Creating Account...' : 'Signing In...'));
 
   try {
     if (isResetMode) {
@@ -2731,8 +2715,7 @@ authForm.addEventListener('submit', async (e) => {
       authError.style.backgroundColor = 'rgba(16, 185, 129, 0.1)'; // Green success
       authError.style.color = '#10B981';
       authError.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-      btnAuthSubmit.textContent = "Send Reset Link";
-      btnAuthSubmit.disabled = false;
+      setButtonLoading(btnAuthSubmit, false, "Send Reset Link");
       return; // Stop here, don't trigger the auth state changes
     } else if (isSignUpMode) {
       const missingReqs = getPasswordPolicyErrors(password);
@@ -2756,16 +2739,15 @@ authForm.addEventListener('submit', async (e) => {
     authError.textContent = getAuthErrorMessage(error);
     authError.style.display = 'block';
   } finally {
-    btnAuthSubmit.disabled = false;
-    btnAuthSubmit.textContent = originalText;
+    setButtonLoading(btnAuthSubmit, false, originalText);
   }
 });
 
 btnLogin.addEventListener('click', async () => {
   const provider = new GoogleAuthProvider();
   authError.style.display = 'none';
-  btnLogin.disabled = true;
-  btnLogin.innerHTML = 'Connecting...';
+  const originalLoginLabel = btnLogin.innerHTML;
+  setButtonLoading(btnLogin, true, originalLoginLabel, 'Connecting...');
   try {
     await setPersistence(auth, rememberMeChecked() ? browserLocalPersistence : browserSessionPersistence);
     await signInWithPopup(auth, provider);
@@ -2774,8 +2756,11 @@ btnLogin.addEventListener('click', async () => {
     authError.textContent = getAuthErrorMessage(error);
     authError.style.display = 'block';
   } finally {
+    // setButtonLoading restores via textContent, which would strip the
+    // Google icon <img> — restore the captured innerHTML directly instead.
     btnLogin.disabled = false;
-    btnLogin.innerHTML = '<img src="/vendor/google.svg" alt="Google" width="18" height="18" /> Continue with Google';
+    delete btnLogin.dataset.originalText;
+    btnLogin.innerHTML = originalLoginLabel;
   }
 });
 
@@ -2783,17 +2768,15 @@ const btnResendVerification = document.getElementById('btn-resend-verification')
 if (btnResendVerification) {
   btnResendVerification.addEventListener('click', async () => {
     if (!auth.currentUser) return;
-    btnResendVerification.disabled = true;
     const originalLabel = btnResendVerification.textContent;
-    btnResendVerification.textContent = 'Sending...';
+    setButtonLoading(btnResendVerification, true, originalLabel, 'Sending...');
     try {
       await sendEmailVerification(auth.currentUser);
       showToast('Verification email sent — check your inbox.', 'success');
     } catch (err) {
       showToast('Could not send verification email: ' + err.message, 'error');
     } finally {
-      btnResendVerification.disabled = false;
-      btnResendVerification.textContent = originalLabel;
+      setButtonLoading(btnResendVerification, false, originalLabel);
     }
   });
 }
