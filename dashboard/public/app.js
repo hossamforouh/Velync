@@ -1628,6 +1628,13 @@ onAuthStateChanged(auth, async (user) => {
             currentPwInput.value = '';
             newPwInput.value = '';
             confirmPwInput.value = '';
+            // Setting .value directly doesn't fire the 'input' event those
+            // listeners depend on — without dispatching it, the strength
+            // meter and "Passwords match" indicator kept showing their last
+            // (now-stale) state after a successful change instead of
+            // clearing back to empty.
+            newPwInput.dispatchEvent(new Event('input'));
+            confirmPwInput.dispatchEvent(new Event('input'));
             // Security notification — best-effort, doesn't block the already-successful change.
             auth.currentUser.getIdToken().then(token =>
               fetch('/api/settings/notify-password-changed', {
