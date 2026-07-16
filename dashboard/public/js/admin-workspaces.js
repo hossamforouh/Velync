@@ -29,14 +29,24 @@ export function initAdminWorkspaces(authInstance) {
   if (more) more.addEventListener('click', () => loadWorkspaces(false));
 
   const search = document.getElementById('admin-ws-search');
+  const searchClear = document.getElementById('admin-ws-search-clear');
   if (search) {
     search.addEventListener('input', () => {
+      if (searchClear) searchClear.style.display = search.value ? 'flex' : 'none';
       clearTimeout(searchDebounce);
       searchDebounce = setTimeout(() => {
         searchTerm = search.value.trim();
         loadWorkspaces(true);
       }, 300);
     });
+    if (searchClear) {
+      searchClear.addEventListener('click', () => {
+        search.value = '';
+        searchTerm = '';
+        loadWorkspaces(true);
+        searchClear.style.display = 'none';
+      });
+    }
   }
 
   const modalOverlay = document.getElementById('ws-usage-modal-overlay');
@@ -182,6 +192,10 @@ async function loadWorkspaces(reset) {
     if (reset && items.length === 0) {
       if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">${searchTerm ? 'No workspaces match your search.' : 'No workspaces.'}</td></tr>`;
     } else if (tbody) {
+      // On a reset load, the skeleton rows set above are still sitting in the
+      // DOM — appendChild() below would stack real rows underneath them
+      // instead of replacing them, which is exactly what was happening.
+      if (reset) tbody.innerHTML = '';
       for (const w of items) {
         const tr = document.createElement('tr');
         tr.innerHTML = `

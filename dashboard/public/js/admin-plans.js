@@ -1,6 +1,6 @@
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
-import { setButtonLoading, getSkeletonTableHTML } from './loading-components.js';
+import { setButtonLoading, getSkeletonTableHTML, getEmptyStateRowHTML } from './loading-components.js';
 
 let auth = null;
 let allPlans = [];
@@ -59,15 +59,8 @@ async function loadPlans(isManualRefresh = false) {
   const tbody = document.getElementById('admin-plans-tbody');
   if (!tbody) return;
 
-  // Visible click feedback for a manual Refresh click — same
-  // rotate+disable pattern the Flows page's own refresh button uses.
   const btnRefresh = isManualRefresh ? document.getElementById('admin-plans-refresh-btn') : null;
-  const icon = isManualRefresh ? document.getElementById('admin-plans-refresh-icon') : null;
   if (btnRefresh) btnRefresh.disabled = true;
-  if (icon) {
-    icon.style.transition = 'transform 0.5s';
-    icon.style.transform = 'rotate(360deg)';
-  }
   if (!allPlans.length) tbody.innerHTML = getSkeletonTableHTML(7, 4);
 
   try {
@@ -82,7 +75,6 @@ async function loadPlans(isManualRefresh = false) {
     if (retryLink) retryLink.addEventListener('click', (e) => { e.preventDefault(); loadPlans(); });
   } finally {
     if (btnRefresh) btnRefresh.disabled = false;
-    if (icon) setTimeout(() => { icon.style.transition = ''; icon.style.transform = ''; }, 500);
   }
 }
 
@@ -91,7 +83,12 @@ function renderPlans() {
   if (!tbody) return;
 
   if (allPlans.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">No plans configured yet. Click "+ New Plan" to create your first one.</td></tr>';
+    tbody.innerHTML = getEmptyStateRowHTML({
+      colspan: 7,
+      iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>',
+      title: 'No plans configured yet',
+      message: 'Click "+ New Plan" to create your first one.',
+    });
     const countEl = document.getElementById('admin-plans-count');
     if (countEl) countEl.textContent = '';
     return;

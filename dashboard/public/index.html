@@ -916,19 +916,25 @@
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
               <h3 style="margin:0;font-size:1rem;">Workspaces</h3>
               <div style="display:flex;align-items:center;gap:10px;">
-                <input id="admin-ws-search" type="text" placeholder="Search by name…" class="form-input" style="max-width:220px;padding:6px 10px;font-size:0.85rem;">
+                <div class="search-wrap" style="position:relative;width:260px;">
+                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;z-index:1;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input type="text" id="admin-ws-search" placeholder="Search by name..." style="padding-left:32px;width:100%;color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:8px 12px 8px 32px;border-radius:8px;font-size:0.85rem;box-sizing:border-box;" />
+                  <button id="admin-ws-search-clear" class="search-clear" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-3);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:0.8rem;z-index:1;">✕</button>
+                </div>
                 <span id="admin-ws-count" style="color:var(--text-3);font-size:0.82rem;"></span>
-                <button id="admin-ws-refresh" class="btn btn-secondary btn-sm" type="button">⟳ Refresh</button>
+                <button id="admin-ws-refresh" class="btn btn-secondary btn-sm" type="button">Refresh</button>
               </div>
             </div>
-            <table class="connections-table" id="admin-ws-table">
-              <thead>
-                <tr><th>Name</th><th>Owner</th><th>Plan</th><th>Members</th><th>Est. Cost (mo)</th><th>ID</th><th>Actions</th></tr>
-              </thead>
-              <tbody id="admin-ws-tbody">
-                <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
-              </tbody>
-            </table>
+            <div class="connections-table-wrap">
+              <table class="connections-table" id="admin-ws-table">
+                <thead>
+                  <tr><th>Name</th><th>Owner</th><th>Plan</th><th>Members</th><th>Est. Cost (mo)</th><th>ID</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="admin-ws-tbody">
+                  <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
             <div style="text-align:center;margin-top:16px;">
               <button id="admin-ws-load-more" class="btn btn-secondary btn-sm" type="button" style="display:none;">Load more</button>
             </div>
@@ -1059,14 +1065,16 @@
                   <div style="text-align:right;margin-bottom:10px;">
                     <button id="admin-sh-refresh" class="btn btn-secondary btn-sm" type="button">Refresh</button>
                   </div>
-                  <table class="connections-table" id="admin-sh-table">
-                    <thead>
-                      <tr><th>Config</th><th>Workspace</th><th>Status</th><th>Started</th><th>Results</th><th>Error</th></tr>
-                    </thead>
-                    <tbody id="admin-sh-tbody">
-                      <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
-                    </tbody>
-                  </table>
+                  <div class="connections-table-wrap">
+                    <table class="connections-table" id="admin-sh-table">
+                      <thead>
+                        <tr><th>Config</th><th>Workspace</th><th>Status</th><th>Started</th><th>Results</th><th>Error</th></tr>
+                      </thead>
+                      <tbody id="admin-sh-tbody">
+                        <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1172,9 +1180,7 @@
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="margin: 0;">Plans &amp; Pricing</h2>
                 <div style="display:flex;gap:8px;align-items:center;">
-                  <button id="admin-plans-refresh-btn" class="btn btn-secondary btn-sm" type="button" title="Refresh" style="padding:6px 10px;">
-                    <svg id="admin-plans-refresh-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                  </button>
+                  <button id="admin-plans-refresh-btn" class="btn btn-secondary btn-sm" type="button">Refresh</button>
                   <button class="btn btn-secondary btn-sm" data-export="plans" type="button" title="Download all plans as a JSON file" style="padding:6px 10px;">Export</button>
                   <button class="btn btn-secondary btn-sm" data-import="plans" type="button" title="Upload a plans JSON file to add/overwrite records" style="padding:6px 10px;">Import</button>
                   <button id="btn-new-plan" class="btn btn-primary btn-sm" type="button">+ New Plan</button>
@@ -1262,12 +1268,12 @@
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                 <h2 style="margin:0;">Audit Log</h2>
                 <div style="display:flex;gap:8px;">
-                  <button id="admin-activity-refresh" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">⟳ Refresh</button>
+                  <button id="admin-activity-refresh" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Refresh</button>
                 </div>
               </div>
               <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">A record of every administrative change made in this workspace — who made it, when, and exactly what changed. Entries are permanent and cannot be edited or deleted.</p>
               <div id="admin-activity-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;">
-                <select id="admin-activity-filter-type" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;">
+                <select id="admin-activity-filter-type" class="select-arrow" style="padding:7px 36px 7px 10px;border-radius:6px;border:1px solid var(--border);background-color:var(--bg);color:var(--text);font-size:13px;">
                   <option value="">All Types</option>
                   <option value="plan">Plan</option>
                   <option value="platform">Platform</option>
@@ -1275,7 +1281,7 @@
                   <option value="workspace-plan">Workspace Plan</option>
                   <option value="global-settings">Global Settings</option>
                 </select>
-                <select id="admin-activity-filter-action" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;">
+                <select id="admin-activity-filter-action" class="select-arrow" style="padding:7px 36px 7px 10px;border-radius:6px;border:1px solid var(--border);background-color:var(--bg);color:var(--text);font-size:13px;">
                   <option value="">All Actions</option>
                   <option value="create">Create</option>
                   <option value="update">Update</option>
@@ -1326,7 +1332,7 @@
               </div>
               <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. <strong>Open</strong>: needs attention. <strong>Resolved</strong>: a fix has shipped, awaiting verification. <strong>Closed</strong>: verified fixed. Repeated occurrences of the same error are grouped into a single row.</p>
               <div id="admin-clienterr-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;">
-                <select id="admin-clienterr-filter-status" class="select-arrow" style="padding:7px 36px 7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;">
+                <select id="admin-clienterr-filter-status" class="select-arrow" style="padding:7px 36px 7px 10px;border-radius:6px;border:1px solid var(--border);background-color:var(--bg);color:var(--text);font-size:13px;">
                   <option value="open">Open</option>
                   <option value="resolved">Resolved</option>
                   <option value="closed">Closed</option>
@@ -2379,6 +2385,7 @@
         Delete Platform?
       </h3>
       <p>You're about to permanently delete <strong id="plat-del-modal-name"></strong>. This cannot be undone.</p>
+      <p id="plat-del-modal-dependency-warning" style="display:none;color:var(--rose);font-size:0.85rem;font-weight:600;"></p>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="plat-del-modal-cancel">Cancel</button>
         <button class="btn btn-danger" id="plat-del-modal-confirm">Delete</button>

@@ -1,5 +1,5 @@
 import { showToast } from './toast.js';
-import { getSkeletonTableHTML } from './loading-components.js';
+import { getSkeletonTableHTML, getEmptyStateRowHTML } from './loading-components.js';
 
 // Admin → Overview → "Recent Executions" (merged from the former standalone
 // Sync Health tab — its summary stats duplicated numbers Overview's own
@@ -49,7 +49,12 @@ async function load() {
     const { recent } = await apiGet('/api/admin/sync-health?limit=100');
 
     if (!recent.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">No recent executions.</td></tr>';
+      tbody.innerHTML = getEmptyStateRowHTML({
+        colspan: 6,
+        iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>',
+        title: 'No recent executions',
+        message: 'Sync runs will show up here once a config runs.',
+      });
       return;
     }
 

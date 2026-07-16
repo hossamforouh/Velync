@@ -1,7 +1,7 @@
 import { collection, onSnapshot, query, orderBy, getDocs, where, limit, startAfter, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
-import { getSkeletonTableHTML, setButtonLoading } from './loading-components.js';
+import { getSkeletonTableHTML, getEmptyStateRowHTML, setButtonLoading } from './loading-components.js';
 import { confirmDialog } from './confirm.js';
 
 let firestoreDb = null;
@@ -811,14 +811,24 @@ function renderPlatformTable() {
   tbody.innerHTML = '';
 
   if (sorted.length === 0) {
-    const msg = platSearchTerm
-      ? `No platforms match "${escHtml(platSearchTerm)}"`
-      : 'No platforms found.';
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;">${msg}</td></tr>`;
+    tbody.innerHTML = getEmptyStateRowHTML({
+      colspan: 6,
+      iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16"></path></svg>',
+      title: platSearchTerm ? 'No matching platforms' : 'No platforms found',
+      message: platSearchTerm
+        ? `No platforms match "${escHtml(platSearchTerm)}". Try a different search term.`
+        : 'Click "+ New Platform" to register the first one.',
+    });
     const loadMoreWrap = document.getElementById('admin-plat-load-more-wrap');
     if (loadMoreWrap) loadMoreWrap.style.display = 'none';
     const countEl = document.getElementById('admin-plat-count');
     if (countEl) countEl.textContent = '';
+    // This early return used to skip the select-all reset below entirely —
+    // if every row was selected right before a bulk delete emptied the
+    // table, the header checkbox was left stuck at .checked = true even
+    // though there was nothing left to select.
+    const selectAllEmpty = document.getElementById('admin-plat-select-all');
+    if (selectAllEmpty) selectAllEmpty.checked = false;
     return;
   }
 
@@ -911,18 +921,21 @@ async function showDeleteModal(id, displayName) {
     console.warn("Failed to check dependencies:", err);
   }
 
-  if (depCount > 0) {
-    const proceed = await confirmDialog({
-      title: 'Platform is in use',
-      message: `"${displayName}" is used by ${depCount} integration(s). Deleting it will orphan those references. Proceed anyway?`,
-      confirmText: 'Delete Anyway',
-    });
-    if (!proceed) return;
-  }
-
   platformToDelete = id;
   platformToDeleteName = displayName;
   delName.textContent = displayName || id;
+  // Fold the "in use" warning into this one modal instead of chaining a
+  // separate confirmDialog() in front of it — that used to show the user
+  // two back-to-back confirmation dialogs for a single delete click.
+  const depWarning = document.getElementById('plat-del-modal-dependency-warning');
+  if (depWarning) {
+    if (depCount > 0) {
+      depWarning.textContent = `⚠ Used by ${depCount} integration(s) — deleting it will orphan those references.`;
+      depWarning.style.display = 'block';
+    } else {
+      depWarning.style.display = 'none';
+    }
+  }
   delOverlay.classList.add('open');
 }
 

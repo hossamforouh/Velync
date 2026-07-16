@@ -112,6 +112,32 @@ export function getEmptySpinnerHTML(text = 'Loading...') {
 }
 
 /**
+ * Returns a standardized "icon + heading + text" empty-state row for a
+ * table body, matching the pattern already used by Connections/Marketplace
+ * (an outlined SVG icon in the violet brand color, an <h3> heading, and a
+ * <p> subtext line) — reused here so every admin table's empty state looks
+ * the same instead of a bare text row.
+ * @param {object} opts
+ * @param {number} opts.colspan - Number of columns to span.
+ * @param {string} opts.iconSvg - Inner SVG markup (viewBox 0 0 24 24, no wrapping <svg> tag needed — pass the full <svg>...</svg>).
+ * @param {string} opts.title - Heading text.
+ * @param {string} opts.message - Subtext paragraph.
+ * @returns {string} HTML string (a full <tr>)
+ */
+export function getEmptyStateRowHTML({ colspan, iconSvg, title, message }) {
+  return `
+    <tr class="table-empty-row">
+      <td colspan="${colspan}">
+        <div style="padding: 32px 16px; text-align: center;">
+          <div style="margin-bottom: 12px;">${iconSvg}</div>
+          <h3 style="margin-bottom: 6px; color: var(--text-1);">${title}</h3>
+          <p style="color: var(--text-3); font-size: 0.88rem; margin-bottom: 0;">${message}</p>
+        </div>
+      </td>
+    </tr>`;
+}
+
+/**
  * Sets the loading state on a button — the one spinner+label treatment
  * every admin action button (Save, Refresh, Export, Import, Delete
  * Selected, ...) should use, so loading feedback looks the same everywhere

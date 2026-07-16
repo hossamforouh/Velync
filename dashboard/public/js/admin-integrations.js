@@ -1,5 +1,5 @@
 import { collection, collectionGroup, onSnapshot, query, orderBy, where, getDocs, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
-import { getSkeletonTableHTML, getEmptySpinnerHTML, setButtonLoading } from './loading-components.js';
+import { getSkeletonTableHTML, getEmptySpinnerHTML, getEmptyStateRowHTML, setButtonLoading } from './loading-components.js';
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
 
@@ -886,7 +886,7 @@ async function loadActivityLog(reset = false) {
   if (reset) {
     activityLastVisible = null;
     activityHasMore = false;
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;">Loading...</td></tr>';
+    tbody.innerHTML = getSkeletonTableHTML(6, 4);
     if (emptyMsg) emptyMsg.style.display = 'none';
   }
 
@@ -973,7 +973,12 @@ async function loadActivityLog(reset = false) {
 
     if (rowCount === 0) {
       if (reset && !activityLastVisible) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;">No audit entries recorded yet.</td></tr>';
+        tbody.innerHTML = getEmptyStateRowHTML({
+          colspan: 6,
+          iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+          title: 'No audit entries recorded yet',
+          message: 'Admin actions will show up here as they happen.',
+        });
       } else if (emptyMsg) {
         emptyMsg.style.display = 'block';
       }
