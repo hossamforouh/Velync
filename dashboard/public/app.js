@@ -3087,15 +3087,17 @@ function renderCards() {
     }
     const lastRun = cfg.lastRunAt ? fmtDate(cfg.lastRunAt) : '—';
 
-    // Parse the cron schedule into a readable text format. Only Notion has
-    // webhook push support today (WEBHOOK_SYNC_PLAN.md §3) — never imply
-    // real-time for TickTick/Google Contacts sources even if the plan has
-    // webhookSyncEnabled, since those platforms can't push regardless of plan.
+    // Parse the cron schedule into a readable text format. Webhook push
+    // support is a per-connector capability (Connector.supportsWebhooks(),
+    // surfaced via GET /api/platforms as `supportsWebhooks`) — looked up
+    // generically here instead of hardcoding a platform name, so any future
+    // webhook-capable connector shows this automatically with no app.js change.
+    const p1SupportsWebhooks = (window.cachedPlatforms || []).find(p => p.id === p1Id)?.supportsWebhooks === true;
     let scheduleText = 'Every 5 Minutes';
     if (!configIsActive(cfg)) {
       scheduleText = '<span style="opacity: 0.5;">Disabled</span>';
-    } else if (p1Id === 'notion' && window._currentPlan?.webhookSyncEnabled) {
-      scheduleText = '<span title="Changes in the source Notion database sync within seconds via webhook. Falls back to the interval below if a webhook is ever missed.">⚡ Real-time</span>';
+    } else if (p1SupportsWebhooks && window._currentPlan?.webhookSyncEnabled) {
+      scheduleText = '<span title="Changes in the source database sync within seconds via webhook. Falls back to the interval below if a webhook is ever missed.">⚡ Real-time</span>';
     } else if (cfg.cronSchedule) {
       const [cVal, cUnit] = parseCron(cfg.cronSchedule);
       let displayUnit = cUnit.charAt(0).toUpperCase() + cUnit.slice(1);

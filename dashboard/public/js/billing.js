@@ -1,7 +1,7 @@
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
 import { updatePlanBadge } from './plan-badge.js';
-import { getSkeletonCardHTML } from './loading-components.js';
+import { getSkeletonCardHTML, setButtonLoading } from './loading-components.js';
 
 let firestoreDb = null;
 let auth = null;
@@ -104,7 +104,7 @@ export async function initBilling(dbInstance, authInstance) {
           <button class="btn btn-secondary btn-sm" id="btn-manage-billing">Manage Subscription →</button>
         </div>
       `;
-      document.getElementById('btn-manage-billing')?.addEventListener('click', openPortal);
+      document.getElementById('btn-manage-billing')?.addEventListener('click', (e) => openPortal(e.currentTarget));
       document.getElementById('btn-undo-downgrade')?.addEventListener('click', (e) => {
         e.preventDefault();
         setDowngrade(true, e.currentTarget);
@@ -211,7 +211,7 @@ async function startCheckout(planId, btn) {
   if (billingActionInFlight) return;
   billingActionInFlight = true;
   const originalText = btn ? btn.textContent : '';
-  if (btn) btn.textContent = 'Processing…';
+  if (btn) setButtonLoading(btn, true, originalText, 'Processing…');
   setBillingButtonsDisabled(true);
   try {
     const token = await auth.currentUser.getIdToken();
@@ -237,7 +237,7 @@ async function startCheckout(planId, btn) {
     }
   } catch (err) {
     showToast('Failed to start checkout: ' + err.message, 'error');
-    if (btn && document.body.contains(btn)) btn.textContent = originalText;
+    if (btn && document.body.contains(btn)) setButtonLoading(btn, false, originalText);
     setBillingButtonsDisabled(false);
   } finally {
     billingActionInFlight = false;
@@ -256,6 +256,8 @@ async function setDowngrade(undo, btn) {
     if (!confirmed) return;
   }
   billingActionInFlight = true;
+  const downgradeOriginalText = btn ? btn.textContent : '';
+  if (btn) setButtonLoading(btn, true, downgradeOriginalText, undo ? 'Keeping plan…' : 'Downgrading…');
   setBillingButtonsDisabled(true);
   try {
     const token = await auth.currentUser.getIdToken();
@@ -270,15 +272,18 @@ async function setDowngrade(undo, btn) {
     await initBilling(firestoreDb, auth); // rebuilds the buttons
   } catch (err) {
     showToast('Failed to update subscription: ' + err.message, 'error');
+    if (btn && document.body.contains(btn)) setButtonLoading(btn, false, downgradeOriginalText);
     setBillingButtonsDisabled(false);
   } finally {
     billingActionInFlight = false;
   }
 }
 
-async function openPortal() {
+async function openPortal(btn) {
   if (billingActionInFlight) return;
   billingActionInFlight = true;
+  const portalOriginalText = btn ? btn.textContent : '';
+  if (btn) setButtonLoading(btn, true, portalOriginalText, 'Opening…');
   setBillingButtonsDisabled(true);
   try {
     const token = await auth.currentUser.getIdToken();
@@ -292,9 +297,11 @@ async function openPortal() {
       window.location.href = data.url; // leaving the page — keep buttons disabled
       return;
     }
+    if (btn) setButtonLoading(btn, false, portalOriginalText);
     setBillingButtonsDisabled(false);
   } catch (err) {
     showToast('Failed to open billing portal: ' + err.message, 'error');
+    if (btn) setButtonLoading(btn, false, portalOriginalText);
     setBillingButtonsDisabled(false);
   } finally {
     billingActionInFlight = false;

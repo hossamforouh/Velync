@@ -621,7 +621,10 @@ function wireAdminControls() {
       setButtonLoading(bulkDeleteBtn, false);
       intSelectedIds.clear();
       updateBulkDeleteBtn();
-      showToast(`Deleted ${success} integration(s)`, 'info');
+      showToast(
+        success === ids.length ? `Deleted ${success} integration(s)` : `Deleted ${success} of ${ids.length} — ${ids.length - success} failed`,
+        success === ids.length ? 'success' : 'error'
+      );
       loadIntegrationsPage(true);
     });
   }

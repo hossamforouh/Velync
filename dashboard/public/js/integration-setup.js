@@ -3,6 +3,7 @@ import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.j
 import { saveConnection, connections, loadConnections, initiateDirectOAuthFlow } from './connections.js';
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
+import { setButtonLoading } from './loading-components.js';
 
 function getDb() { return getFirestore(getApp()); }
 
@@ -198,8 +199,7 @@ async function connectSetupPlatform(platformId, btn) {
   }
 
   const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Connecting…';
+  setButtonLoading(btn, true, originalText, 'Connecting…');
 
   const baseLabel = 'My ' + (platform.name || platformId);
   const existingLabels = connections.map(c => c.label).filter(Boolean);
@@ -219,8 +219,7 @@ async function connectSetupPlatform(platformId, btn) {
     populateSetupView(currentP1Id, currentP2Id);
   } catch (err) {
     showToast('Connection failed: ' + err.message, 'error');
-    btn.disabled = false;
-    btn.textContent = originalText;
+    setButtonLoading(btn, false, originalText);
   }
 }
 

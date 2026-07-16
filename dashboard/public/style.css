@@ -2917,26 +2917,12 @@ header.legacy-header {
 }
 
 /* ── Delete confirm modal ────────────────────────────────────── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  /* No backdrop-filter here on purpose: this is a fixed, full-viewport
-     overlay behind a scrollable panel (Settings and friends). Some browsers
-     (notably Safari/WebKit) re-sample a backdrop-filter's source on ANY
-     scroll/paint invalidation elsewhere in the same compositing tree, not
-     just changes literally behind the element — so a full-screen blur here
-     was making every scroll inside the modal janky. A flat darker overlay
-     gives the same "dimmed background" read at zero per-frame cost. */
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
+/* The base .modal-overlay rule lives further down (see "Settings Hub
+   Modal" below) — .modal-overlay was previously defined twice with
+   conflicting background/z-index/transition values; since both blocks
+   targeted the same selector at equal specificity, the later one always
+   won in practice, making this one fully dead. Consolidated to avoid two
+   people ever "fixing" the wrong copy again. */
 .modal-overlay.open {
   opacity: 1;
   pointer-events: all;

@@ -80,6 +80,14 @@ describe('GET /api/platforms', () => {
     const ticktick = body.platforms.find(p => p.id === 'ticktick');
     assert.strictEqual(ticktick.tier, 'premium');
   });
+
+  it('computes supportsWebhooks per-connector instead of the frontend hardcoding a platform name', async () => {
+    const { body } = await apiFetch('/api/platforms');
+    const notion = body.platforms.find(p => p.id === 'notion');
+    const ticktick = body.platforms.find(p => p.id === 'ticktick');
+    assert.strictEqual(notion.supportsWebhooks, true);
+    assert.strictEqual(ticktick.supportsWebhooks, false);
+  });
 });
 
 describe('GET /api/integrations', () => {

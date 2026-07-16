@@ -2,6 +2,7 @@ const { Router } = require('express');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 const { verifyAuth } = require('../middleware/auth');
+const { getConnector } = require('../../domains/connector/registry');
 
 const router = Router();
 
@@ -19,7 +20,18 @@ const router = Router();
 router.get('/platforms', verifyAuth, async (req, res) => {
   try {
     const snap = await db.collection('platforms').get();
-    const platforms = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Compute webhook capability from the connector itself (Connector.
+    // supportsWebhooks()) rather than leaving the frontend to hardcode
+    // platform-name checks — the same abstraction leak that caused several
+    // prior bugs in this project (see CLAUDE.md's connector-registry note).
+    const platforms = snap.docs.map(d => {
+      const data = d.data();
+      let supportsWebhooks = false;
+      try {
+        supportsWebhooks = data.connectorKey ? getConnector(data.connectorKey).supportsWebhooks() : false;
+      } catch (_) { /* unregistered/stale connectorKey — treat as no webhook support */ }
+      return { id: d.id, ...data, supportsWebhooks };
+    });
     return res.json({ success: true, platforms });
   } catch (err) {
     logger.error('public-marketplace', 'Failed to list platforms', { error: err.message });

@@ -3,6 +3,8 @@
  * Replaces the simple "No Flows Found" empty state with a step-by-step flow.
  */
 import { initiateDirectOAuthFlow, connections } from './connections.js';
+import { showToast } from './toast.js';
+import { setButtonLoading } from './loading-components.js';
 
 let currentStep = 1;
 let onboardState = { p1: null, p2: null, connection1: null, connection2: null };
@@ -273,16 +275,15 @@ async function bindStep3(db, auth, onComplete) {
 
   if (finishBtn) {
     finishBtn.addEventListener('click', async () => {
-      finishBtn.disabled = true;
-      finishBtn.textContent = 'Creating…';
+      setButtonLoading(finishBtn, true, 'Create my first sync →', 'Creating…');
       try {
         const token = await auth.currentUser.getIdToken();
         await createFirstConfig(token);
         cleanup();
         if (onComplete) onComplete();
       } catch (err) {
-        finishBtn.disabled = false;
-        finishBtn.textContent = 'Create my first sync →';
+        showToast('Failed to create your first sync: ' + err.message, 'error');
+        setButtonLoading(finishBtn, false, 'Create my first sync →');
       }
     });
   }
@@ -316,8 +317,7 @@ async function connectPlatform(stepNum, btn, finishBtn) {
     return;
   }
 
-  btn.disabled = true;
-  btn.textContent = 'Connecting…';
+  setButtonLoading(btn, true, btn.textContent, 'Connecting…');
 
   const baseLabel = 'My ' + (platform.name || platformId);
   const existingLabels = connections.map(c => c.label).filter(Boolean);
@@ -344,8 +344,7 @@ async function connectPlatform(stepNum, btn, finishBtn) {
     checkStep3Ready(finishBtn);
   } catch (err) {
     if (statusEl) statusEl.textContent = '✗ Connection failed: ' + err.message;
-    btn.disabled = false;
-    btn.textContent = 'Retry';
+    setButtonLoading(btn, false, 'Retry');
   }
 }
 

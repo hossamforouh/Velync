@@ -740,7 +740,10 @@ function wirePlatformControls() {
       setButtonLoading(bulkDeleteBtn, false, 'Delete Selected');
       platSelectedIds.clear();
       updatePlatBulkDeleteBtn();
-      showToast(`Deleted ${success} platform(s)`, 'info');
+      showToast(
+        success === ids.length ? `Deleted ${success} platform(s)` : `Deleted ${success} of ${ids.length} — ${ids.length - success} failed`,
+        success === ids.length ? 'success' : 'error'
+      );
       loadPlatformsPage(true);
     });
   }
@@ -939,8 +942,7 @@ if (btnDelConfirm) {
     if (!platformToDelete) return;
     const id = platformToDelete;
 
-    btnDelConfirm.disabled = true;
-    btnDelConfirm.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span><span style="vertical-align:middle;">Deleting...</span>';
+    setButtonLoading(btnDelConfirm, true, 'Delete', 'Deleting...');
 
     try {
       const { deletedData } = await apiRequest(`/api/admin/platforms/${id}`, { method: 'DELETE' });
@@ -960,8 +962,7 @@ if (btnDelConfirm) {
       console.error("Delete failed", err);
       showToast('Failed to delete platform: ' + err.message, 'error');
     } finally {
-      btnDelConfirm.disabled = false;
-      btnDelConfirm.textContent = 'Delete';
+      setButtonLoading(btnDelConfirm, false, 'Delete');
     }
   });
 }
