@@ -83,7 +83,6 @@ export async function loadConnections(reset = false) {
       connections = [];
     }
 
-    const __diagWsId = window.currentWorkspaceId;
     const [connSnap, platforms] = await Promise.all([
       getDocs(query(
         collection(getDb(), 'connected_accounts'),
@@ -94,12 +93,6 @@ export async function loadConnections(reset = false) {
       )),
       fetchPlatformsCached(),
     ]);
-    // [DIAG] temporary — captured to client_errors via the console.error hook.
-    try {
-      console.error('[DIAG loadConnections] reset=' + reset + ' wsId=' + __diagWsId
-        + ' rawDocs=' + connSnap.size + ' fromCache=' + (connSnap.metadata && connSnap.metadata.fromCache)
-        + ' providers=' + connSnap.docs.map(d => d.data().provider).join('|'));
-    } catch (_) {}
 
     platformDetails = {};
     let colorIdx = 0;
@@ -136,7 +129,6 @@ export async function loadConnections(reset = false) {
 
     return connections;
   } catch (err) {
-    console.error('[DIAG loadConnections THREW] wsId=' + window.currentWorkspaceId + ' msg=' + err.message + ' code=' + err.code);
     console.error('[connections] Failed to load:', err);
     showToast('Failed to load connections: ' + err.message, 'error');
     return [];

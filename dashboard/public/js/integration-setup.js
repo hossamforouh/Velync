@@ -121,15 +121,6 @@ function populateSetupView(p1Id, p2Id) {
   const isP1Connected = connections.some(c => c.provider === p1Id);
   const isP2Connected = connections.some(c => c.provider === p2Id);
 
-  // [DIAG] temporary — captured to client_errors via the console.error hook.
-  try {
-    console.error('[DIAG populateSetupView] connCount=' + connections.length
-      + ' providers=' + connections.map(c => c.provider).join('|')
-      + ' p1Id=' + p1Id + ' p2Id=' + p2Id
-      + ' isP1=' + isP1Connected + ' isP2=' + isP2Connected
-      + ' wsId=' + window.currentWorkspaceId);
-  } catch (_) {}
-
   const status1 = document.getElementById('setup-source-status');
   if (status1) { status1.textContent = isP1Connected ? 'Connected' : 'Not Connected'; status1.className = `setup-platform-status ${isP1Connected ? 'connected' : 'disconnected'}`; }
   const status2 = document.getElementById('setup-dest-status');
