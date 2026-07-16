@@ -30,8 +30,12 @@ window.addEventListener('open-integration-setup', async (e) => {
   // Show loading overlay before async work
   const loadingOverlay = document.createElement('div');
   loadingOverlay.id = 'setup-loading-overlay';
-  loadingOverlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
-  loadingOverlay.innerHTML = '<div class="spinner"></div><p style="color:#fff;font-size:1rem;margin:0;">Preparing setup…</p>';
+  loadingOverlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;';
+  loadingOverlay.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px 40px;border-radius:var(--radius-md, 16px);background:var(--bg-3);border:1px solid var(--border);box-shadow:var(--shadow-glow);">
+      <div class="spinner"></div>
+      <p style="color:var(--text-1);font-size:1rem;font-weight:500;margin:0;">Preparing setup…</p>
+    </div>`;
   document.body.appendChild(loadingOverlay);
 
   // Timeout guard: remove overlay after 15s if anything hangs

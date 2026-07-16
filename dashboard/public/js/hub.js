@@ -368,15 +368,6 @@ function wireHubToolbar() {
     }
   }
 
-  // Refresh
-  const refreshBtn = document.getElementById('hub-refresh-btn');
-  if (refreshBtn && !refreshBtn.dataset.hubWired) {
-    refreshBtn.dataset.hubWired = 'true';
-    refreshBtn.addEventListener('click', () => {
-      renderHubView(dbRef, onNavigateRef);
-    });
-  }
-
   // Load More
   const loadMoreBtn = document.getElementById('hub-load-more');
   if (loadMoreBtn && !loadMoreBtn.dataset.hubWired) {

@@ -5187,9 +5187,10 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// Close panel/modal on Escape
+// Close modal on Escape. The New/Edit Config panel is intentionally excluded —
+// it's a multi-step wizard and an accidental Escape shouldn't back you out of it.
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closePanel(); closeModal(); closeNodeModal(); }
+  if (e.key === 'Escape') { closeModal(); closeNodeModal(); }
 });
 
 // ─── Node Config Modal Logic ────────────────────────────────────
