@@ -725,7 +725,7 @@
               </div>
             </div>
             <div class="toolbar-right" style="display:flex;gap:8px;align-items:center;">
-              <button class="toolbar-btn" id="conn-refresh-btn" type="button">Refresh</button>
+              <button class="btn btn-secondary btn-refresh" id="conn-refresh-btn" type="button">Refresh</button>
               <button class="btn btn-primary btn-sm" id="btn-add-conn" type="button">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 New Connection
@@ -823,9 +823,7 @@
               <button class="toolbar-btn" id="logs-export-btn" title="Export as CSV">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               </button>
-              <button class="toolbar-btn" id="logs-refresh" title="Refresh logs">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              </button>
+              <button class="btn btn-secondary btn-refresh" id="logs-refresh" type="button">Refresh</button>
             </div>
           </div>
 
@@ -915,7 +913,7 @@
                   <button id="admin-ws-search-clear" class="search-clear" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-3);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:0.8rem;z-index:1;">✕</button>
                 </div>
                 <span id="admin-ws-count" style="color:var(--text-3);font-size:0.82rem;"></span>
-                <button id="admin-ws-refresh" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+                <button id="admin-ws-refresh" class="btn btn-secondary btn-refresh" type="button">Refresh</button>
               </div>
             </div>
             <div class="connections-table-wrap">
@@ -1056,7 +1054,7 @@
                 </button>
                 <div id="admin-sh-body" style="display:none;margin-top:16px;">
                   <div style="text-align:right;margin-bottom:10px;">
-                    <button id="admin-sh-refresh" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+                    <button id="admin-sh-refresh" class="btn btn-secondary btn-refresh" type="button">Refresh</button>
                   </div>
                   <div class="connections-table-wrap">
                     <table class="connections-table" id="admin-sh-table">
@@ -1125,7 +1123,7 @@
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="margin: 0;">Platforms</h2>
                 <div style="display:flex;gap:8px;">
-                  <button id="admin-plat-refresh-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Refresh</button>
+                  <button id="admin-plat-refresh-btn" class="btn btn-secondary btn-refresh" type="button">Refresh</button>
                   <button class="btn btn-secondary" data-export="platforms" style="padding:8px 12px;font-size:13px;" title="Download all platforms as a JSON file">Export</button>
                   <button class="btn btn-secondary" data-import="platforms" style="padding:8px 12px;font-size:13px;" title="Upload a platforms JSON file to add/overwrite records">Import</button>
                   <button id="admin-plat-bulk-delete-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;color:var(--danger);display:none;">Delete Selected</button>
@@ -1173,7 +1171,7 @@
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="margin: 0;">Plans &amp; Pricing</h2>
                 <div style="display:flex;gap:8px;align-items:center;">
-                  <button id="admin-plans-refresh-btn" class="btn btn-secondary btn-sm" type="button">Refresh</button>
+                  <button id="admin-plans-refresh-btn" class="btn btn-secondary btn-refresh" type="button">Refresh</button>
                   <button class="btn btn-secondary btn-sm" data-export="plans" type="button" title="Download all plans as a JSON file">Export</button>
                   <button class="btn btn-secondary btn-sm" data-import="plans" type="button" title="Upload a plans JSON file to add/overwrite records">Import</button>
                   <button id="btn-new-plan" class="btn btn-primary btn-sm" type="button">+ New Plan</button>
@@ -1211,7 +1209,7 @@
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="margin: 0;">Marketplace Integrations</h2>
                 <div style="display:flex;gap:8px;">
-                  <button id="admin-int-refresh-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Refresh</button>
+                  <button id="admin-int-refresh-btn" class="btn btn-secondary btn-refresh" type="button">Refresh</button>
                   <button class="btn btn-secondary" data-export="integrations" style="padding:8px 12px;font-size:13px;" title="Download all marketplace integrations as a JSON file">Export</button>
                   <button class="btn btn-secondary" data-import="integrations" style="padding:8px 12px;font-size:13px;" title="Upload an integrations JSON file to add/overwrite records">Import</button>
                   <button id="admin-int-bulk-delete-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;color:var(--danger);display:none;">Delete Selected</button>
@@ -1261,7 +1259,7 @@
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                 <h2 style="margin:0;">Audit Log</h2>
                 <div style="display:flex;gap:8px;">
-                  <button id="admin-activity-refresh" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Refresh</button>
+                  <button id="admin-activity-refresh" class="btn btn-secondary btn-refresh" type="button">Refresh</button>
                 </div>
               </div>
               <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">A record of every administrative change made in this workspace — who made it, when, and exactly what changed. Entries are permanent and cannot be edited or deleted.</p>
@@ -1320,7 +1318,7 @@
                 <div style="display:flex;gap:8px;">
                   <button id="admin-clienterr-export" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Export CSV</button>
                   <button id="admin-clienterr-bulk-delete-btn" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;color:var(--rose);display:none;">Delete Selected</button>
-                  <button id="admin-clienterr-refresh" class="btn btn-secondary" style="padding:8px 12px;font-size:13px;">Refresh</button>
+                  <button id="admin-clienterr-refresh" class="btn btn-secondary btn-refresh" type="button">Refresh</button>
                 </div>
               </div>
               <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. <strong>Open</strong>: needs attention. <strong>Resolved</strong>: a fix has shipped, awaiting verification. <strong>Closed</strong>: verified fixed. Repeated occurrences of the same error are grouped into a single row.</p>
