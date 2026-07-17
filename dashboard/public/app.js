@@ -63,6 +63,7 @@ async function fetchPlatformEntities(dataSourceId, connId, parentValue) {
   if (!connId) return [];
 
   // 1. Try backend
+  let backendError = null;
   try {
     const token = await auth.currentUser.getIdToken();
     const API_BASE = window.VELYNC_CONFIG.apiBase;
@@ -78,16 +79,23 @@ async function fetchPlatformEntities(dataSourceId, connId, parentValue) {
       const data = await res.json();
       return (data.entities || []).map(e => ({ value: e.id, label: e.name }));
     }
-    showToast('Failed to fetch platform entities', 'error');
+    backendError = new Error(`Backend error (HTTP ${res.status})`);
     console.warn('[fetchPlatformEntities] Backend error:', res.status);
   } catch (e) {
-    showToast('Failed to fetch platform entities', 'error');
+    backendError = e;
     console.warn('[fetchPlatformEntities] Network error:', e);
   }
 
-  // 2. Client-side fallback for supported data sources
+  // 2. Client-side fallback for supported data sources. Every call site
+  // (the dynamic_select/dynamic_multi_select field renderers) already shows
+  // a clear inline "Error loading" state + a red "Fetch Failed — Retry"
+  // button when this throws — a matching global toast on top of that was
+  // redundant, and since a wizard step can render several of these fields
+  // at once, a single failed connection used to stack up N identical,
+  // unhelpful toasts. Throwing here (for data sources with no client
+  // fallback) lets that existing per-field UI carry the error instead.
   const conn = _connectionsCache.find(c => c.id === connId);
-  if (!conn) return [];
+  if (!conn) { if (backendError) throw backendError; return []; }
 
   switch (dataSourceId) {
     case 'ticktick.getProjects':
@@ -103,9 +111,11 @@ async function fetchPlatformEntities(dataSourceId, connId, parentValue) {
     case 'templates':
     case 'contactGroups':
     case 'google_contacts_fetch_groups':
-      // These are handled server-side; no client fallback available
+      // These are handled server-side; no client fallback available.
+      if (backendError) throw backendError;
       return [];
     default:
+      if (backendError) throw backendError;
       return [];
   }
 }
@@ -445,9 +455,9 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                   const savedVals = parseSavedMultiValue(val);
                   msEl.className = 'ds-multi-select has-options';
                   msEl.innerHTML = items.map(i => {
-                    const checked = savedVals.includes(i.value) ? 'checked' : '';
-                    return `<label class="ms-option">
-                      <input type="checkbox" class="ms-cb" value="${escAttr(i.value)}" ${checked} />
+                    const isChecked = savedVals.includes(i.value);
+                    return `<label class="ms-option${isChecked ? ' selected' : ''}">
+                      <input type="checkbox" class="ms-cb" value="${escAttr(i.value)}" ${isChecked ? 'checked' : ''} />
                       <span>${escHtml(i.label)}</span>
                     </label>`;
                   }).join('');
@@ -509,9 +519,11 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
                 }
             }
           });
-          if (field.type === 'dynamic_select' && !field.dependsOn) {
-            setTimeout(() => loadDefaultMappingsPreset(), 0);
-          }
+          // Mapping suggestions are generated once, when the user actually
+          // advances to the Map Fields step (btn-step1-next), which reads
+          // whatever these dynamic_select values are at that point — no
+          // need to regenerate (and re-toast) on every change here while
+          // still on the Connect step.
         });
         
         inputEl.addEventListener('input', () => {
@@ -550,6 +562,10 @@ window.parseSavedMultiValue = function(val) {
 };
 
 window.updateMsHidden = function(container) {
+  container.querySelectorAll('.ms-option').forEach(opt => {
+    const cb = opt.querySelector('input[type="checkbox"]');
+    opt.classList.toggle('selected', !!cb?.checked);
+  });
   const hidden = container.closest('.ds-input-container')?.querySelector('input[type="hidden"][data-schema-id]');
   if (!hidden) return;
   const checked = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);

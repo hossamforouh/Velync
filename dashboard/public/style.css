@@ -6049,11 +6049,17 @@ input:-webkit-autofill {
   cursor: default;
 }
 
-/* Scrollable list when options are loaded */
+/* Scrollable list when options are loaded — a flex-wrap grid of chips
+   rather than one full-width row per tag, so a handful of short tag names
+   don't waste most of the field's width down a tall single column. */
 .ds-multi-select.has-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
   max-height: 200px;
   overflow-y: auto;
-  padding: 4px;
+  padding: 10px;
 }
 
 .ds-multi-select.has-options::-webkit-scrollbar {
@@ -6081,30 +6087,58 @@ input:-webkit-autofill {
   color: var(--rose);
 }
 
-/* Option rows — match TomSelect dropdown option style */
+/* Option chips — compact, wrap horizontally, and pick up an on-brand
+   filled/highlighted look once selected, the same toggle-pill convention
+   already used by .logs-filter-pill.active elsewhere in the app (tinted
+   fill + colored border, no checkbox glyph needed to read as "selected"). */
 .ms-option {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
   cursor: pointer;
-  transition: background 0.15s ease;
-  font-size: 0.875rem;
-  color: var(--text-1);
+  transition: var(--transition);
+  font-size: 0.85rem;
+  color: var(--text-2);
   user-select: none;
-  margin-bottom: 2px;
+  white-space: nowrap;
 }
-.ms-option:last-child { margin-bottom: 0; }
+
+/* The checkbox stays in the DOM (keyboard focus + toggling still work
+   exactly as before — the whole chip is still this <label>) but is
+   visually hidden rather than display:none, so it remains reachable by
+   keyboard/screen readers without drawing a redundant checkbox glyph next
+   to the chip's own selected/unselected fill. */
+.ms-option input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .ms-option:hover {
+  border-color: var(--border-hover);
   background: rgba(129, 140, 248, 0.1);
+  color: var(--text-1);
+}
+
+.ms-option.selected {
+  background: rgba(129, 140, 248, 0.16);
+  border-color: var(--violet);
+  color: var(--text-1);
 }
 
 .ms-option input[type="checkbox"] {
   accent-color: var(--primary);
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   cursor: pointer;
   flex-shrink: 0;
   margin: 0;
