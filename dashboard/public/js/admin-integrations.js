@@ -647,9 +647,9 @@ function wireAdminControls() {
       _invalidateCache('marketplace');
       _invalidateCache('overview');
       _invalidateCache('activity');
-      setButtonLoading(refreshBtn, true, 'Refresh', 'Refreshing…');
+      refreshBtn.disabled = true;
       await loadIntegrationsPage(true);
-      setButtonLoading(refreshBtn, false);
+      refreshBtn.disabled = false;
     });
   }
 
