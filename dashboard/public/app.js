@@ -20,6 +20,7 @@ import { showToast } from './js/toast.js';
 import { confirmDialog, alertDialog, threeWayConfirmDialog } from './js/confirm.js';
 import { startLoad, endLoad, isLoading } from './js/loading.js';
 import { getSkeletonFormHTML, getSkeletonTableHTML, getEmptySpinnerHTML, setButtonLoading, getEmptyStateRowHTML } from './js/loading-components.js';
+import { wireRowActionsMenus } from './js/row-actions-menu.js';
 
 /** Show a plan-limit toast with an Upgrade button that opens billing settings */
 function showPlanError(msg) {
@@ -3117,7 +3118,7 @@ function renderCards() {
     if (!configIsActive(cfg)) {
       scheduleText = '<span style="opacity: 0.5;">Disabled</span>';
     } else if (p1SupportsWebhooks && window._currentPlan?.webhookSyncEnabled) {
-      scheduleText = '<span title="Changes in the source database sync within seconds via webhook. Falls back to the interval below if a webhook is ever missed.">⚡ Real-time</span>';
+      scheduleText = '<span>⚡ Real-time<span class="info-tip" tabindex="0" role="note" aria-label="Changes in the source database sync within seconds via webhook. Falls back to the interval below if a webhook is ever missed.">i<span class="info-tip-bubble">Changes in the source database sync within seconds via webhook. Falls back to the interval below if a webhook is ever missed.</span></span></span>';
     } else if (cfg.cronSchedule) {
       const [cVal, cUnit] = parseCron(cfg.cronSchedule);
       let displayUnit = cUnit.charAt(0).toUpperCase() + cUnit.slice(1);
@@ -3180,6 +3181,8 @@ function renderCards() {
     tableBody.appendChild(row);
   });
 
+  wireRowActionsMenus();
+
   // Single delegated click listener for all row interactions
   if (!tableBody._delegated) {
     tableBody._delegated = true;
@@ -3202,48 +3205,6 @@ function renderCards() {
 
       const delBtn = e.target.closest('.btn-row-delete');
       if (delBtn) { e.stopPropagation(); confirmDelete(delBtn.dataset.id, delBtn.dataset.name); return; }
-
-      const moreBtn = e.target.closest('.btn-row-more');
-      if (moreBtn) {
-        e.stopPropagation();
-        document.querySelectorAll('.row-actions-menu.open').forEach(m => {
-          if (m !== moreBtn.nextElementSibling) m.classList.remove('open');
-          m.style.position = '';
-          m.style.left = '';
-          m.style.top = '';
-          m.style.bottom = '';
-        });
-        const menu = moreBtn.nextElementSibling;
-        if (!menu) return;
-        const isOpening = !menu.classList.contains('open');
-        if (isOpening) {
-          const btnRect = moreBtn.getBoundingClientRect();
-          const wrapperRect = document.getElementById('grid-table-wrapper').getBoundingClientRect();
-          const menuWidth = 140;
-          const menuHeight = menu.offsetHeight || 150;
-          const left = Math.max(0, Math.min(btnRect.right - menuWidth, wrapperRect.right - menuWidth));
-          const spaceBelow = window.innerHeight - btnRect.bottom - 4;
-          if (spaceBelow >= menuHeight) {
-            menu.style.position = 'fixed';
-            menu.style.left = left + 'px';
-            menu.style.top = btnRect.bottom + 4 + 'px';
-            menu.style.bottom = 'auto';
-          } else {
-            menu.style.position = 'fixed';
-            menu.style.left = left + 'px';
-            menu.style.top = 'auto';
-            menu.style.bottom = window.innerHeight - btnRect.top + 4 + 'px';
-          }
-          menu.classList.add('open');
-        } else {
-          menu.classList.remove('open');
-          menu.style.position = '';
-          menu.style.left = '';
-          menu.style.top = '';
-          menu.style.bottom = '';
-        }
-        return;
-      }
 
       const chk = e.target.closest('.row-checkbox');
       if (chk) {
@@ -3754,13 +3715,13 @@ function addMappingRow(sourceField = '', destField = '', confidence = null, reas
   ).join('');
 
   row.innerHTML = `
-    <select class="map-source" style="flex: 1; padding: 10px 12px; border-radius: 8px; background: transparent; color: var(--text-1); border: 1px solid transparent; font-size: 0.9rem; font-weight: 500; outline: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';" onmouseout="this.style.background='transparent'; this.style.borderColor='transparent';">${sOptions}</select>
+    <select class="map-source select-arrow" style="flex: 1; padding: 10px 32px 10px 12px; border-radius: 8px; background-color: transparent; color: var(--text-1); border: 1px solid transparent; font-size: 0.9rem; font-weight: 500; outline: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';" onmouseout="this.style.backgroundColor='transparent'; this.style.borderColor='transparent';">${sOptions}</select>
     
     <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--glass); color: var(--text-3);">
       ${feather.icons['arrow-right'].toSvg({width: 16, height: 16})}
     </div>
     
-    <select class="map-dest" style="flex: 1; padding: 10px 12px; border-radius: 8px; background: transparent; color: var(--text-1); border: 1px solid transparent; font-size: 0.9rem; font-weight: 500; outline: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';" onmouseout="this.style.background='transparent'; this.style.borderColor='transparent';">${dOptions}</select>
+    <select class="map-dest select-arrow" style="flex: 1; padding: 10px 32px 10px 12px; border-radius: 8px; background-color: transparent; color: var(--text-1); border: 1px solid transparent; font-size: 0.9rem; font-weight: 500; outline: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';" onmouseout="this.style.backgroundColor='transparent'; this.style.borderColor='transparent';">${dOptions}</select>
     
     ${confidence !== null ? (() => {
       // Color-code by confidence so a weak AI suggestion is visually
@@ -5179,18 +5140,6 @@ if (fSourceList) {
   });
 }
 
-// Close dropdown menus on outside click
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.row-actions-dropdown')) {
-    document.querySelectorAll('.row-actions-menu.open').forEach(m => {
-      m.classList.remove('open');
-      m.style.position = '';
-      m.style.left = '';
-      m.style.top = '';
-      m.style.bottom = '';
-    });
-  }
-});
 
 // Close modal on Escape. The New/Edit Config panel is intentionally excluded —
 // it's a multi-step wizard and an accidental Escape shouldn't back you out of it.

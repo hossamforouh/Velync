@@ -747,6 +747,15 @@ header.legacy-header {
   white-space: nowrap;
 }
 
+/* One disabled treatment for every .btn variant (primary/secondary/danger/
+   ghost/sm/toolbar-sm/...) — most call sites just set `.disabled = true`
+   on a button and relied on nothing but the bare browser default look. */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .btn-primary {
   background: var(--grad);
   color: var(--text-inverse);
@@ -1189,7 +1198,7 @@ header.legacy-header {
 }
 
 .icon-btn.disabled {
-  opacity: 0.35;
+  opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -2515,6 +2524,16 @@ header.legacy-header {
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 14px;
+}
+
+.form-row input:disabled,
+.form-row select:disabled,
+.form-row textarea:disabled {
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .form-row select.is-loading,
@@ -4266,7 +4285,7 @@ input:-webkit-autofill {
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   text-align: left;
 }
@@ -4418,9 +4437,9 @@ input:-webkit-autofill {
 }
 
 .badge-failed {
-  background: rgba(239, 68, 68, 0.15);
-  color: #F87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(251, 113, 133, 0.3);
 }
 
 .badge-info {
@@ -4440,9 +4459,9 @@ input:-webkit-autofill {
 }
 
 .badge-danger {
-  background: rgba(239, 68, 68, 0.15);
-  color: #F87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(251, 113, 133, 0.3);
 }
 
 /* ── Execution Logs Filter Pills ────────────────────────────── */

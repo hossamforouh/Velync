@@ -12,6 +12,7 @@ import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.j
 import { getSkeletonRowHTML, getEmptySpinnerHTML, setButtonLoading, getEmptyStateRowHTML } from './loading-components.js';
 import { confirmDialog } from './confirm.js';
 import { showToast } from './toast.js';
+import { wireRowActionsMenus, closeAllRowActionsMenus } from './row-actions-menu.js';
 
 const PAGE_SIZE = 50;
 
@@ -303,7 +304,7 @@ export async function renderConnectionsView() {
     tbody.appendChild(tr);
   });
 
-  wireDropdownMenus();
+  wireRowActionsMenus();
   wireFullEditButtons();
   wireDeleteButtons();
   updateLoadMoreVisibility();
@@ -427,71 +428,6 @@ function wireToolbar() {
   toolbarWired = true;
 }
 
-/* ── Wire Dropdown Menus ───────────────────────────────────── */
-
-// Menus are `position: absolute` by default (see .row-actions-menu in
-// style.css), which gets clipped by the table's own scroll boundary for
-// rows near the bottom — same root cause app.js's Flows table already
-// fixed for its own row-actions menu (switch to `position: fixed`,
-// computed from the button's rect, flipping upward when there's no room
-// below). Mirrored here rather than left un-fixed on this page too.
-function wireDropdownMenus() {
-  document.querySelectorAll('.btn-row-more').forEach(btn => {
-    if (btn.dataset.connWired) return;
-    btn.dataset.connWired = 'true';
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const menu = btn.parentElement.querySelector('.row-actions-menu');
-      if (!menu) return;
-      const isOpen = menu.classList.contains('open');
-      closeAllConnMenus();
-      if (!isOpen) {
-        positionConnMenu(btn, menu);
-        menu.classList.add('open');
-        btn.classList.add('open');
-      }
-    });
-  });
-}
-
-function positionConnMenu(btn, menu) {
-  const btnRect = btn.getBoundingClientRect();
-  const wrapper = document.getElementById('conn-grid-table-wrapper');
-  const wrapperRect = wrapper ? wrapper.getBoundingClientRect() : { right: window.innerWidth };
-  const menuWidth = menu.offsetWidth || 180;
-  const menuHeight = menu.offsetHeight || 100;
-  const left = Math.max(0, Math.min(btnRect.right - menuWidth, wrapperRect.right - menuWidth));
-  const spaceBelow = window.innerHeight - btnRect.bottom - 4;
-
-  menu.style.position = 'fixed';
-  menu.style.left = left + 'px';
-  if (spaceBelow >= menuHeight) {
-    menu.style.top = btnRect.bottom + 4 + 'px';
-    menu.style.bottom = 'auto';
-  } else {
-    menu.style.top = 'auto';
-    menu.style.bottom = window.innerHeight - btnRect.top + 4 + 'px';
-  }
-}
-
-function resetConnMenuPosition(menu) {
-  menu.style.position = '';
-  menu.style.left = '';
-  menu.style.top = '';
-  menu.style.bottom = '';
-}
-
-function closeAllConnMenus() {
-  document.querySelectorAll('.row-actions-menu.open').forEach(m => { m.classList.remove('open'); resetConnMenuPosition(m); });
-  document.querySelectorAll('.btn-row-more.open').forEach(b => b.classList.remove('open'));
-}
-
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.row-actions-dropdown')) {
-    closeAllConnMenus();
-  }
-});
-
 /* ── Wire Full Edit Buttons ────────────────────────────────── */
 
 function wireFullEditButtons() {
@@ -499,7 +435,7 @@ function wireFullEditButtons() {
     if (btn.dataset.fullEditWired) return;
     btn.dataset.fullEditWired = 'true';
     btn.addEventListener('click', () => {
-      closeAllConnMenus();
+      closeAllRowActionsMenus();
       const id = btn.dataset.id;
       const conn = connections.find(c => c.id === id);
       if (conn) openEditConnectionDialog(conn);
