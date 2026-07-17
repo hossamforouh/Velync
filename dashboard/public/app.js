@@ -4772,8 +4772,19 @@ async function fireOpenAddConnection(provider) {
   if (window._connectingProvider) {
     return;
   }
-  
+
   if (provider) {
+    // openNodeModal() clears window.cachedPlatforms to force a fresh reload
+    // for the node's own schema fields — if the user clicks "+ Connect"
+    // before anything else has repopulated it, this lookup used to silently
+    // miss (undefined plat), which skipped the direct-OAuth branch below and
+    // fell through to the generic "Add New Connection" dialog even for
+    // platforms configured for one-click OAuth. Re-fetch here if needed so
+    // that gate is always evaluated against real data, not a momentarily
+    // empty cache.
+    if (!window.cachedPlatforms) {
+      try { await ensureCachedPlatforms(); } catch (e) { console.warn('[fireOpenAddConnection] Could not load platforms', e); }
+    }
     const plat = window.cachedPlatforms?.find(p => p.id === provider || p.key === provider);
 
     // If platform is OAuth, attempt direct flow
@@ -5179,6 +5190,7 @@ function openNodeModal(nodeId) {
   const p2Name = window._p2DisplayName || 'Destination';
   if (nodeId === 'p1') {
     if (nodeModalTitle) nodeModalTitle.innerHTML = 'Setup Trigger <span style="color:var(--text-3); font-weight:normal;">(' + escHtml(p1Name) + ')</span>';
+    if (nodeModalSave) nodeModalSave.textContent = 'Save Trigger';
     const sectionP1 = document.getElementById('section-source');
     if (sectionP1 && nodeModalBody) {
       sectionP1.style.display = 'block';
@@ -5186,6 +5198,7 @@ function openNodeModal(nodeId) {
     }
   } else if (nodeId === 'p2') {
     if (nodeModalTitle) nodeModalTitle.innerHTML = 'Setup Action <span style="color:var(--text-3); font-weight:normal;">(' + escHtml(p2Name) + ')</span>';
+    if (nodeModalSave) nodeModalSave.textContent = 'Save Action';
     const sectionP2 = document.getElementById('section-dest');
     if (sectionP2 && nodeModalBody) {
       sectionP2.style.display = 'block';
