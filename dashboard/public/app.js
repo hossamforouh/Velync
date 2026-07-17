@@ -4864,8 +4864,17 @@ document.getElementById('dest-connect-link')?.addEventListener('click', (e) => {
   fireOpenAddConnection(document.getElementById('dest-connect-link')?.dataset.provider || null);
 });
 
-// Refresh dropdowns when connections are saved/deleted elsewhere
+// Refresh dropdowns when connections are saved/deleted elsewhere. Scoped to
+// the config wizard actually being open — this handler force-selects a
+// connection and dispatches 'change' on the dropdowns, which cascades into
+// schema loading and AI mapping-suggestion side effects (including a toast).
+// Without this guard, a connection saved from a completely different page
+// (e.g. the Marketplace setup preview) still ran all of that invisibly in
+// the background, using stale _dropdownSourceProvider/_dropdownDestProvider
+// values left over from the last time the wizard was open.
 window.addEventListener('connections-refreshed', async (e) => {
+  if (!sidePanel || !sidePanel.classList.contains('open')) return;
+
   const currentP1 = fSourceConnection.value;
   const currentP2 = fDestConnection.value;
 
