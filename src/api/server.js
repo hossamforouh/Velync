@@ -42,10 +42,14 @@ const ALLOWED_ORIGINS = [
 function createApp() {
   const app = express();
 
-  // Cloud Run terminates TLS and forwards via a proxy (X-Forwarded-For). Trust it
-  // so express-rate-limit can identify clients by real IP (otherwise it throws a
-  // validation error and can't rate-limit correctly).
-  app.set('trust proxy', true);
+  // Cloud Run terminates TLS and forwards via exactly one proxy hop (Google's
+  // Front End), which sets X-Forwarded-For to the real client IP. Trusting
+  // `true` tells Express to trust an unlimited chain of forwarded-for
+  // entries, which means a client can prepend their own fake IP and have it
+  // trusted as "the real one" — trivially defeating IP-based rate limiting
+  // (this is exactly what express-rate-limit's ERR_ERL_PERMISSIVE_TRUST_PROXY
+  // warning flags). `1` trusts exactly the one hop Cloud Run actually adds.
+  app.set('trust proxy', 1);
 
   // Security headers
   app.use(helmet({
