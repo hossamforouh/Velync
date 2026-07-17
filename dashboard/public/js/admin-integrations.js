@@ -706,7 +706,7 @@ function renderAdminTable() {
             <p style="color: var(--text-3); font-size: 0.88rem; margin-bottom: 0;">
               ${searchTerm
                 ? `No integrations match "${escHtml(searchTerm)}". Try a different search term.`
-                : 'Click "+ Add New" to create the first Marketplace integration.'}
+                : 'Click "+ New Integration" to create the first Marketplace integration.'}
             </p>
           </div>
         </td>

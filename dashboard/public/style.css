@@ -31,6 +31,8 @@
   /* Cyan 500 */
   --rose: #FB7185;
   /* Rose 400 */
+  --danger: var(--rose);
+  /* Alias — several call sites reference --danger for destructive actions */
   --amber: #FBBF24;
   /* Amber 400 */
   --green: #34D399;
@@ -802,7 +804,13 @@ header.legacy-header {
   border-radius: var(--radius-xs);
 }
 
-.btn-refresh {
+.btn-xs {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-xs);
+}
+
+.btn-toolbar-sm {
   padding: 8px 12px;
   font-size: 13px;
 }

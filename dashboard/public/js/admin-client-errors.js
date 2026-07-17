@@ -173,8 +173,8 @@ function groupRowHtml(g) {
       <td data-label="Status"><span class="badge ${STATUS_BADGE[g.status]}">${STATUS_LABEL[g.status]}</span></td>
       <td data-label="Actions" style="white-space:nowrap;">
         ${actionButtonsHtml(g.status)}
-        <button class="btn btn-secondary btn-sm clienterr-details-btn" style="padding:4px 8px;font-size:12px;">Details</button>
-        <button class="btn btn-secondary btn-sm clienterr-delete-group-btn" style="padding:4px 8px;font-size:12px;color:var(--rose);">Delete</button>
+        <button class="btn btn-secondary btn-xs clienterr-details-btn">Details</button>
+        <button class="btn btn-danger btn-xs clienterr-delete-group-btn">Delete</button>
       </td>
     </tr>`;
 }
@@ -192,8 +192,8 @@ function childRowHtml(d, fp) {
       <td style="font-size:0.78rem;">${escHtml(d.uid || 'anonymous')}</td>
       <td></td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-secondary btn-sm clienterr-details-child-btn" data-id="${escAttr(d.id)}" style="padding:3px 7px;font-size:11px;">Details</button>
-        <button class="btn btn-secondary btn-sm clienterr-delete-child-btn" data-id="${escAttr(d.id)}" style="padding:3px 7px;font-size:11px;color:var(--rose);">Delete</button>
+        <button class="btn btn-secondary btn-xs clienterr-details-child-btn" data-id="${escAttr(d.id)}">Details</button>
+        <button class="btn btn-danger btn-xs clienterr-delete-child-btn" data-id="${escAttr(d.id)}">Delete</button>
       </td>
     </tr>`;
 }
