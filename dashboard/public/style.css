@@ -2576,6 +2576,18 @@ header.legacy-header {
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
 }
 
+/* Change Workspace Plan modal's select — stretch to the same width as the
+   Cancel/Save button row below it (the shared .admin-input max-width:300px
+   otherwise leaves it noticeably narrower than the modal's own content
+   width), and give the arrow more clearance from the border than the
+   default .select-arrow gap so it doesn't read as flush against the edge. */
+#ws-plan-modal-select {
+  max-width: none;
+  width: 100%;
+  padding-right: 40px;
+  background-position: right 16px center;
+}
+
 /* ── Client Errors: grouped-occurrence rows ─────────────────────
    A "group" row represents one or more instances of the same error
    (same normalized message + URL path). Child rows are individual
