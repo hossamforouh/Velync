@@ -1,6 +1,6 @@
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
-import { setButtonLoading } from './loading-components.js';
+import { setButtonLoading, getEmptyStateRowHTML } from './loading-components.js';
 import {
   collection, query, where, orderBy, limit, getDocs, startAfter
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
@@ -65,7 +65,7 @@ export async function initLogs(db, workspaceId, authInstance) {
 
 function getFilters() {
   const search = (document.getElementById('logs-search')?.value || '').trim();
-  const activePill = document.querySelector('.logs-filter-pill.active');
+  const activePill = document.querySelector('#logs-filter-pills .logs-filter-pill.active');
   const status = activePill?.dataset?.status || 'all';
   const fromDate = document.getElementById('logs-date-from')?.value || '';
   const toDate = document.getElementById('logs-date-to')?.value || '';
@@ -270,28 +270,22 @@ function renderLogs() {
   logsTbody.innerHTML = '';
 
   if (filtered.length === 0) {
-    let emptyMsg = 'No execution logs found.';
+    let title = 'No execution logs yet';
+    let message = 'Logs will automatically appear here once your integrations start syncing.';
     if (cachedLogs.length > 0 && hasActiveFilters()) {
-      emptyMsg = 'No logs match the current filters. Try adjusting your search or filter criteria.';
+      title = 'No matching logs';
+      message = 'No logs match the current filters. Try adjusting your search or filter criteria.';
     } else if (cachedLogs.length === 0 && hasActiveFilters() && (f.fromDate || f.toDate)) {
-      emptyMsg = 'No logs found in the selected date range.';
-    } else if (cachedLogs.length === 0) {
-      emptyMsg = 'Logs will automatically appear here once your integrations start syncing.';
+      title = 'No logs in range';
+      message = 'No logs found in the selected date range.';
     }
 
-    logsTbody.innerHTML = `
-      <tr>
-        <td colspan="4">
-          <div style="padding:60px 16px;text-align:center;">
-            <div style="margin-bottom:16px;color:var(--violet);display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:rgba(124,58,237,0.1);">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-              </svg>
-            </div>
-            <h3 style="margin-bottom:8px;color:var(--text-1);font-weight:600;font-size:1.1rem;">${emptyMsg}</h3>
-          </div>
-        </td>
-      </tr>`;
+    logsTbody.innerHTML = getEmptyStateRowHTML({
+      colspan: 4,
+      iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>',
+      title,
+      message,
+    });
     updateLoadMoreVisibility();
     return;
   }
@@ -310,17 +304,17 @@ function renderLogs() {
     let details = '';
 
     if (log.status === 'running') {
-      statusBadge = '<span class="badge badge-warning" style="background:rgba(245,158,11,0.2);color:#fcd34d;padding:4px 8px;border-radius:4px;font-size:0.8rem;font-weight:500;">Running</span>';
+      statusBadge = '<span class="badge badge-warning">Running</span>';
       details = 'Sync in progress...';
     } else if (log.status === 'success') {
-      statusBadge = '<span class="badge badge-success" style="background:rgba(16,185,129,0.2);color:#6ee7b7;padding:4px 8px;border-radius:4px;font-size:0.8rem;font-weight:500;">Success</span>';
+      statusBadge = '<span class="badge badge-success">Success</span>';
       const parts = [];
       if (log.syncedCount) parts.push(`Synced ${log.syncedCount}`);
       if (log.deletedCount) parts.push(`Deleted ${log.deletedCount}`);
       if (log.failedCount) parts.push(`Failed ${log.failedCount}`);
       details = parts.length > 0 ? parts.join('. ') + '.' : 'Sync completed.';
     } else {
-      statusBadge = '<span class="badge badge-failed" style="background:rgba(239,68,68,0.2);color:#fca5a5;padding:4px 8px;border-radius:4px;font-size:0.8rem;font-weight:500;">Failed</span>';
+      statusBadge = '<span class="badge badge-failed">Failed</span>';
       details = log.error || 'Unknown error occurred.';
     }
 
@@ -714,9 +708,9 @@ function attachFilterListeners() {
     searchClear.style.display = 'none';
   }
 
-  document.querySelectorAll('.logs-filter-pill').forEach(pill => {
+  document.querySelectorAll('#logs-filter-pills .logs-filter-pill').forEach(pill => {
     pill.addEventListener('click', () => {
-      document.querySelectorAll('.logs-filter-pill').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('#logs-filter-pills .logs-filter-pill').forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
       fetchLogs(true);
     });
@@ -739,8 +733,8 @@ function attachFilterListeners() {
       if (searchClear) { searchClear.style.display = 'none'; }
       if (dateFrom) { dateFrom.value = ''; }
       if (dateTo) { dateTo.value = ''; }
-      document.querySelectorAll('.logs-filter-pill').forEach(p => p.classList.remove('active'));
-      const allPill = document.querySelector('.logs-filter-pill[data-status="all"]');
+      document.querySelectorAll('#logs-filter-pills .logs-filter-pill').forEach(p => p.classList.remove('active'));
+      const allPill = document.querySelector('#logs-filter-pills .logs-filter-pill[data-status="all"]');
       if (allPill) allPill.classList.add('active');
       fetchLogs(true);
     });

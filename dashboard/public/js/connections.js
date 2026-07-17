@@ -9,7 +9,7 @@ import { getFirestore, collection, getDocs, query, where, orderBy, limit, startA
 import { getAuth } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
 
-import { getSkeletonRowHTML, getEmptySpinnerHTML, setButtonLoading } from './loading-components.js';
+import { getSkeletonRowHTML, getEmptySpinnerHTML, setButtonLoading, getEmptyStateRowHTML } from './loading-components.js';
 import { confirmDialog } from './confirm.js';
 import { showToast } from './toast.js';
 
@@ -213,22 +213,14 @@ export async function renderConnectionsView() {
   let filtered = applyFilters();
 
   if (filtered.length === 0 && connections.length === 0 && !hasMore) {
-    tbody.innerHTML = `
-      <tr class="table-empty-row">
-        <td colspan="4">
-          <div style="padding: 32px 16px; text-align: center;">
-            <div style="font-size: 2.5rem; margin-bottom: 12px; color: var(--violet);">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
-            </div>
-            <h3 style="margin-bottom: 6px; color: var(--text-1);">${searchTerm ? 'No matching connections' : 'No connections yet'}</h3>
-            <p style="color: var(--text-3); font-size: 0.88rem; margin-bottom: 16px;">
-              ${searchTerm
-                ? `No connections match "${escHtml(searchTerm)}". Try a different search term.`
-                : 'Add your API credentials here to reuse them across multiple sync configurations.'}
-            </p>
-          </div>
-        </td>
-      </tr>`;
+    tbody.innerHTML = getEmptyStateRowHTML({
+      colspan: 4,
+      iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>',
+      title: searchTerm ? 'No matching connections' : 'No connections yet',
+      message: searchTerm
+        ? `No connections match "${escHtml(searchTerm)}". Try a different search term.`
+        : 'Add your API credentials here to reuse them across multiple sync configurations.',
+    });
     updateLoadMoreVisibility();
     return;
   }

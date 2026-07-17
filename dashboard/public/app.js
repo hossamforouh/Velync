@@ -19,7 +19,7 @@ import './js/integration-setup.js';
 import { showToast } from './js/toast.js';
 import { confirmDialog, alertDialog, threeWayConfirmDialog } from './js/confirm.js';
 import { startLoad, endLoad, isLoading } from './js/loading.js';
-import { getSkeletonFormHTML, getSkeletonTableHTML, getEmptySpinnerHTML, setButtonLoading } from './js/loading-components.js';
+import { getSkeletonFormHTML, getSkeletonTableHTML, getEmptySpinnerHTML, setButtonLoading, getEmptyStateRowHTML } from './js/loading-components.js';
 
 /** Show a plan-limit toast with an Upgrade button that opens billing settings */
 function showPlanError(msg) {
@@ -3060,16 +3060,12 @@ function renderCards() {
 
   // If search matches nothing
   if (sortedConfigs.length === 0) {
-    tableBody.innerHTML = `
-      <tr class="table-empty-row">
-        <td colspan="8">
-          <div style="padding: 32px 16px; text-align: center;">
-            <div style="font-size: 2rem; margin-bottom: 12px;">🔍</div>
-            <h3 style="margin-bottom: 6px; color: var(--text-1);">No match found</h3>
-            <p style="color: var(--text-3); font-size: 0.88rem;">Adjust your filter or search terms and try again.</p>
-          </div>
-        </td>
-      </tr>`;
+    tableBody.innerHTML = getEmptyStateRowHTML({
+      colspan: 8,
+      iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+      title: 'No match found',
+      message: 'Adjust your filter or search terms and try again.',
+    });
     updateToolbarButtonStates();
     updateMultiSelectBar();
     return;

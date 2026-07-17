@@ -1,7 +1,7 @@
 import { collection, query, orderBy, limit, startAfter, getDocs } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { showToast } from './toast.js';
 import { confirmDialog } from './confirm.js';
-import { setButtonLoading, getSkeletonTableHTML } from './loading-components.js';
+import { setButtonLoading, getSkeletonTableHTML, getEmptyStateRowHTML } from './loading-components.js';
 
 let firestoreDb = null;
 let authInstance = null;
@@ -133,22 +133,14 @@ function getFilteredDocs() {
 
 function emptyStateRowHtml() {
   const hasActiveFilter = clientErrFilters.status !== 'open' || clientErrFilters.search;
-  return `
-    <tr class="table-empty-row">
-      <td colspan="7">
-        <div style="padding: 32px 16px; text-align: center;">
-          <div style="margin-bottom: 12px;">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
-          </div>
-          <h3 style="margin-bottom: 6px; color: var(--text-1);">${hasActiveFilter ? 'No matching errors' : 'No client errors reported'}</h3>
-          <p style="color: var(--text-3); font-size: 0.88rem; margin-bottom: 0;">
-            ${hasActiveFilter
-              ? 'No errors match the current filters. Try a different status or search term.'
-              : 'Uncaught exceptions and failed API calls from users’ browsers will show up here automatically.'}
-          </p>
-        </div>
-      </td>
-    </tr>`;
+  return getEmptyStateRowHTML({
+    colspan: 7,
+    iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>',
+    title: hasActiveFilter ? 'No matching errors' : 'No client errors reported',
+    message: hasActiveFilter
+      ? 'No errors match the current filters. Try a different status or search term.'
+      : 'Uncaught exceptions and failed API calls from users’ browsers will show up here automatically.',
+  });
 }
 
 function actionButtonsHtml(status) {
@@ -260,7 +252,7 @@ async function loadClientErrors(reset = false) {
   const tbody = document.getElementById('admin-clienterr-tbody');
   if (!tbody) return;
 
-  clientErrFilters.status = document.getElementById('admin-clienterr-filter-status')?.value ?? 'open';
+  clientErrFilters.status = document.querySelector('#admin-clienterr-filter-bar .logs-filter-pill.active')?.dataset?.status ?? 'open';
   clientErrFilters.search = document.getElementById('admin-clienterr-search')?.value?.trim() || '';
 
   clientErrLoading = true;
@@ -534,8 +526,15 @@ function wireClientErrorControls() {
   const loadMoreBtn = document.getElementById('admin-clienterr-load-more');
   if (loadMoreBtn) loadMoreBtn.addEventListener('click', () => loadClientErrors(false));
 
-  const statusEl = document.getElementById('admin-clienterr-filter-status');
-  if (statusEl) statusEl.addEventListener('change', () => loadClientErrors(true));
+  document.querySelectorAll('#admin-clienterr-filter-bar .logs-filter-pill').forEach(pill => {
+    if (pill.dataset.clientErrWired) return;
+    pill.dataset.clientErrWired = 'true';
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('#admin-clienterr-filter-bar .logs-filter-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      loadClientErrors(true);
+    });
+  });
 
   const searchEl = document.getElementById('admin-clienterr-search');
   if (searchEl) {

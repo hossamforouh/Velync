@@ -915,23 +915,6 @@ header.legacy-header {
   color: var(--text-3);
 }
 
-.usage-modal-close {
-  background: none;
-  border: none;
-  color: var(--text-3);
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-  transition: var(--transition);
-}
-
-.usage-modal-close:hover {
-  color: var(--text-1);
-  background: var(--glass-hover);
-}
-
 .usage-hero-total {
   text-align: center;
   padding: 24px;
@@ -1913,46 +1896,6 @@ header.legacy-header {
   align-items: center;
   gap: 8px;
   color: var(--text-1);
-}
-
-.conn-dialog .form-row {
-  margin-top: 12px;
-}
-
-.conn-dialog .form-row label {
-  color: var(--text-2);
-  font-weight: 600;
-  font-size: 0.9rem;
-  margin-bottom: 6px;
-  display: block;
-}
-
-.conn-dialog .form-row input,
-.conn-dialog .form-row select {
-  color: var(--text-1);
-  color-scheme: dark;
-  background-color: var(--bg-3);
-  border: 1px solid var(--border);
-  padding: 10px;
-  border-radius: 6px;
-  width: 100%;
-  box-sizing: border-box;
-  font-family: inherit;
-  transition: border-color 0.2s;
-}
-
-.conn-dialog .form-row input:focus,
-.conn-dialog .form-row select:focus {
-  border-color: var(--violet);
-  outline: none;
-}
-
-.conn-dialog .form-row input:disabled {
-  color: var(--text-3);
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.06);
-  opacity: 0.7;
-  cursor: not-allowed;
 }
 
 .conn-dialog .form-row-hint {
@@ -4135,12 +4078,14 @@ input:-webkit-autofill {
   flex-shrink: 0;
 }
 
-.hub-toolbar .search-wrap {
+.hub-toolbar .search-wrap,
+.search-wrap {
   position: relative;
   width: 260px;
 }
 
-.hub-toolbar .search-wrap .search-icon {
+.hub-toolbar .search-wrap .search-icon,
+.search-wrap .search-icon {
   position: absolute;
   left: 10px;
   top: 50%;
@@ -4150,7 +4095,8 @@ input:-webkit-autofill {
   z-index: 1;
 }
 
-.hub-toolbar .search-wrap .search-clear {
+.hub-toolbar .search-wrap .search-clear,
+.search-wrap .search-clear {
   position: absolute;
   right: 6px;
   top: 50%;
@@ -4168,11 +4114,13 @@ input:-webkit-autofill {
   z-index: 1;
 }
 
-.hub-toolbar .search-wrap .search-clear:hover {
+.hub-toolbar .search-wrap .search-clear:hover,
+.search-wrap .search-clear:hover {
   color: var(--text-1);
 }
 
-.hub-toolbar .filter-input {
+.hub-toolbar .filter-input,
+.filter-input {
   color: var(--text-1);
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
@@ -4183,7 +4131,8 @@ input:-webkit-autofill {
   transition: border-color 0.2s;
 }
 
-.hub-toolbar .filter-input:focus {
+.hub-toolbar .filter-input:focus,
+.filter-input:focus {
   outline: none;
   border-color: var(--violet);
 }
@@ -4366,14 +4315,17 @@ input:-webkit-autofill {
 
 .conn-dialog .form-row input,
 .conn-dialog .form-row select {
+  color: var(--text-1);
+  color-scheme: dark;
   height: 38px;
   border-radius: 6px;
   border: 1px solid var(--border);
   padding: 0 12px;
+  width: 100%;
+  box-sizing: border-box;
   font-size: 0.875rem;
   font-family: inherit;
   background-color: var(--bg);
-  color: var(--text-1);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -4382,6 +4334,15 @@ input:-webkit-autofill {
 .conn-dialog .form-row select:focus {
   border-color: var(--violet);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+  outline: none;
+}
+
+.conn-dialog .form-row input:disabled {
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .conn-dialog .form-row select.select-arrow {
@@ -4497,6 +4458,7 @@ input:-webkit-autofill {
   padding: 4px 14px;
   font-size: 0.78rem;
   font-weight: 500;
+  font-family: inherit;
   color: var(--text-3);
   cursor: pointer;
   transition: all 0.15s;
@@ -4506,32 +4468,17 @@ input:-webkit-autofill {
 
 .logs-filter-pill:hover {
   background: var(--bg-hover);
-  color: var(--text-1);
-  border-color: rgba(255,255,255,0.15);
+  border-color: var(--pill-color, rgba(255,255,255,0.15));
+  color: var(--pill-color, var(--text-1));
 }
 
+/* One rule drives every filter-pill row in the app (Exec Logs, Client
+   Errors, ...) — each pill sets its own --pill-color inline instead of
+   this rule special-casing specific status values. */
 .logs-filter-pill.active {
-  background: rgba(124, 58, 237, 0.2);
-  border-color: var(--violet);
-  color: var(--violet);
-}
-
-.logs-filter-pill[data-status="success"].active {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: #6ee7b7;
-  color: #6ee7b7;
-}
-
-.logs-filter-pill[data-status="running"].active {
-  background: rgba(245, 158, 11, 0.15);
-  border-color: #fcd34d;
-  color: #fcd34d;
-}
-
-.logs-filter-pill[data-status="failed"].active {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: #fca5a5;
-  color: #fca5a5;
+  background: color-mix(in srgb, var(--pill-color, var(--violet)) 15%, transparent);
+  border-color: var(--pill-color, var(--violet));
+  color: var(--pill-color, var(--violet));
 }
 
 .logs-date-input {
@@ -6115,31 +6062,6 @@ input:-webkit-autofill {
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
-}
-
-/* ── Logs Filter Pills ─────────────────────────────────────── */
-.logs-filter-pill {
-  padding: 4px 12px;
-  border-radius: 100px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-2);
-  font-size: 0.78rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: inherit;
-}
-
-.logs-filter-pill:hover {
-  border-color: var(--pill-color, var(--violet));
-  color: var(--pill-color, var(--text-1));
-}
-
-.logs-filter-pill.active {
-  background: var(--pill-color, var(--violet));
-  border-color: var(--pill-color, var(--violet));
-  color: #fff;
 }
 
 /* ── Load More Button ──────────────────────────────────────── */

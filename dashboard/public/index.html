@@ -801,7 +801,7 @@
                 <button class="search-clear" id="logs-search-clear" type="button" aria-label="Clear search">&times;</button>
               </div>
 
-              <div class="logs-filter-pills" style="display:flex;gap:4px;">
+              <div class="logs-filter-pills" id="logs-filter-pills" style="display:flex;gap:4px;">
                 <button class="logs-filter-pill active" data-status="all" style="--pill-color:var(--violet);">All</button>
                 <button class="logs-filter-pill" data-status="success" style="--pill-color:#6ee7b7;">Success</button>
                 <button class="logs-filter-pill" data-status="running" style="--pill-color:#fcd34d;">Running</button>
@@ -905,9 +905,9 @@
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
               <h3 style="margin:0;font-size:1rem;">Workspaces</h3>
               <div style="display:flex;align-items:center;gap:10px;">
-                <div class="search-wrap" style="position:relative;width:260px;">
-                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;z-index:1;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  <input type="text" id="admin-ws-search" placeholder="Search by name..." style="padding-left:32px;width:100%;color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:8px 12px 8px 32px;border-radius:8px;font-size:0.85rem;box-sizing:border-box;" />
+                <div class="search-wrap">
+                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input type="text" id="admin-ws-search" class="filter-input" placeholder="Search by name..." style="padding-left:32px;width:100%;" />
                   <button id="admin-ws-search-clear" class="search-clear" style="display:none;">✕</button>
                 </div>
                 <span id="admin-ws-count" style="color:var(--text-3);font-size:0.82rem;"></span>
@@ -979,7 +979,7 @@
               </div>
 
               <!-- Platform Popularity -->
-              <div class="surface-card" style="margin-bottom:24px;padding:20px;">
+              <div class="surface-card" style="margin-bottom:24px;">
                 <h3 style="margin:0 0 16px;font-size:1rem;display:flex;align-items:center;gap:8px;">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
                   Platform Popularity
@@ -991,7 +991,7 @@
 
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
                 <!-- Top Errors -->
-                <div class="surface-card" style="padding:20px;">
+                <div class="surface-card">
                   <h3 style="margin:0 0 12px;font-size:1rem;display:flex;align-items:center;gap:8px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                     Top Errors (24h)
@@ -1002,7 +1002,7 @@
                 </div>
 
                 <!-- Connections Distribution -->
-                <div class="surface-card" style="padding:20px;">
+                <div class="surface-card">
                   <h3 style="margin:0 0 12px;font-size:1rem;display:flex;align-items:center;gap:8px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
                     Connections Per User
@@ -1014,7 +1014,7 @@
               </div>
 
               <!-- Stale Configs -->
-              <div class="surface-card" style="margin-bottom:24px;padding:20px;">
+              <div class="surface-card" style="margin-bottom:24px;">
                 <h3 style="margin:0 0 12px;font-size:1rem;display:flex;align-items:center;gap:8px;">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   Stale Configs (active but no sync in &gt;7 days)
@@ -1025,7 +1025,7 @@
               </div>
 
               <!-- Daily Sync Volume -->
-              <div class="surface-card" style="margin-bottom:24px;padding:20px;">
+              <div class="surface-card" style="margin-bottom:24px;">
                 <h3 style="margin:0 0 12px;font-size:1rem;display:flex;align-items:center;gap:8px;">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
                   Daily Sync Volume (7 days)
@@ -1042,7 +1042,7 @@
                    didn't have: the per-run log table. Collapsed by default
                    and fetched lazily so it doesn't slow down Overview's
                    initial load. -->
-              <div class="surface-card" style="margin-bottom:24px;padding:20px;">
+              <div class="surface-card" style="margin-bottom:24px;">
                 <button id="admin-sh-toggle" type="button" style="all:unset;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;">
                   <h3 style="margin:0;font-size:1rem;display:flex;align-items:center;gap:8px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
@@ -1072,7 +1072,7 @@
           <!-- Global Settings Pane -->
           <div class="admin-pane" id="admin-pane-global" style="display: none;">
             <div class="surface-card">
-              <h2 style="margin-bottom: 4px;">Global Settings</h2>
+              <h2 style="margin: 0 0 4px;">Global Settings</h2>
               <p style="color:var(--text-3);font-size:0.85rem;margin:0 0 20px;">
                 Platform-wide settings that apply to every workspace. Per-workspace limits
                 (active configs, sync interval, log retention) are configured per plan in the
@@ -1118,7 +1118,7 @@
           <div class="admin-pane" id="admin-pane-platforms" style="display: none;">
             <div class="surface-card">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h2 style="margin: 0;">Platforms</h2>
+                <h2 style="margin: 0 0 4px;">Platforms</h2>
                 <div style="display:flex;gap:8px;">
                   <button id="admin-plat-refresh-btn" class="btn btn-secondary btn-toolbar-sm" type="button">Refresh</button>
                   <button class="btn btn-secondary btn-toolbar-sm" data-export="platforms" title="Download all platforms as a JSON file">Export</button>
@@ -1129,9 +1129,9 @@
               </div>
 
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-                <div class="search-wrap" style="position:relative;width:260px;">
-                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;z-index:1;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  <input type="text" id="admin-plat-search" placeholder="Search by name, ID, or auth type..." style="padding-left:32px;width:100%;color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:8px 12px 8px 32px;border-radius:8px;font-size:0.85rem;box-sizing:border-box;" />
+                <div class="search-wrap">
+                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input type="text" id="admin-plat-search" class="filter-input" placeholder="Search by name, ID, or auth type..." style="padding-left:32px;width:100%;" />
                   <button id="admin-plat-search-clear" class="search-clear" style="display:none;">✕</button>
                 </div>
                 <span id="admin-plat-count" style="color:var(--text-3);font-size:0.82rem;"></span>
@@ -1166,7 +1166,7 @@
           <div class="admin-pane" id="admin-pane-plans" style="display: none;">
             <div class="surface-card">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h2 style="margin: 0;">Plans &amp; Pricing</h2>
+                <h2 style="margin: 0 0 4px;">Plans &amp; Pricing</h2>
                 <div style="display:flex;gap:8px;align-items:center;">
                   <button id="admin-plans-refresh-btn" class="btn btn-secondary btn-toolbar-sm" type="button">Refresh</button>
                   <button class="btn btn-secondary btn-toolbar-sm" data-export="plans" type="button" title="Download all plans as a JSON file">Export</button>
@@ -1204,7 +1204,7 @@
           <div class="admin-pane" id="admin-pane-marketplace" style="display: none;">
             <div class="surface-card">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h2 style="margin: 0;">Marketplace Integrations</h2>
+                <h2 style="margin: 0 0 4px;">Marketplace Integrations</h2>
                 <div style="display:flex;gap:8px;">
                   <button id="admin-int-refresh-btn" class="btn btn-secondary btn-toolbar-sm" type="button">Refresh</button>
                   <button class="btn btn-secondary btn-toolbar-sm" data-export="integrations" title="Download all marketplace integrations as a JSON file">Export</button>
@@ -1215,9 +1215,9 @@
               </div>
 
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-                <div class="search-wrap" style="position:relative;width:260px;">
-                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;z-index:1;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  <input type="text" id="admin-int-search" placeholder="Search by name, ID, or status..." style="padding-left:32px;width:100%;color:var(--text-1);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:8px 12px 8px 32px;border-radius:8px;font-size:0.85rem;box-sizing:border-box;" />
+                <div class="search-wrap">
+                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input type="text" id="admin-int-search" class="filter-input" placeholder="Search by name, ID, or status..." style="padding-left:32px;width:100%;" />
                   <button id="admin-int-search-clear" class="search-clear" style="display:none;">✕</button>
                 </div>
                 <span id="admin-int-count" style="color:var(--text-3);font-size:0.82rem;"></span>
@@ -1254,12 +1254,12 @@
           <div class="admin-pane" id="admin-pane-activity" style="display: none;">
             <div class="surface-card">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                <h2 style="margin:0;">Audit Log</h2>
+                <h2 style="margin: 0 0 4px;">Audit Log</h2>
                 <div style="display:flex;gap:8px;">
                   <button id="admin-activity-refresh" class="btn btn-secondary btn-toolbar-sm" type="button">Refresh</button>
                 </div>
               </div>
-              <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">A record of every administrative change made in this workspace — who made it, when, and exactly what changed. Entries are permanent and cannot be edited or deleted.</p>
+              <p style="margin:4px 0 16px;color:var(--text-3);font-size:0.82rem;">A record of every administrative change made in this workspace — who made it, when, and exactly what changed. Entries are permanent and cannot be edited or deleted.</p>
               <div id="admin-activity-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;">
                 <select id="admin-activity-filter-type" class="select-arrow" style="padding:7px 36px 7px 10px;border-radius:6px;border:1px solid var(--border);background-color:var(--bg);color:var(--text);font-size:13px;">
                   <option value="">All Types</option>
@@ -1311,21 +1311,21 @@
           <div class="admin-pane" id="admin-pane-client-errors" style="display: none;">
             <div class="surface-card">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                <h2 style="margin:0;">Client Errors</h2>
+                <h2 style="margin: 0 0 4px;">Client Errors</h2>
                 <div style="display:flex;gap:8px;">
                   <button id="admin-clienterr-export" class="btn btn-secondary btn-toolbar-sm">Export CSV</button>
                   <button id="admin-clienterr-bulk-delete-btn" class="btn btn-danger btn-toolbar-sm" style="display:none;">Delete Selected</button>
                   <button id="admin-clienterr-refresh" class="btn btn-secondary btn-toolbar-sm" type="button">Refresh</button>
                 </div>
               </div>
-              <p style="margin:-8px 0 16px;color:var(--text-3);font-size:0.85rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. <strong>Open</strong>: needs attention. <strong>Resolved</strong>: a fix has shipped, awaiting verification. <strong>Closed</strong>: verified fixed. Repeated occurrences of the same error are grouped into a single row.</p>
+              <p style="margin:4px 0 16px;color:var(--text-3);font-size:0.82rem;">Frontend JS errors reported automatically from users' browsers — uncaught exceptions and unhandled promise rejections. <strong>Open</strong>: needs attention. <strong>Resolved</strong>: a fix has shipped, awaiting verification. <strong>Closed</strong>: verified fixed. Repeated occurrences of the same error are grouped into a single row.</p>
               <div id="admin-clienterr-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;">
-                <select id="admin-clienterr-filter-status" class="select-arrow" style="padding:7px 36px 7px 10px;border-radius:6px;border:1px solid var(--border);background-color:var(--bg);color:var(--text);font-size:13px;">
-                  <option value="open">Open</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="closed">Closed</option>
-                  <option value="">All</option>
-                </select>
+                <div class="logs-filter-pills" style="display:flex;gap:4px;">
+                  <button class="logs-filter-pill active" data-status="open" type="button" style="--pill-color:#FBBF24;">Open</button>
+                  <button class="logs-filter-pill" data-status="resolved" type="button" style="--pill-color:var(--violet);">Resolved</button>
+                  <button class="logs-filter-pill" data-status="closed" type="button" style="--pill-color:#34D399;">Closed</button>
+                  <button class="logs-filter-pill" data-status="" type="button" style="--pill-color:var(--violet);">All</button>
+                </div>
                 <input type="text" id="admin-clienterr-search" placeholder="Search message, URL, or uid..." style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;flex:1;min-width:180px;">
               </div>
               <div class="connections-table-wrap">
@@ -1365,8 +1365,7 @@
             <div class="panel-header"
               style="padding: 0 0 20px 0; background: transparent; border-bottom: 1px solid var(--border); margin-bottom: 24px;">
               <h2 id="platform-panel-title" style="font-size: 1.5rem;">Create New Platform</h2>
-              <button class="panel-close" id="platform-panel-close"
-                style="position: relative; right: 0; top: 0;">✕</button>
+              <button class="panel-close" id="platform-panel-close">✕</button>
             </div>
 
             <div class="panel-body" style="padding: 0; overflow-y: visible;">
@@ -1497,7 +1496,7 @@
         <div class="panel-header"
           style="padding: 0 0 20px 0; background: transparent; border-bottom: 1px solid var(--border); margin-bottom: 24px;">
           <h2 id="plan-editor-panel-title" style="font-size: 1.5rem;">Edit Plan</h2>
-          <button class="panel-close" id="plan-editor-close" style="position: relative; right: 0; top: 0;">✕</button>
+          <button class="panel-close" id="plan-editor-close">✕</button>
         </div>
         <div class="panel-body" style="padding: 0; overflow-y: visible;">
           <div id="plan-editor-id-display" style="display:none;color:var(--text-3);font-size:0.82rem;margin-bottom:16px;"></div>
@@ -1575,7 +1574,7 @@
   <aside class="side-panel" id="side-panel">
     <div class="panel-header">
       <h2 id="panel-title">New Config</h2>
-      <button class="panel-close" id="panel-close"><i data-feather="x"></i></button>
+      <button class="panel-close" id="panel-close">✕</button>
     </div>
 
     <div class="panel-body">
@@ -1843,9 +1842,7 @@
           style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
           Setup Node
         </h3>
-        <button class="modal-close" id="node-modal-close"
-          style="background: none; border: none; cursor: pointer; color: var(--text-2);"><i
-            data-feather="x"></i></button>
+        <button class="modal-close" id="node-modal-close">✕</button>
       </div>
 
       <div id="node-modal-body" style="max-height: 60vh; overflow-y: auto; padding-right: 8px;">
@@ -1940,7 +1937,7 @@
     <div class="modal" role="dialog" aria-modal="true" style="max-width: 450px; padding: 24px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h3 id="status-modal-title" style="margin: 0; display: flex; align-items: center; gap: 8px;">Incomplete</h3>
-        <button class="modal-close" onclick="closeStatusModal()" style="background: none; border: none; color: var(--text-2); cursor: pointer; padding: 4px; display: flex;"><i data-feather="x"></i></button>
+        <button class="modal-close" onclick="closeStatusModal()">✕</button>
       </div>
       <p id="status-modal-subtitle" class="form-hint" style="margin-bottom: 24px;">Which properties in Notion are displayed as incomplete in TickTick?</p>
       
@@ -1968,7 +1965,7 @@
   <!-- ── Settings Hub Modal ──────────────────────────────────── -->
   <div class="modal-overlay" id="settings-modal">
     <div class="settings-hub-container">
-      <button class="modal-close" id="settings-close" title="Close"><i data-feather="x"></i></button>
+      <button class="modal-close" id="settings-close" title="Close">✕</button>
 
       <div class="settings-sidebar">
         <div class="settings-header">Settings</div>
@@ -1996,7 +1993,7 @@
 
         <!-- Profile Tab -->
         <div class="settings-pane active" id="pane-profile">
-          <h2>Profile Settings</h2>
+          <h2 style="margin: 0 0 4px;">Profile Settings</h2>
           <p class="settings-subtitle">Manage your personal account details.</p>
 
           <div class="form-row">
@@ -2015,7 +2012,7 @@
 
         <!-- Workspace Tab -->
         <div class="settings-pane" id="pane-workspace" style="display: none;">
-          <h2>Workspace Settings</h2>
+          <h2 style="margin: 0 0 4px;">Workspace Settings</h2>
           <p class="settings-subtitle">Manage your current active workspace.</p>
 
           <div class="form-row">
@@ -2079,7 +2076,7 @@
 
         <!-- Billing Tab -->
         <div class="settings-pane" id="pane-billing" style="display: none;">
-          <h2>Billing & Plan</h2>
+          <h2 style="margin: 0 0 4px;">Billing & Plan</h2>
           <p class="settings-subtitle">Manage your subscription and billing details.</p>
 
           <div id="billing-plan-display">
@@ -2103,7 +2100,7 @@
 
       <!-- Notifications Tab -->
       <div class="settings-pane" id="pane-notifications" style="display: none;">
-        <h2>Notifications</h2>
+        <h2 style="margin: 0 0 4px;">Notifications</h2>
         <p class="settings-subtitle">Configure which events trigger email notifications.</p>
 
         <div class="notif-row">
@@ -2155,7 +2152,7 @@
 
       <!-- Sessions Tab -->
       <div class="settings-pane" id="pane-sessions" style="display: none;">
-        <h2>Sessions</h2>
+        <h2 style="margin: 0 0 4px;">Sessions</h2>
         <p class="settings-subtitle">Manage your active sessions and sign out of devices.</p>
 
         <div class="session-card" id="current-session-card">
@@ -2176,7 +2173,7 @@
 
       <!-- Account Tab -->
       <div class="settings-pane" id="pane-account" style="display: none;">
-        <h2>Account</h2>
+        <h2 style="margin: 0 0 4px;">Account</h2>
         <p class="settings-subtitle">Export your data or permanently delete your account.</p>
 
         <div style="padding:20px;background:var(--grad-card);border:1px solid var(--glass-hover);border-radius:12px;margin-bottom:24px;">
@@ -2352,7 +2349,7 @@
           <h3 class="usage-modal-title" id="ws-usage-modal-title">Usage</h3>
           <div class="usage-modal-subtitle" id="ws-usage-modal-subtitle"></div>
         </div>
-        <button class="usage-modal-close" id="ws-usage-modal-close" type="button" aria-label="Close">&times;</button>
+        <button class="panel-close" id="ws-usage-modal-close" type="button" aria-label="Close">✕</button>
       </div>
       <div id="ws-usage-modal-body">
         <p style="text-align:center;padding:30px;color:var(--text-3);">Loading…</p>

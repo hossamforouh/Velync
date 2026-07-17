@@ -186,15 +186,17 @@ function renderCards() {
       ? `No integrations match "<strong>${escHtml(searchTerm)}</strong>". Try a different search term.`
       : 'The marketplace is currently empty. Check back later for new platform connections!';
     grid.innerHTML = `
-      <div style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;gap:16px;background:var(--card-bg);border:1px dashed var(--border);border-radius:12px;margin-top:24px;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7"></rect>
-          <rect x="14" y="3" width="7" height="7"></rect>
-          <rect x="14" y="14" width="7" height="7"></rect>
-          <rect x="3" y="14" width="7" height="7"></rect>
-        </svg>
-        <h3 style="color:var(--text-1);font-size:1.1rem;margin:0;">${searchTerm ? 'No matching integrations' : 'No integrations available'}</h3>
-        <p style="color:var(--text-2);font-size:0.95rem;margin:0;max-width:400px;">${emptyMsg}</p>
+      <div style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;text-align:center;gap:6px;background:var(--card-bg);border:1px dashed var(--border);border-radius:12px;margin-top:24px;">
+        <div style="margin-bottom:6px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+        </div>
+        <h3 style="color:var(--text-1);margin-bottom: 6px;">${searchTerm ? 'No matching integrations' : 'No integrations available'}</h3>
+        <p style="color:var(--text-3);font-size:0.88rem;margin:0;max-width:400px;">${emptyMsg}</p>
       </div>`;
     updateLoadMoreVisibility(0);
     return;
