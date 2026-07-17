@@ -313,32 +313,31 @@
 
   <!-- ── Global Loader ──────────────────────────────────────── -->
   <style>
-    @keyframes pulseGlow {
-      0% { transform: scale(0.95); filter: drop-shadow(0 0 10px rgba(136, 192, 208, 0.4)); opacity: 0.8; }
-      50% { transform: scale(1.05); filter: drop-shadow(0 0 25px rgba(136, 192, 208, 0.8)); opacity: 1; }
-      100% { transform: scale(0.95); filter: drop-shadow(0 0 10px rgba(136, 192, 208, 0.4)); opacity: 0.8; }
-    }
-    @keyframes dashSpin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    /* Shares the same spin motion and violet ring color as the in-app
+       .spinner (see style.css) — the boot screen used to spin a two-tone
+       ring with a bouncy easing and pulse-glow the logo, a different
+       visual language from every other loading state in the app. Now it's
+       the same ring, just larger, wrapped around the static brand mark. */
+    @keyframes globalLoaderSpin {
+      to { transform: rotate(360deg); }
     }
     @keyframes fadeOutLoader {
       0% { opacity: 1; visibility: visible; }
       100% { opacity: 0; visibility: hidden; }
     }
     #global-loader {
-      display: flex; 
-      flex-direction: column; 
-      position: fixed; 
-      top: 0; 
-      left: 0; 
-      width: 100vw; 
-      height: 100vh; 
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
       background-color: rgba(10, 8, 25, 0.95); /* Deep dark background */
       backdrop-filter: blur(12px); /* Glassmorphism */
       -webkit-backdrop-filter: blur(12px);
-      z-index: 9999; 
-      justify-content: center; 
+      z-index: 9999;
+      justify-content: center;
       align-items: center;
     }
     #global-loader.hidden {
@@ -357,24 +356,19 @@
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      border: 2px solid transparent;
-      border-top-color: var(--primary, #06b6d4);
-      border-bottom-color: var(--violet, #8b5cf6);
-      animation: dashSpin 1.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+      border: 4px solid rgba(79, 70, 229, 0.1);
+      border-top-color: var(--violet, #818CF8);
+      animation: globalLoaderSpin 1s linear infinite;
     }
     .loader-logo-container svg {
       width: 44px;
       height: 44px;
-      animation: pulseGlow 2s infinite ease-in-out;
     }
     .loading-text {
       margin-top: 24px;
-      font-size: 0.85rem;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: var(--text-2, #94a3b8);
+      font-size: 1rem;
+      color: var(--text-1, #f1f5f9);
       font-weight: 500;
-      animation: pulse 2s infinite ease-in-out;
     }
   </style>
   <div id="global-loader">
@@ -391,7 +385,7 @@
         <path d="M8 9l8 14 8-14" stroke="#1A1D24" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
-    <div class="loading-text">Initializing Workspace...</div>
+    <div class="loading-text">Initializing workspace…</div>
   </div>
 
   <!-- ── Platform Shell ─────────────────────────────────────── -->

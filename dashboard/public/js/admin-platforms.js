@@ -366,7 +366,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       loadingEl = document.createElement('div');
       loadingEl.className = 'modal-loading';
       loadingEl.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:60px 40px;flex-direction:column;gap:12px;color:var(--text-3);';
-      loadingEl.innerHTML = '<span class="spinner" style="width:24px;height:24px;border-width:2.5px;"></span><span>Loading editor...</span>';
+      loadingEl.innerHTML = '<span class="spinner" style="width:24px;height:24px;border-width:2.5px;"></span><span>Loading editor…</span>';
       panelBody.appendChild(loadingEl);
     }
     form.style.display = 'none';

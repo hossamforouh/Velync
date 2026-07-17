@@ -3605,7 +3605,7 @@ function handleConnectionChange(prefix) {
   const conn = _connectionsCache.find(c => c.id === connId);
   if (!conn) return;
 
-  container.innerHTML = getEmptySpinnerHTML('Loading fields...');
+  container.innerHTML = getEmptySpinnerHTML('Loading fields…');
   window.renderSchemaForPlatform(conn.provider, containerId, prefix, {});
 }
 
@@ -3924,7 +3924,7 @@ async function loadDefaultMappingsPreset() {
     return; // Preserve existing state if connections and specific dynamic contexts haven't changed
   }
 
-  mappingsContainer.innerHTML = getEmptySpinnerHTML('Generating intelligent mapping suggestions...');
+  mappingsContainer.innerHTML = getEmptySpinnerHTML('Generating intelligent mapping suggestions…');
   if (window.feather) window.feather.replace();
 
   try {

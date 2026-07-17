@@ -3858,6 +3858,42 @@ header.legacy-header {
   animation: spin 1s linear infinite;
 }
 
+/* The one full-screen "please wait" overlay treatment — dimmed/blurred
+   backdrop with a bordered, shadowed card holding the spinner+text. Used by
+   getLoadingOverlayCardHTML() wherever a dialog/page needs to block on an
+   async load (e.g. opening the Connections add/edit dialog, the
+   Marketplace flow-setup step) so every such overlay looks the same. */
+.loading-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--glass-heavy);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 40px;
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 60px var(--shadow);
+}
+
+.loading-overlay-card p {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
 /* Small spinner for inside buttons — most save/action buttons use a colored
    (often violet-gradient) background, so the default .spinner's violet ring
    nearly disappears against it. This overrides to a white-based ring that

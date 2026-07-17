@@ -102,11 +102,35 @@ export function getSkeletonFormHTML() {
  * @param {string} text - Optional text to display below the spinner.
  * @returns {string} HTML string
  */
-export function getEmptySpinnerHTML(text = 'Loading...') {
+export function getEmptySpinnerHTML(text = 'Loading…') {
   return `
     <div class="empty-spinner-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; gap: 16px; color: var(--text-3);">
       <div class="spinner" style="width: 32px; height: 32px; border-width: 3px;"></div>
       ${text ? `<span style="font-size: 0.95rem; font-weight: 500;">${text}</span>` : ''}
+    </div>
+  `;
+}
+
+/**
+ * Returns markup for a full-screen dimmed loading overlay — a spinner+text
+ * pair inside a bordered/shadowed card, centered over a blurred backdrop.
+ * This is the one "please wait, something is opening" treatment every
+ * full-page/dialog loading state should use (e.g. the Connections
+ * add/edit-connection dialog, the Marketplace "start a flow" setup step) —
+ * as opposed to getEmptySpinnerHTML(), which is meant for loading states
+ * *inside* an already-bordered container (a panel, a table cell) where a
+ * second nested card would look boxed-in-a-box.
+ * @param {string} text - Message shown below the spinner.
+ * @param {string} [id] - Optional id to assign to the overlay element, so callers can find/remove it.
+ * @returns {string} HTML string — a fixed, full-viewport overlay div.
+ */
+export function getLoadingOverlayCardHTML(text = 'Loading…', id = '') {
+  return `
+    <div${id ? ` id="${id}"` : ''} class="loading-overlay-backdrop">
+      <div class="loading-overlay-card">
+        <div class="spinner"></div>
+        <p>${text}</p>
+      </div>
     </div>
   `;
 }

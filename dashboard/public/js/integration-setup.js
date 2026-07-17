@@ -3,7 +3,7 @@ import { getApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.j
 import { saveConnection, connections, loadConnections, initiateDirectOAuthFlow } from './connections.js';
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
-import { setButtonLoading } from './loading-components.js';
+import { setButtonLoading, getLoadingOverlayCardHTML } from './loading-components.js';
 
 function getDb() { return getFirestore(getApp()); }
 
@@ -54,15 +54,9 @@ window.addEventListener('open-integration-setup', async (e) => {
   platformsMap = e.detail.platformsMap;
 
   // Show loading overlay before async work
-  const loadingOverlay = document.createElement('div');
-  loadingOverlay.id = 'setup-loading-overlay';
-  loadingOverlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;';
-  loadingOverlay.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px 40px;border-radius:var(--radius-md, 16px);background:var(--bg-3);border:1px solid var(--border);box-shadow:var(--shadow-glow);">
-      <div class="spinner"></div>
-      <p style="color:var(--text-1);font-size:1rem;font-weight:500;margin:0;">Preparing setup…</p>
-    </div>`;
-  document.body.appendChild(loadingOverlay);
+  const tmpWrap = document.createElement('div');
+  tmpWrap.innerHTML = getLoadingOverlayCardHTML('Preparing setup…', 'setup-loading-overlay');
+  document.body.appendChild(tmpWrap.firstElementChild);
 
   // Timeout guard: remove overlay after 15s if anything hangs
   let loadingTimedOut = false;
