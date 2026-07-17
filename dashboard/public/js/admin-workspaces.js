@@ -1,6 +1,7 @@
 import { showToast } from './toast.js';
 import { fmtCost, renderUsageStatCardsHtml } from './usage-format.js';
 import { getSkeletonCardGridHTML, getSkeletonTableHTML, getEmptyStateRowHTML } from './loading-components.js';
+import { wireRowActionsMenus } from './row-actions-menu.js';
 
 // Admin → Workspaces management tab.
 // Powered by the server-side admin endpoints (/api/admin/stats + /api/admin/workspaces),
@@ -250,14 +251,23 @@ async function loadWorkspaces(reset) {
           <td data-label="Members">${Number(w.memberCount) || 0}</td>
           <td data-label="Est. Cost (mo)"><button class="row-action-btn btn-ws-usage" type="button" title="View usage breakdown" style="width:auto;padding:2px 8px;font-size:0.82rem;">${esc(fmtCost(w.estimatedCostUsd ?? 0))}</button></td>
           <td data-label="ID"><code style="font-size:0.82rem;">${esc(w.id)}</code></td>
-          <td data-label="Actions"><button class="row-action-btn btn-change-plan" type="button" title="Change Plan">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-          </button></td>`;
+          <td data-label="Actions">
+            <div class="row-actions-dropdown">
+              <button class="row-action-btn btn-row-more" type="button" title="More actions">⋮</button>
+              <div class="row-actions-menu">
+                <button class="row-action-menu-item btn-change-plan" type="button">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                  Change Plan
+                </button>
+              </div>
+            </div>
+          </td>`;
         tbody.appendChild(tr);
         tr.querySelector('.btn-change-plan').addEventListener('click', () => openPlanEditor(tr, w));
         tr.querySelector('.btn-ws-usage').addEventListener('click', () => openUsageModal(w));
       }
       rowsShown += items.length;
+      wireRowActionsMenus();
     }
 
     cursor = nextCursor;

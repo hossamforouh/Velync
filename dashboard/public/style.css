@@ -1560,13 +1560,6 @@ header.legacy-header {
   justify-content: center;
 }
 
-.row-actions-group {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
 .row-action-btn {
   background: transparent;
   border: none;
@@ -1584,17 +1577,6 @@ header.legacy-header {
 .row-action-btn:hover {
   background: rgba(128, 128, 128, 0.15);
   color: var(--text-1);
-}
-
-.row-action-btn.del-plat-btn:hover,
-.row-action-btn.conn-delete-btn:hover {
-  color: var(--danger);
-  background: rgba(244, 63, 94, 0.15);
-}
-
-.row-action-btn.edit-plat-btn:hover {
-  color: var(--violet);
-  background: rgba(99, 102, 241, 0.15);
 }
 
 .btn-row-more {

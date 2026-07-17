@@ -1,6 +1,7 @@
 import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
 import { setButtonLoading, getSkeletonTableHTML, getEmptyStateRowHTML } from './loading-components.js';
+import { wireRowActionsMenus } from './row-actions-menu.js';
 
 let auth = null;
 let allPlans = [];
@@ -117,12 +118,19 @@ function renderPlans() {
         ${p.webhookSyncEnabled ? '<span class="badge badge-info" style="margin-left:4px;" title="Notion-sourced configs get webhook-triggered real-time sync">⚡ Real-time</span>' : ''}
       </td>
       <td data-label="Actions" class="col-actions">
-        <button class="row-action-btn edit-plan-btn" data-id="${p.id}" type="button" title="Edit Plan">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-        </button>
-        <button class="row-action-btn toggle-plan-btn" data-id="${p.id}" type="button" title="${p.isActive ? 'Deactivate' : 'Activate'} Plan" style="color:${toggleColor};">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${toggleIcon}</svg>
-        </button>
+        <div class="row-actions-dropdown">
+          <button class="row-action-btn btn-row-more" type="button" title="More actions">⋮</button>
+          <div class="row-actions-menu">
+            <button class="row-action-menu-item edit-plan-btn" data-id="${p.id}" type="button">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+              Edit Plan
+            </button>
+            <button class="row-action-menu-item toggle-plan-btn" data-id="${p.id}" type="button" style="color:${toggleColor};">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${toggleIcon}</svg>
+              ${p.isActive ? 'Deactivate' : 'Activate'} Plan
+            </button>
+          </div>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
@@ -130,6 +138,8 @@ function renderPlans() {
     tr.querySelector('.edit-plan-btn').addEventListener('click', () => openPlanEditor(p));
     tr.querySelector('.toggle-plan-btn').addEventListener('click', () => togglePlan(p.id));
   });
+
+  wireRowActionsMenus();
 
   const countEl = document.getElementById('admin-plans-count');
   if (countEl) countEl.textContent = `${allPlans.length} plan(s)`;
