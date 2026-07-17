@@ -661,7 +661,7 @@ async function openAddConnectionDialog(presetProvider = null) {
 
         <div class="form-row" style="margin-top:0;">
           <label for="conn-provider">Connection Type *</label>
-          <select id="conn-provider">
+          <select id="conn-provider" class="select-arrow">
             ${platforms.map(p => `<option value="${p.id}" ${p.id === selectedPlatform.id ? 'selected' : ''}>${p.name}</option>`).join('')}
           </select>
         </div>
@@ -705,7 +705,6 @@ async function openAddConnectionDialog(presetProvider = null) {
     });
 
     document.getElementById('conn-dialog-cancel').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
     document.getElementById('conn-dialog-save').addEventListener('click', async () => {
       const label = document.getElementById('conn-label').value.trim();
@@ -750,7 +749,7 @@ async function openAddConnectionDialog(presetProvider = null) {
 
         const saveBtn = document.getElementById('conn-dialog-save');
         saveBtn.disabled = true;
-        saveBtn.innerHTML = '<span class="spin">⟳</span> Waiting for Auth…';
+        saveBtn.innerHTML = 'Waiting for Auth…';
 
         try {
           if (!selectedPlatform.authUrl) throw new Error("Missing Authorization URL");
@@ -788,7 +787,7 @@ async function openAddConnectionDialog(presetProvider = null) {
             if (event.data.type === 'oauth-code') {
               clearInterval(popupCloseCheck);
               window.removeEventListener('message', messageHandler);
-              saveBtn.innerHTML = '<span class="spin">⟳</span> Exchanging token…';
+              saveBtn.innerHTML = 'Exchanging token…';
               try {
                 await exchangeOAuthCode({
                   code: event.data.code,
@@ -860,7 +859,7 @@ async function openAddConnectionDialog(presetProvider = null) {
 
       const saveBtn = document.getElementById('conn-dialog-save');
       saveBtn.disabled = true;
-      saveBtn.innerHTML = '<span class="spin">⟳</span> Saving…';
+      saveBtn.innerHTML = 'Saving…';
 
       try {
         await saveConnection(payload);
@@ -956,11 +955,11 @@ async function openEditConnectionDialog(conn) {
         <button class="btn btn-secondary" id="conn-edit-dialog-cancel">Cancel</button>
         ${selectedPlatform.authType === 'oauth'
           ? `<button class="btn btn-secondary" id="conn-edit-dialog-save">
-               Save Changes
+               Save
              </button>
              <button class="btn btn-primary" id="conn-edit-dialog-reauth">
                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-               Reauthorize with ${selectedPlatform.name}
+               Reauthorize
              </button>`
           : `<button class="btn btn-primary" id="conn-edit-dialog-save">
                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -974,7 +973,6 @@ async function openEditConnectionDialog(conn) {
   if (window.feather) feather.replace();
 
   document.getElementById('conn-edit-dialog-cancel').addEventListener('click', () => overlay.remove());
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
   // Save handler — updates label + attributes directly
   const saveBtn = document.getElementById('conn-edit-dialog-save');
@@ -1003,7 +1001,7 @@ async function openEditConnectionDialog(conn) {
       }
 
       saveBtn.disabled = true;
-      saveBtn.innerHTML = '<span class="spin">⟳</span> Saving…';
+      saveBtn.innerHTML = 'Saving…';
 
       try {
         const updateData = { label };
@@ -1017,7 +1015,9 @@ async function openEditConnectionDialog(conn) {
       } catch (err) {
         showToast('Update failed: ' + err.message, 'error');
         saveBtn.disabled = false;
-        saveBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes';
+        saveBtn.innerHTML = selectedPlatform.authType === 'oauth'
+          ? 'Save'
+          : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes';
       }
     });
   }
@@ -1053,7 +1053,7 @@ async function openEditConnectionDialog(conn) {
       const popup = window.open('', popupName, `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`);
 
       reauthBtn.disabled = true;
-      reauthBtn.innerHTML = '<span class="spin">⟳</span> Reauthorizing…';
+      reauthBtn.innerHTML = 'Reauthorizing…';
 
       try {
         if (!selectedPlatform.authUrl) throw new Error('Missing Authorization URL');
@@ -1069,7 +1069,7 @@ async function openEditConnectionDialog(conn) {
         if (!popup) {
           showToast('Popup blocked! Please allow popups for this site.', 'error');
           reauthBtn.disabled = false;
-          reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize with ' + selectedPlatform.name;
+          reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize';
           return;
         }
 
@@ -1079,7 +1079,7 @@ async function openEditConnectionDialog(conn) {
           if (event.data.type === 'oauth-code') {
             clearInterval(popupCloseCheck);
             window.removeEventListener('message', messageHandler);
-            reauthBtn.innerHTML = '<span class="spin">⟳</span> Exchanging token…';
+            reauthBtn.innerHTML = 'Exchanging token…';
             try {
               await exchangeOAuthCode({
                 code: event.data.code,
@@ -1099,14 +1099,14 @@ async function openEditConnectionDialog(conn) {
               console.error('[conn-edit] Reauth failed:', err);
               showToast('Reauthorization failed: ' + err.message, 'error');
               reauthBtn.disabled = false;
-              reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize with ' + selectedPlatform.name;
+              reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize';
             }
           } else if (event.data.type === 'oauth-error') {
             clearInterval(popupCloseCheck);
             window.removeEventListener('message', messageHandler);
             showToast('Reauthorization failed: ' + event.data.error, 'error');
             reauthBtn.disabled = false;
-            reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize with ' + selectedPlatform.name;
+            reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize';
           }
         };
 
@@ -1117,14 +1117,14 @@ async function openEditConnectionDialog(conn) {
             clearInterval(popupCloseCheck);
             window.removeEventListener('message', messageHandler);
             reauthBtn.disabled = false;
-            reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize with ' + selectedPlatform.name;
+            reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize';
           }
         }, 1000);
       } catch (e) {
         console.error('[conn-edit] OAuth config error:', e);
         showToast('Invalid OAuth configuration: ' + e.message, 'error');
         reauthBtn.disabled = false;
-        reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize with ' + selectedPlatform.name;
+        reauthBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Reauthorize';
       }
     });
   }

@@ -1936,7 +1936,7 @@ header.legacy-header {
 .conn-dialog .form-row select {
   color: var(--text-1);
   color-scheme: dark;
-  background: var(--bg-3);
+  background-color: var(--bg-3);
   border: 1px solid var(--border);
   padding: 10px;
   border-radius: 6px;
@@ -2059,6 +2059,7 @@ header.legacy-header {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  flex-wrap: wrap;
   margin-top: 16px;
 }
 
@@ -4376,7 +4377,7 @@ input:-webkit-autofill {
   padding: 0 12px;
   font-size: 0.875rem;
   font-family: inherit;
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text-1);
   outline: none;
   transition: border-color 0.15s;
@@ -4386,6 +4387,10 @@ input:-webkit-autofill {
 .conn-dialog .form-row select:focus {
   border-color: var(--violet);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+}
+
+.conn-dialog .form-row select.select-arrow {
+  padding-right: 36px;
 }
 
 /* ── WhatsApp Support FAB ───────────────────────────────────── */
