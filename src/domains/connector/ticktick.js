@@ -96,7 +96,23 @@ class TickTickConnector extends Connector {
     await svc.authenticate();
     if (fieldId === 'lists') {
       const projects = await svc.getProjects();
-      return (projects || []).map(p => ({ value: p.id || p.name, label: p.name }));
+      // TickTick's API has no per-list "this is a task list / note list"
+      // flag — a single list can hold both. The Target Entity dropdown
+      // (Tasks/Notes) is passed through here as parentValue, and we use
+      // the same kind/name heuristic the sync engine itself relies on at
+      // fetch time (see fetch(), which splits by t.kind === 'NOTE') so the
+      // picker only shows lists relevant to what the user is about to sync
+      // — otherwise every list shows regardless of entity type.
+      let filtered = projects || [];
+      if (context.parentValue) {
+        const pValStr = String(context.parentValue).toLowerCase();
+        if (pValStr.includes('note')) {
+          filtered = filtered.filter(p => p.kind === 'NOTE' || (p.name || '').toLowerCase().includes('note'));
+        } else if (pValStr.includes('task')) {
+          filtered = filtered.filter(p => p.kind !== 'NOTE' && !(p.name || '').toLowerCase().includes('note'));
+        }
+      }
+      return filtered.map(p => ({ value: p.id || p.name, label: p.name }));
     }
     if (fieldId === 'tags') {
       const tags = await svc.getAllTags();

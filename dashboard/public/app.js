@@ -101,10 +101,10 @@ async function fetchPlatformEntities(dataSourceId, connId, parentValue) {
     case 'ticktick.getProjects':
     case 'fetchTickTickLists':
     case 'lists':
-      return clientTickTickProjects(conn, parentValue);
+      return clientTickTickProjects(conn, parentValue, backendError);
     case 'fetchTickTickTags':
     case 'tags':
-      return clientTickTickAllTags(conn);
+      return clientTickTickAllTags(conn, backendError);
     case 'fetchNotionDBs':
     case 'databases':
     case 'fetchNotionTemplates':
@@ -138,14 +138,22 @@ async function clientTickTickToken(conn) {
   return null;
 }
 
-async function clientTickTickProjects(conn, parentValue) {
+async function clientTickTickProjects(conn, parentValue, backendError) {
   try {
+    // Connections created under the current architecture never carry
+    // accessToken/clientId/clientSecret client-side — those live encrypted
+    // server-side only (see src/api/routes/connections.js) — so this token
+    // lookup can never succeed for a real connection anymore. That used to
+    // mean any backend hiccup (a rate limit, a timeout) silently fell back
+    // here and returned [], which the field then rendered as "No data
+    // available" — indistinguishable from "you genuinely have zero lists".
+    // Surface the real backend failure instead of pretending we checked.
     const token = await clientTickTickToken(conn);
-    if (!token) return [];
+    if (!token) { if (backendError) throw backendError; return []; }
     const res = await fetch('https://api.ticktick.com/open/v1/project', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) return [];
+    if (!res.ok) { if (backendError) throw backendError; return []; }
     const projects = await res.json();
     let filteredProjects = projects || [];
     
@@ -170,7 +178,11 @@ async function clientTickTickProjects(conn, parentValue) {
     return filteredProjects.map(p => ({ value: p.id || p.name, label: p.name }));
   } catch (e) {
     console.warn('[clientTickTickProjects]', e);
-    showToast('Failed to load TickTick projects', 'error');
+    // This function only ever runs as a fallback after the backend call
+    // already failed — surface that original failure (the field's own
+    // "Error loading" / "Fetch Failed — Retry" state picks it up) rather
+    // than silently returning [] and reading as "confirmed zero lists".
+    if (backendError) throw backendError;
     return [];
   }
 }
@@ -192,15 +204,19 @@ async function fetchTagsForProject(token, project) {
   }
 }
 
-async function clientTickTickAllTags(conn) {
+async function clientTickTickAllTags(conn, backendError) {
   try {
+    // Same "this fallback can never actually authenticate" gap as
+    // clientTickTickProjects — surface the real backend failure instead of
+    // returning [] (which the field would render as "No tags available",
+    // indistinguishable from a genuinely tag-free account).
     const token = await clientTickTickToken(conn);
-    if (!token) return [];
+    if (!token) { if (backendError) throw backendError; return []; }
 
     const projRes = await fetch('https://api.ticktick.com/open/v1/project', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!projRes.ok) return [];
+    if (!projRes.ok) { if (backendError) throw backendError; return []; }
 
     const projects = await projRes.json();
     const tagArrays = await Promise.all((projects || []).map(p => fetchTagsForProject(token, p)));
@@ -208,6 +224,7 @@ async function clientTickTickAllTags(conn) {
     return Array.from(tagSet).map(name => ({ value: name, label: name }));
   } catch (e) {
     console.warn('[clientTickTickAllTags]', e);
+    if (backendError) throw backendError;
     return [];
   }
 }
@@ -4768,7 +4785,7 @@ document.getElementById('f-dest-connection')?.addEventListener('change', () => {
 });
 
 // Connect provider buttons in node modal
-async function fireOpenAddConnection(provider) {
+async function fireOpenAddConnection(provider, isSource = null) {
   if (window._connectingProvider) {
     return;
   }
@@ -4799,8 +4816,14 @@ async function fireOpenAddConnection(provider) {
         label = baseLabel + ' (' + idx + ')';
       }
 
-      // Show inline loading state in the dropdown
-      const isP1 = provider === _dropdownSourceProvider;
+      // Show inline loading state in the dropdown. Which side (source vs
+      // destination) is determined by which button the caller says was
+      // clicked, not by comparing against _dropdownSourceProvider — that
+      // module-level value gets reset elsewhere in the wizard/node-modal
+      // flow (e.g. opening the node modal from the Marketplace), and a
+      // stale/empty comparison here used to silently apply the new
+      // connection to the wrong dropdown (or neither).
+      const isP1 = isSource !== null ? isSource : provider === _dropdownSourceProvider;
       const select = isP1 ? fSourceConnection : fDestConnection;
       const btn = isP1 ? document.getElementById('btn-connect-source') : document.getElementById('btn-connect-dest');
       const hint = isP1 ? document.getElementById('source-connect-hint') : document.getElementById('dest-connect-hint');
@@ -4815,9 +4838,35 @@ async function fireOpenAddConnection(provider) {
       if (btn) btn.style.display = 'none';
       if (hint) hint.style.display = 'none';
 
+      // The window-level 'connections-refreshed' listener elsewhere re-selects
+      // the new connection into this same dropdown too, but only when its own
+      // ambient conditions line up (e.g. the wizard side panel already being
+      // marked "open" at the moment the OAuth popup resolves). This button
+      // can be clicked from inside the node-config modal, opened from a
+      // context (like the Marketplace flow) where that isn't guaranteed —
+      // attaching a listener scoped to this exact attempt guarantees this
+      // dropdown ends up correctly selected regardless of that.
+      const onThisConnectionRefreshed = (e) => {
+        const { newConnectionId, platformId, failed } = e.detail || {};
+        if (platformId !== provider) return;
+        window.removeEventListener('connections-refreshed', onThisConnectionRefreshed);
+        if (select) {
+          select.disabled = false;
+          select.classList.remove('is-loading');
+          if (!failed && newConnectionId) {
+            select.value = newConnectionId;
+            select.dispatchEvent(new Event('change'));
+          }
+        }
+        if (btn) btn.style.display = '';
+        window._connectingProvider = null;
+      };
+      window.addEventListener('connections-refreshed', onThisConnectionRefreshed);
+
       const opened = await initiateDirectOAuthFlow(plat, label);
-      if (opened) return; // Popup opened — skip the dialog
-      
+      if (opened) return; // Popup opened — onThisConnectionRefreshed handles cleanup/selection
+
+      window.removeEventListener('connections-refreshed', onThisConnectionRefreshed);
       window._connectingProvider = null;
       // Revert loading state
       if (select) {
@@ -4834,18 +4883,18 @@ async function fireOpenAddConnection(provider) {
   window.dispatchEvent(new CustomEvent('open-add-connection', { detail: { provider } }));
 }
 document.getElementById('btn-connect-source')?.addEventListener('click', () => {
-  fireOpenAddConnection(document.getElementById('btn-connect-source')?.dataset.provider || null);
+  fireOpenAddConnection(document.getElementById('btn-connect-source')?.dataset.provider || null, true);
 });
 document.getElementById('btn-connect-dest')?.addEventListener('click', () => {
-  fireOpenAddConnection(document.getElementById('btn-connect-dest')?.dataset.provider || null);
+  fireOpenAddConnection(document.getElementById('btn-connect-dest')?.dataset.provider || null, false);
 });
 document.getElementById('source-connect-link')?.addEventListener('click', (e) => {
   e.preventDefault();
-  fireOpenAddConnection(document.getElementById('source-connect-link')?.dataset.provider || null);
+  fireOpenAddConnection(document.getElementById('source-connect-link')?.dataset.provider || null, true);
 });
 document.getElementById('dest-connect-link')?.addEventListener('click', (e) => {
   e.preventDefault();
-  fireOpenAddConnection(document.getElementById('dest-connect-link')?.dataset.provider || null);
+  fireOpenAddConnection(document.getElementById('dest-connect-link')?.dataset.provider || null, false);
 });
 
 // Refresh dropdowns when connections are saved/deleted elsewhere. Scoped to

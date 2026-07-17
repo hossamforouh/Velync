@@ -15,9 +15,16 @@ const router = Router();
 // this limiter count EVERY /api/* request in the whole app (any request reaching
 // this middleware, whether or not platformRoutes actually had a matching
 // sub-route), not just the two routes below. Scoped directly to them here instead.
+// 20/min was tight enough that normal wizard usage could trip it: a single
+// "Setup Trigger"/"Setup Action" modal auto-loads List Name + Tags on open,
+// re-fetches List Name every time Target Entity changes, and each manual
+// "Refresh" click adds one more — a few minutes of legitimate back-and-forth
+// (switching entity type, retrying) could plausibly reach 20 without any
+// abuse involved. Raised to 60/min: still a real ceiling against scripted
+// abuse, just with headroom for interactive use.
 const platformLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 20,
+  max: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
