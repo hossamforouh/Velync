@@ -14,13 +14,39 @@ let platformsMap = {};
 let sidePanelObserver = null;
 let currentP1Id = null;
 let currentP2Id = null;
+let activeSetupConnListener = null;
 
 // Setup Integration Flow
 function closeSetupView() {
   const overlay = document.getElementById('setup-overlay');
   if (overlay) overlay.classList.remove('open');
   window.currentIntegration = null;
+  if (activeSetupConnListener) {
+    window.removeEventListener('connections-refreshed', activeSetupConnListener);
+    activeSetupConnListener = null;
+  }
 }
+
+// Safety net independent of the 'connections-refreshed' event entirely: the
+// OAuth popup runs in a separate window, and returning from it always fires
+// a 'focus' event on this window — regardless of which internal code path
+// handled the popup's success message, whether its dispatched event detail
+// carries the platformId we expect, or any other event-matching detail that
+// could go wrong. On refocus, just re-fetch connections from Firestore and
+// re-render this view for real, exactly like navigating away and back does.
+// Checks the view's actual visibility (rather than a separate open/closed
+// flag) so this can't go stale if the user leaves via a nav click that
+// doesn't route through closeSetupView().
+window.addEventListener('focus', async () => {
+  const view = document.getElementById('view-integration-setup');
+  if (!view || view.style.display === 'none') return;
+  try {
+    await loadConnections(true);
+    populateSetupView(currentP1Id, currentP2Id);
+  } catch (err) {
+    console.error('[integration-setup] focus refresh failed:', err);
+  }
+});
 
 window.addEventListener('open-integration-setup', async (e) => {
   currentIntegration = e.detail.integration;
@@ -62,6 +88,23 @@ window.addEventListener('open-integration-setup', async (e) => {
 
     if (!loadingTimedOut) {
       populateSetupView(p1Id, p2Id);
+
+      // Persistent safety net: re-render whenever a connection relevant to
+      // this view is saved while it's open, independent of the one-shot
+      // waitForSetupConnectionRefresh() promise below. That promise only
+      // resolves for the exact platformId it was started for and only once
+      // per Connect click — if it's ever missed (a stray dispatch consumed
+      // it, a race, anything), the badge would otherwise stay stuck on "Not
+      // Connected" until the user navigated away and back. This listener
+      // doesn't have that failure mode: any relevant 'connections-refreshed'
+      // event re-renders the view for as long as it stays open.
+      if (activeSetupConnListener) window.removeEventListener('connections-refreshed', activeSetupConnListener);
+      activeSetupConnListener = (event) => {
+        const detail = event.detail || {};
+        if (detail.platformId && detail.platformId !== p1Id && detail.platformId !== p2Id) return;
+        populateSetupView(currentP1Id, currentP2Id);
+      };
+      window.addEventListener('connections-refreshed', activeSetupConnListener);
     }
   } finally {
     clearTimeout(loadingTimeout);
