@@ -2183,6 +2183,27 @@ header.legacy-header {
   scrollbar-color: var(--border) transparent;
 }
 
+/* scrollbar-color above only styles Firefox — Chrome/Safari/Edge ignore it
+   and fall back to the native OS scrollbar (a bright, thick, theme-blind
+   bar), which is what was showing on hover in the Settings modal. These
+   give WebKit/Blink browsers the same thin, dark, on-brand scrollbar. */
+.panel-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.panel-body::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover, var(--border));
+}
+
 .panel-footer {
   display: flex;
   gap: 12px;
@@ -4879,6 +4900,25 @@ input:-webkit-autofill {
   flex: 1;
   padding: 40px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.settings-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
 }
 
 .settings-pane {
