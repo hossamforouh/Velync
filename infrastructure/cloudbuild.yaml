@@ -51,7 +51,15 @@ steps:
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
-      - --min-instances=1
+      # Staging scales to zero when idle (unlike production, which stays
+      # always-on so its in-process sync scheduler keeps firing reliably) —
+      # it's a test environment, so a few seconds of cold-start on the first
+      # request after idle is an acceptable tradeoff for not paying for an
+      # always-on instance. This used to be --min-instances=1, which silently
+      # re-enabled billing for an idle staging instance on every deploy,
+      # undoing the same cost fix applied manually via `gcloud run services
+      # update` after each Cloud Build run.
+      - --min-instances=0
       - --max-instances=10
       - --concurrency=80
       - --cpu=1
