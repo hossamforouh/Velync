@@ -1,5 +1,6 @@
 const db = require('./db');
 const logger = require('./logger');
+const { renderEmailHtml, escHtml, p } = require('./emailTemplate');
 
 /**
  * Resolve the email addresses of workspace members who have opted into a
@@ -56,12 +57,27 @@ async function notifySyncFailure({ workspaceId, configId, configName, error, cur
     if (emails.length === 0) return;
 
     const label = configName || configId;
+    const html = renderEmailHtml({
+      eyebrow: 'Sync failed',
+      accent: 'danger',
+      heading: `"${label}" failed to complete`,
+      bodyHtml:
+        p(`Your sync <strong style="color:#E2E4F0;">${escHtml(label)}</strong> ran into an error and did not finish.`) +
+        `<div style="background:rgba(251,113,133,0.08);border:1px solid rgba(251,113,133,0.25);border-radius:10px;padding:14px 16px;margin:0 0 20px;">
+          <p style="color:#FB7185;font-size:13px;font-family:'SF Mono',Consolas,monospace;margin:0;word-break:break-word;">${escHtml(error)}</p>
+        </div>` +
+        p('You can turn these emails off anytime in Settings &rsaquo; Notifications.'),
+      ctaText: 'View Execution Logs',
+      ctaUrl: 'https://velync.web.app/',
+    });
+    const text = `Your sync "${label}" failed to complete.\n\nError: ${error}\n\nView details: https://velync.web.app/\n\nYou can turn these emails off anytime in Settings > Notifications.`;
     for (const to of emails) {
       await db.collection('mail').add({
         to,
         message: {
           subject: `[Velync] Sync failed — "${label}"`,
-          text: `Your sync "${label}" failed to complete.\n\nError: ${error}\n\nView details: https://velync.web.app/\n\nYou can turn these emails off anytime in Settings > Notifications.`,
+          text,
+          html,
         },
       });
     }
@@ -92,8 +108,21 @@ async function notifyAdmins(subject, text) {
       }
     }
 
+    // notifyAdmins() is called with free-form technical text from several
+    // unrelated places (webhook failures, deletion errors, verification
+    // tokens) — rather than touching every call site, wrap whatever text
+    // was passed in the same branded shell, preserving its line breaks.
+    const html = renderEmailHtml({
+      eyebrow: 'Admin alert',
+      accent: 'warning',
+      heading: subject.replace(/^\[Velync\]\s*/, ''),
+      bodyHtml: `<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:16px;">
+          <p style="color:#A8AEC0;font-size:14px;line-height:22px;margin:0;white-space:pre-wrap;font-family:'SF Mono',Consolas,monospace;">${escHtml(text)}</p>
+        </div>`,
+      footerNote: 'Sent to superadmins only.',
+    });
     for (const to of emails) {
-      await db.collection('mail').add({ to, message: { subject, text } });
+      await db.collection('mail').add({ to, message: { subject, text, html } });
     }
     if (emails.length > 0) {
       logger.info('notifications', `Sent admin alert: "${subject}"`, { recipients: emails.length });

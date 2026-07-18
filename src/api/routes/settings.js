@@ -6,6 +6,7 @@ const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
 const { deleteWorkspace } = require('../../domains/workspace/deletion');
 const { notifyAdmins } = require('../../core/notifications');
+const { renderEmailHtml, p } = require('../../core/emailTemplate');
 const { logAdminActivity, computeChanges } = require('../../core/activityLog');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
@@ -165,6 +166,16 @@ router.post('/notify-password-changed', verifyAuth, async (req, res) => {
         message: {
           subject: '[Velync] Your password was changed',
           text: 'Your Velync account password was just changed. If this wasn\'t you, please revoke your sessions and reset your password immediately from Settings > Account.',
+          html: renderEmailHtml({
+            eyebrow: 'Security notice',
+            accent: 'success',
+            heading: 'Your password was changed',
+            bodyHtml:
+              p('Your Velync account password was just changed.') +
+              p("If this wasn't you, please revoke your sessions and reset your password immediately."),
+            ctaText: 'Review Account Security',
+            ctaUrl: 'https://velync.web.app/',
+          }),
         },
       });
     }

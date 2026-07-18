@@ -7,64 +7,30 @@ const db = require('../../core/db');
 const logger = require('../../core/logger');
 const { logUsageEvent } = require('../../domains/usage');
 const { getPlan } = require('../../core/plan');
+const { renderEmailHtml, escHtml, p } = require('../../core/emailTemplate');
 
 const router = Router();
 
 function buildInviteEmailHtml(workspaceName) {
-  return `
-<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background-color:#0a0819;color:#e2e8f0;font-family:'Helvetica Neue', Helvetica, Arial, sans-serif;">
-  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#0a0819;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color:#1e1b4b;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);">
-          <tr>
-            <td align="center" style="padding:40px 0 35px 0;background:linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);">
-              <h1 style="color:#ffffff;margin:0;font-size:32px;letter-spacing:1px;">Velync</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:40px 40px;">
-              <h2 style="color:#ffffff;font-size:22px;margin-top:0;margin-bottom:20px;">Hi there,</h2>
-              <p style="color:#cbd5e1;font-size:16px;line-height:24px;margin-bottom:24px;">
-                You have been invited to collaborate on <strong>${workspaceName}</strong> in Velync.
-              </p>
+  return renderEmailHtml({
+    eyebrow: "You're invited",
+    heading: 'Hi there,',
+    bodyHtml:
+      p(`You have been invited to collaborate on <strong style="color:#E2E4F0;">${escHtml(workspaceName)}</strong> in Velync.`) +
+      p('By joining this workspace, you will be able to work together with your team to:') +
+      `<ul style="color:#A8AEC0;font-size:15px;line-height:24px;margin:0 0 20px;padding-left:20px;">
+        <li style="margin-bottom:8px;"><strong style="color:#E2E4F0;">Build Active Flows:</strong> Create, manage, and monitor automated sync pipelines.</li>
+        <li style="margin-bottom:8px;"><strong style="color:#E2E4F0;">Connect Platforms:</strong> Securely link third-party tools like Notion, TickTick, and Google.</li>
+        <li><strong style="color:#E2E4F0;">Monitor Execution Logs:</strong> Track live data mapping and system operations in real time.</li>
+      </ul>` +
+      p('Ready to align your workflows? Click the button below to accept your invitation, set up your account, and jump straight into the dashboard.'),
+    ctaText: 'Join the Workspace',
+    ctaUrl: 'https://velync.web.app',
+  });
+}
 
-              <p style="color:#cbd5e1;font-size:16px;line-height:24px;margin-bottom:16px;">
-                By joining this workspace, you will be able to work together with your team to:
-              </p>
-
-              <ul style="color:#cbd5e1;font-size:16px;line-height:26px;margin-bottom:32px;padding-left:20px;">
-                <li style="margin-bottom:10px;"><strong>Build Active Flows:</strong> Create, manage, and monitor automated sync pipelines.</li>
-                <li style="margin-bottom:10px;"><strong>Connect Platforms:</strong> Securely link third-party tools like Notion, TickTick, and Google.</li>
-                <li style="margin-bottom:10px;"><strong>Monitor Execution Logs:</strong> Track live data mapping and system operations in real time.</li>
-              </ul>
-
-              <p style="color:#cbd5e1;font-size:16px;line-height:24px;margin-bottom:40px;">
-                Ready to align your workflows? Click the button below to accept your invitation, set up your account, and jump straight into the dashboard.
-              </p>
-
-              <div style="text-align:center;">
-                <a href="https://velync.web.app" style="display:inline-block;padding:16px 32px;background:linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);color:#ffffff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:bold;box-shadow:0 4px 15px rgba(79,70,229,0.4);">Join the Workspace</a>
-              </div>
-            </td>
-          </tr>
-          <tr>
-            <td align="center" style="padding:24px;background-color:#161436;border-top:1px solid rgba(255,255,255,0.05);">
-              <p style="color:#64748b;font-size:13px;margin:0;">
-                © 2026 Velync. All rights reserved.<br>
-                Secure integrations for modern teams.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-  `;
+function buildInviteEmailText(workspaceName) {
+  return `You have been invited to collaborate on "${workspaceName}" in Velync.\n\nJoin here: https://velync.web.app`;
 }
 
 const validate = (req, res, next) => {
@@ -148,6 +114,7 @@ router.post('/workspace/invite', verifyAuth, [
         to: [email],
         message: {
           subject: 'Collaboration Invite: Access a Workspace on Velync',
+          text: buildInviteEmailText(workspaceName),
           html: buildInviteEmailHtml(workspaceName),
         },
       });

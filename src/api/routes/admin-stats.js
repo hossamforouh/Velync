@@ -6,6 +6,7 @@ const logger = require('../../core/logger');
 const db = require('../../core/db');
 const { logAdminActivity } = require('../../core/activityLog');
 const { getAdminStats, listWorkspaces, getRecentSyncHealth, getAdminOverview } = require('../../domains/admin/stats');
+const { renderEmailHtml, escHtml, p } = require('../../core/emailTemplate');
 
 const router = Router();
 
@@ -118,11 +119,21 @@ router.patch('/admin/workspaces/:workspaceId/plan', verifyAuth, requireSuperAdmi
         const ownerDoc = await db.collection('users').doc(ws.ownerId).get();
         const ownerEmail = ownerDoc.exists ? ownerDoc.data().email : null;
         if (ownerEmail) {
+          const wsName = ws.name || workspaceId;
           await db.collection('mail').add({
             to: ownerEmail,
             message: {
               subject: '[Velync] Your plan was updated',
-              text: `Your workspace "${ws.name || workspaceId}" has been moved to the ${plan.name} plan by a Velync admin. If you have questions about this change, contact support.`,
+              text: `Your workspace "${wsName}" has been moved to the ${plan.name} plan by a Velync admin. If you have questions about this change, contact support.`,
+              html: renderEmailHtml({
+                eyebrow: 'Plan updated',
+                heading: `You're now on the ${escHtml(plan.name)} plan`,
+                bodyHtml:
+                  p(`Your workspace <strong style="color:#E2E4F0;">${escHtml(wsName)}</strong> has been moved to the <strong style="color:#E2E4F0;">${escHtml(plan.name)}</strong> plan by a Velync admin.`) +
+                  p('If you have questions about this change, contact support.'),
+                ctaText: 'Open Velync',
+                ctaUrl: 'https://velync.web.app/',
+              }),
             },
           });
         }

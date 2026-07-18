@@ -8,6 +8,7 @@ const config = require('../../core/config');
 const ls = require('../../core/lemonSqueezy');
 const { reconcileActiveConfigsForPlan } = require('../../core/plan');
 const { notifyAdmins } = require('../../core/notifications');
+const { renderEmailHtml, escHtml, p } = require('../../core/emailTemplate');
 
 const router = Router();
 
@@ -64,6 +65,17 @@ async function reconcileAndNotify(workspaceId, planId, ownerId) {
           message: {
             subject: '[Velync] Some sync configs were paused',
             text: `Your plan change means you're now over your active-config limit, so ${pausedCount} sync config(s) were automatically paused:\n\n${pausedNames.map(n => '- ' + n).join('\n')}\n\nUpgrade your plan or manually choose which to keep active at https://velync.web.app/.`,
+            html: renderEmailHtml({
+              eyebrow: 'Configs paused',
+              accent: 'warning',
+              heading: `${pausedCount} sync config${pausedCount !== 1 ? 's were' : ' was'} paused`,
+              bodyHtml:
+                p("Your plan change means you're now over your active-config limit, so the following config(s) were automatically paused:") +
+                `<ul style="color:#A8AEC0;font-size:15px;line-height:24px;margin:0 0 20px;padding-left:20px;">${pausedNames.map(n => `<li>${escHtml(n)}</li>`).join('')}</ul>` +
+                p('Upgrade your plan or manually choose which to keep active.'),
+              ctaText: 'Manage Sync Configs',
+              ctaUrl: 'https://velync.web.app/',
+            }),
           },
         });
       }
@@ -384,6 +396,13 @@ router.post('/billing/webhook', (req, res) => {
                     message: {
                       subject: '[Velync] Subscription ended',
                       text: 'Your Velync subscription has ended and your workspace has been reverted to the Free plan. You can resubscribe anytime at https://velync.web.app/settings.',
+                      html: renderEmailHtml({
+                        eyebrow: 'Subscription ended',
+                        heading: "You're back on the Free plan",
+                        bodyHtml: p('Your Velync subscription has ended and your workspace has been reverted to the Free plan. You can resubscribe anytime.'),
+                        ctaText: 'Resubscribe',
+                        ctaUrl: 'https://velync.web.app/settings',
+                      }),
                     },
                   });
                 }
@@ -419,6 +438,14 @@ router.post('/billing/webhook', (req, res) => {
                     message: {
                       subject: '[Velync] Payment failed — action required',
                       text: 'Your Velync subscription payment failed. Please update your billing details at https://velync.web.app/settings to avoid service interruption.',
+                      html: renderEmailHtml({
+                        eyebrow: 'Action required',
+                        accent: 'danger',
+                        heading: 'Your last payment failed',
+                        bodyHtml: p('Please update your billing details to avoid service interruption.'),
+                        ctaText: 'Update Billing Details',
+                        ctaUrl: 'https://velync.web.app/settings',
+                      }),
                     },
                   });
                 }
