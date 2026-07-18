@@ -29,10 +29,37 @@ const router = Router();
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    logger.error('sync-configs', `Validation failed on ${req.method} ${req.path}`, { details: errors.array(), body: req.body });
     return res.status(400).json({ error: 'Validation failed', details: errors.array() });
   }
   next();
 };
+
+/**
+ * Resolve platform1/platform2 from the connection documents themselves
+ * rather than trusting whatever the client sent. The client derives these
+ * from a locally-cached connections array that has repeatedly gone stale
+ * (a fresh OAuth connection not yet in cache, an async ordering race, a
+ * workspace switch) — each time silently sending platform1/platform2 as
+ * null, which express-validator's .notEmpty() correctly rejects with a
+ * 400 that gives the user no indication anything is wrong with their
+ * setup. The connectionId fields are already required and validated
+ * against this workspace, so deriving the platform from them server-side
+ * is strictly more reliable and closes this whole bug class at the root.
+ */
+async function resolvePlatformsFromConnections(workspaceId, conn1Id, conn2Id) {
+  const [snap1, snap2] = await Promise.all([
+    db.collection('connected_accounts').doc(conn1Id).get(),
+    db.collection('connected_accounts').doc(conn2Id).get(),
+  ]);
+  if (!snap1.exists || snap1.data().workspaceId !== workspaceId) {
+    throw new Error('Source connection not found');
+  }
+  if (!snap2.exists || snap2.data().workspaceId !== workspaceId) {
+    throw new Error('Destination connection not found');
+  }
+  return { platform1: snap1.data().provider, platform2: snap2.data().provider };
+}
 
 /**
  * Look up workspace and plan for the current user.
@@ -187,8 +214,8 @@ router.get('/sync-configs/:configId', verifyAuth, async (req, res) => {
 // ─── Create a new sync config ─────────────────────────────────
 router.post('/sync-configs', verifyAuth, [
   body('description').optional().isString().trim(),
-  body('platform1').isString().trim().notEmpty(),
-  body('platform2').isString().trim().notEmpty(),
+  body('platform1').optional().isString().trim(),
+  body('platform2').optional().isString().trim(),
   body('platform1ConnectionId').isString().trim().notEmpty(),
   body('platform2ConnectionId').isString().trim().notEmpty(),
   body('status').optional().isIn(['draft', 'active', 'paused']),
@@ -199,7 +226,12 @@ router.post('/sync-configs', verifyAuth, [
   body('syncType').optional().isString(),
   body('filterConfig').optional().isObject(),
   body('creationSource').optional().isString(),
-  body('integrationId').optional().isString(),
+  // { nullable: true } is required, not just optional() alone — the client
+  // sends integrationId: null (not an omitted field) whenever a config
+  // wasn't created from a marketplace integration, and express-validator's
+  // optional() only skips validation for an actually-missing field by
+  // default; a literal null still hits .isString() and fails it.
+  body('integrationId').optional({ nullable: true }).isString(),
 ], validate, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -208,13 +240,22 @@ router.post('/sync-configs', verifyAuth, [
 
     const status = req.body.status || 'active';
 
+    let platform1, platform2;
+    try {
+      ({ platform1, platform2 } = await resolvePlatformsFromConnections(
+        ctx.workspaceId, req.body.platform1ConnectionId, req.body.platform2ConnectionId
+      ));
+    } catch (resolveErr) {
+      return res.status(400).json({ error: resolveErr.message });
+    }
+
     // Plan enforcement (throws on violation)
     try {
       await enforceTotalConfigCap(ctx.workspaceId);
       await enforcePlanLimits(ctx.workspaceId, ctx.plan, {
         status,
-        platform1: req.body.platform1,
-        platform2: req.body.platform2,
+        platform1,
+        platform2,
         cronSchedule: req.body.cronSchedule,
       });
     } catch (planErr) {
@@ -224,6 +265,8 @@ router.post('/sync-configs', verifyAuth, [
     // Build the config document
     const configData = {
       ...req.body,
+      platform1,
+      platform2,
       status,
       workspaceId: ctx.workspaceId,
       ownerId: uid,
@@ -265,7 +308,12 @@ router.put('/sync-configs/:configId', verifyAuth, [
   body('syncType').optional().isString(),
   body('filterConfig').optional().isObject(),
   body('creationSource').optional().isString(),
-  body('integrationId').optional().isString(),
+  // { nullable: true } is required, not just optional() alone — the client
+  // sends integrationId: null (not an omitted field) whenever a config
+  // wasn't created from a marketplace integration, and express-validator's
+  // optional() only skips validation for an actually-missing field by
+  // default; a literal null still hits .isString() and fails it.
+  body('integrationId').optional({ nullable: true }).isString(),
 ], validate, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -286,6 +334,23 @@ router.put('/sync-configs/:configId', verifyAuth, [
     // Merge incoming fields over existing data
     const merged = { ...existingData, ...req.body };
 
+    // When either connection is being changed, re-derive platform1/platform2
+    // from the connection documents rather than trusting client-supplied
+    // values — see resolvePlatformsFromConnections() above for why.
+    if (req.body.platform1ConnectionId || req.body.platform2ConnectionId) {
+      try {
+        const resolved = await resolvePlatformsFromConnections(
+          ctx.workspaceId,
+          merged.platform1ConnectionId,
+          merged.platform2ConnectionId
+        );
+        merged.platform1 = resolved.platform1;
+        merged.platform2 = resolved.platform2;
+      } catch (resolveErr) {
+        return res.status(400).json({ error: resolveErr.message });
+      }
+    }
+
     // Resolve the effective new status
     const newStatus = req.body.status !== undefined ? req.body.status : existingData.status;
 
@@ -293,8 +358,8 @@ router.put('/sync-configs/:configId', verifyAuth, [
     const needsPlanCheck =
       newStatus === 'active' || existingData.status !== 'active';
     const platformChanged =
-      (req.body.platform1 && req.body.platform1 !== existingData.platform1) ||
-      (req.body.platform2 && req.body.platform2 !== existingData.platform2);
+      merged.platform1 !== existingData.platform1 ||
+      merged.platform2 !== existingData.platform2;
     const cronChanged =
       req.body.cronSchedule !== undefined && req.body.cronSchedule !== existingData.cronSchedule;
 

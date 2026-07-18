@@ -3670,8 +3670,20 @@ async function handleConnectionChange(prefix) {
   if (!window.cachedPlatforms) {
     try { await ensureCachedPlatforms(); } catch (e) { console.warn('[handleConnectionChange] Could not load platforms', e); }
   }
-  const newP1 = prefix === 'p1' ? (conn?.provider || null) : _dropdownSourceProvider;
-  const newP2 = prefix === 'p2' ? (conn?.provider || null) : _dropdownDestProvider;
+  // A non-empty connId can still miss in _connectionsCache for a moment —
+  // window.dispatchEvent('connections-refreshed') doesn't wait for its async
+  // listeners, so the listener that refreshes _connectionsCache and the one
+  // that re-selects a freshly-created connection into this dropdown (and
+  // dispatches 'change', landing here) can race. Only clear the provider
+  // when the user genuinely deselected (connId empty); on a cache-miss,
+  // keep whatever provider was already known rather than clobbering it with
+  // null — a null here used to also blank out buildFormPayload()'s
+  // fallback for the saved config's `platform1`/`platform2`, since that
+  // fallback chain is `_connectionsCache lookup || _dropdownSourceProvider
+  // || null`, causing a 400 (platform1/platform2 required) on Save even
+  // though the connection dropdown itself showed the right value.
+  const newP1 = prefix === 'p1' ? (connId ? (conn?.provider ?? _dropdownSourceProvider) : null) : _dropdownSourceProvider;
+  const newP2 = prefix === 'p2' ? (connId ? (conn?.provider ?? _dropdownDestProvider) : null) : _dropdownDestProvider;
   setConnectButtonProviders(newP1, newP2);
 
   if (!connId) {
@@ -4980,16 +4992,22 @@ document.getElementById('btn-step2-save')?.addEventListener('click', (e) => {
 });
 
 // Update node status indicators and load schema when connection changes
-document.getElementById('f-source-connection')?.addEventListener('change', () => {
+document.getElementById('f-source-connection')?.addEventListener('change', async () => {
   updateNodeStatuses();
-  handleConnectionChange('p1');
+  // handleConnectionChange() became async (it may await ensureCachedPlatforms()
+  // before resolving the provider) — must be awaited before reading the
+  // provider names it sets, or autoPopulateSyncName() below reads stale
+  // (pre-update) _dropdownSourceName/_dropdownDestName and bakes the
+  // generic "Source"/"Destination" placeholder into the sync name instead
+  // of the real platform name.
+  await handleConnectionChange('p1');
   if (document.getElementById('f-source-connection')?.value && document.getElementById('f-dest-connection')?.value) {
     autoPopulateSyncName();
   }
 });
-document.getElementById('f-dest-connection')?.addEventListener('change', () => {
+document.getElementById('f-dest-connection')?.addEventListener('change', async () => {
   updateNodeStatuses();
-  handleConnectionChange('p2');
+  await handleConnectionChange('p2');
   if (document.getElementById('f-source-connection')?.value && document.getElementById('f-dest-connection')?.value) {
     autoPopulateSyncName();
   }
