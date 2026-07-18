@@ -2,7 +2,7 @@
  * Onboarding wizard — guides new users through first config creation.
  * Replaces the simple "No Flows Found" empty state with a step-by-step flow.
  */
-import { initiateDirectOAuthFlow, connections } from './connections.js';
+import { initiateDirectOAuthFlow, loadConnections, connections } from './connections.js';
 import { showToast } from './toast.js';
 import { setButtonLoading, getEmptySpinnerHTML } from './loading-components.js';
 
@@ -211,31 +211,66 @@ function backStep1(db, auth, onComplete) {
 
 // ─────────────── Step 3: Connect accounts & review ───────────────
 
-function goStep3(db, auth, onComplete) {
+// Looks for an already-existing connection for a platform before assuming
+// the user needs to go through OAuth again — someone who already connected
+// TickTick/Notion from the Connections page (or a previous onboarding
+// attempt) shouldn't be told "Not connected" and sent through the popup
+// flow a second time.
+function findExistingConnection(platformId) {
+  return connections.find(c => c.provider === platformId);
+}
+
+function renderPlatformCard(stepNum, platformId, existing) {
+  const statusText = existing ? `✓ Connected (${escHtml(existing.label || existing.providerName || platformId)})` : 'Not connected';
+  const statusColor = existing ? 'var(--green)' : 'var(--text-3)';
+  const btnHtml = existing
+    ? ''
+    : `<button class="btn btn-sm btn-primary" id="btn-connect-${stepNum}" style="margin-top:8px;">Connect</button>`;
+  return `
+    <div class="onboarding-card" style="cursor:default;">
+      <h4>Platform ${stepNum}: ${escHtml(platformId)}</h4>
+      <p id="step3-status-${stepNum}" style="color:${statusColor};">${statusText}</p>
+      ${btnHtml}
+    </div>
+  `;
+}
+
+async function goStep3(db, auth, onComplete) {
   currentStep = 3;
   updateIndicators();
   const content = document.getElementById('onboarding-step-content');
   content.innerHTML = `
     <h3 style="margin:0 0 4px;font-size:1.05rem;">3. Connect and activate</h3>
     <p style="margin:0 0 16px;color:var(--text-3);font-size:0.88rem;">Connect your accounts and we'll create your first sync config.</p>
-    <div id="step3-connections">
-      <div class="onboarding-card" style="cursor:default;">
-        <h4>Platform 1: ${escHtml(onboardState.p1)}</h4>
-        <p id="step3-status-1" style="color:var(--text-3);">Not connected</p>
-        <button class="btn btn-sm btn-primary" id="btn-connect-1" style="margin-top:8px;">Connect</button>
-      </div>
-      <div class="onboarding-card" style="cursor:default;">
-        <h4>Platform 2: ${escHtml(onboardState.p2)}</h4>
-        <p id="step3-status-2" style="color:var(--text-3);">Not connected</p>
-        <button class="btn btn-sm btn-primary" id="btn-connect-2" style="margin-top:8px;">Connect</button>
-      </div>
-    </div>
+    <div id="step3-connections">${getEmptySpinnerHTML('Checking existing connections…')}</div>
     <div class="onboarding-actions">
       <button class="onboarding-btn onboarding-btn-secondary" id="btn-step3-back">← Back</button>
       <button class="onboarding-btn onboarding-btn-primary" id="btn-step3-finish" disabled>Create my first sync →</button>
     </div>
   `;
+
+  // Refresh from Firestore rather than trusting whatever `connections` last
+  // held — onboarding may be the first thing this session ever loads it.
+  try {
+    await loadConnections(true);
+  } catch (err) {
+    console.warn('[onboarding] Failed to load existing connections', err);
+  }
+
+  const existing1 = findExistingConnection(onboardState.p1);
+  const existing2 = findExistingConnection(onboardState.p2);
+  if (existing1) onboardState.connection1 = existing1.id;
+  if (existing2) onboardState.connection2 = existing2.id;
+
+  const connectionsEl = document.getElementById('step3-connections');
+  if (connectionsEl) {
+    connectionsEl.innerHTML =
+      renderPlatformCard(1, onboardState.p1, existing1) +
+      renderPlatformCard(2, onboardState.p2, existing2);
+  }
+
   bindStep3(db, auth, onComplete);
+  checkStep3Ready(document.getElementById('btn-step3-finish'));
 }
 
 async function bindStep3(db, auth, onComplete) {
