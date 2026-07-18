@@ -34,6 +34,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
+  // Guard against posting the same authorization code twice — a reload or
+  // bfcache restore of this exact callback URL (e.g. before the 1.5s
+  // auto-close fires) would otherwise re-run this script and re-post the
+  // same one-time-use code, which the opener would exchange again and the
+  // provider would correctly reject as invalid_grant (harmless in that the
+  // first exchange already succeeded, but it surfaces a confusing error).
+  const dedupeKey = 'velync_oauth_code_posted_' + code;
+  if (sessionStorage.getItem(dedupeKey)) {
+    showSuccess();
+    return;
+  }
+  sessionStorage.setItem(dedupeKey, '1');
+
   let platformId = 'unknown';
   let label = 'OAuth Connection';
   let workspaceId = null;
