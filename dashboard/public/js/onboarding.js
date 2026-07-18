@@ -215,7 +215,11 @@ function backStep1(db, auth, onComplete) {
 // the user needs to go through OAuth again — someone who already connected
 // TickTick/Notion from the Connections page (or a previous onboarding
 // attempt) shouldn't be told "Not connected" and sent through the popup
-// flow a second time.
+// flow a second time. If there are multiple saved connections for that
+// platform, picks the most recently created one — `connections` comes from
+// loadConnections()'s Firestore query (`orderBy('createdAt', 'desc')`), so
+// .find() returning the first match is already the newest one, not
+// coincidentally.
 function findExistingConnection(platformId) {
   return connections.find(c => c.provider === platformId);
 }
@@ -309,17 +313,24 @@ async function bindStep3(db, auth, onComplete) {
   }
 
   if (finishBtn) {
-    finishBtn.addEventListener('click', async () => {
-      setButtonLoading(finishBtn, true, 'Create my first sync →', 'Creating…');
-      try {
-        const token = await auth.currentUser.getIdToken();
-        await createFirstConfig(token);
-        cleanup();
-        if (onComplete) onComplete();
-      } catch (err) {
-        showToast('Failed to create your first sync: ' + err.message, 'error');
-        setButtonLoading(finishBtn, false, 'Create my first sync →');
+    // Deliberately does NOT POST a config directly — that used to create an
+    // "active" config with empty fieldMappings, which is a broken sync (no
+    // data actually gets mapped between the two platforms). Instead this
+    // hands off to the same full config wizard the "New Config" button and
+    // Marketplace use (window.openPanel), pre-filled with the two platforms
+    // just connected here — window.currentIntegration is the same hook
+    // integration-setup.js uses for this, so the source/dest dropdowns
+    // auto-select the (single, just-created) connection for each platform,
+    // and the wizard's own validation forces the user to pick a target
+    // entity and complete field mappings before it can be saved as active.
+    finishBtn.addEventListener('click', () => {
+      if (!window.openPanel) {
+        showToast('Could not open the sync setup — please refresh and try again.', 'error');
+        return;
       }
+      window.currentIntegration = { platform1: onboardState.p1, platform2: onboardState.p2 };
+      cleanup();
+      window.openPanel();
     });
   }
 }
@@ -418,26 +429,6 @@ async function waitForConnectionRefresh(expectedPlatformId) {
       reject(new Error('OAuth timed out'));
     }, 300000);
   });
-}
-
-async function createFirstConfig(token) {
-  const payload = {
-    platform1: onboardState.p1,
-    platform2: onboardState.p2,
-    platform1ConnectionId: onboardState.connection1,
-    platform2ConnectionId: onboardState.connection2,
-    status: 'active',
-    description: 'My first sync',
-    fieldMappings: [],
-  };
-
-  const resp = await fetch('/api/sync-configs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify(payload),
-  });
-  const result = await resp.json();
-  if (!resp.ok) throw new Error(result.error || 'Failed to create config');
 }
 
 function updateIndicators() {

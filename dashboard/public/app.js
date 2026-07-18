@@ -3715,19 +3715,27 @@ function populateConnectionDropdowns(connections, id = null, p1Provider = null, 
       if (cfg.platform2ConnectionId) fDestConnection.value = cfg.platform2ConnectionId;
     }
   } else {
-    // New config: if a platform's connection list is unambiguous (exactly
-    // one saved account for that provider — e.g. the user just connected it
-    // from the Marketplace setup preview), auto-select it so they don't have
-    // to re-pick a platform they just connected. Left unselected whenever
-    // there's more than one account for that provider — genuinely ambiguous,
-    // not something to guess at. Dispatches 'change' so schema-loading
-    // (handleConnectionChange) runs exactly as it would for a manual pick —
-    // setting .value alone doesn't fire that listener.
-    if (p1Conns.length === 1) {
+    // New config opened for a KNOWN platform (Marketplace "Configure Sync",
+    // or the onboarding wizard hand-off — both set p1Provider/p2Provider via
+    // window.currentIntegration) auto-selects a connection so the user
+    // doesn't have to re-pick a platform they just connected. When there are
+    // multiple saved connections for that provider, pick the most recently
+    // created one — `connections` (and therefore p1Conns/p2Conns, since
+    // .filter() preserves order) comes from loadConnections()'s Firestore
+    // query, which is `orderBy('createdAt', 'desc')`, so index 0 is always
+    // the newest. Gated on p1Provider/p2Provider being set at all — when
+    // opening a blank "New Config" with no platform determined yet
+    // (p1Provider/p2Provider null), p1Conns/p2Conns fall back to the FULL
+    // connections list, and auto-selecting from that would silently fill in
+    // an unrelated connection for whichever platform happens to be first.
+    // Dispatches 'change' so schema-loading (handleConnectionChange) runs
+    // exactly as it would for a manual pick — setting .value alone doesn't
+    // fire that listener.
+    if (p1Provider && p1Conns.length >= 1) {
       fSourceConnection.value = p1Conns[0].id;
       fSourceConnection.dispatchEvent(new Event('change'));
     }
-    if (p2Conns.length === 1) {
+    if (p2Provider && p2Conns.length >= 1) {
       fDestConnection.value = p2Conns[0].id;
       fDestConnection.dispatchEvent(new Event('change'));
     }
