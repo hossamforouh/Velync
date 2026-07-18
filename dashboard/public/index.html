@@ -1786,20 +1786,14 @@
             </div>
 
             <div class="form-row">
-              <label style="display: flex; justify-content: space-between;">
-                Sync Schedule
-                <a href="https://crontab.guru/" target="_blank" rel="noopener noreferrer" style="font-size: 0.8rem; color: var(--primary);">Advanced Cron</a>
-              </label>
-              <div style="display: flex; gap: 8px;">
-                <input id="f-interval-value" type="number" min="1" value="5" style="width: 80px; text-align: center;" />
-                <select id="f-interval-unit" style="flex: 1;">
-                  <option value="minutes">Minutes</option>
-                  <option value="hours">Hours</option>
-                  <option value="advanced">Advanced (Raw Cron)</option>
-                </select>
+              <label for="f-interval-preset">Sync Schedule</label>
+              <select id="f-interval-preset"></select>
+              <div id="interval-plan-hint" style="font-size: 0.8rem; color: var(--text-3); margin-top: 6px;"></div>
+              <div id="interval-advanced-wrap" style="display: none; margin-top: 8px;">
+                <input id="f-cron" type="text" placeholder="*/5 * * * *" autocomplete="off" />
+                <div id="interval-cron-warning" style="display: none; font-size: 0.8rem; color: var(--rose); margin-top: 6px;"></div>
+                <a href="https://crontab.guru/" target="_blank" rel="noopener noreferrer" style="font-size: 0.8rem; color: var(--primary); display: inline-block; margin-top: 4px;">Need help writing a cron expression?</a>
               </div>
-              <input id="f-cron" type="text" style="display: none; margin-top: 8px;" placeholder="*/5 * * * *"
-                autocomplete="off" />
             </div>
           </div>
 

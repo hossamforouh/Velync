@@ -1117,8 +1117,9 @@ const tbSearch            = document.getElementById('tb-search');
 const fId          = document.getElementById('form-id');
 const fDescription = document.getElementById('f-description');
 const fCron        = document.getElementById('f-cron');
-const fIntervalValue = document.getElementById('f-interval-value');
-const fIntervalUnit = document.getElementById('f-interval-unit');
+const fIntervalPreset = document.getElementById('f-interval-preset');
+const intervalAdvancedWrap = document.getElementById('interval-advanced-wrap');
+const intervalPlanHint = document.getElementById('interval-plan-hint');
 const fSourceConnection = document.getElementById('f-source-connection');
 const fDestConnection = document.getElementById('f-dest-connection');
 const lastRunRow   = document.getElementById('last-run-row');
@@ -1152,15 +1153,19 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof initWorkspaceDropdownSkeleton === 'function') {
     initWorkspaceDropdownSkeleton();
   }
-  if (fIntervalUnit) {
-    fIntervalUnit.addEventListener('change', () => {
-      if (fIntervalUnit.value === 'advanced') {
-        fCron.style.display = 'block';
-        if (fIntervalValue) fIntervalValue.style.display = 'none';
-      } else {
-        fCron.style.display = 'none';
-        if (fIntervalValue) fIntervalValue.style.display = 'block';
+  if (fIntervalPreset) {
+    fIntervalPreset.addEventListener('change', () => {
+      if (intervalAdvancedWrap) {
+        intervalAdvancedWrap.style.display = fIntervalPreset.value === 'advanced' ? 'block' : 'none';
       }
+      if (fIntervalPreset.value === 'advanced') updateCronWarning();
+    });
+  }
+  if (fCron) {
+    let cronWarningTimer = null;
+    fCron.addEventListener('input', () => {
+      clearTimeout(cronWarningTimer);
+      cronWarningTimer = setTimeout(updateCronWarning, 400);
     });
   }
 
@@ -3406,6 +3411,24 @@ async function openPanel(id = null) {
     }
   }
 
+  // 1b. Ensure the workspace's plan is known before the Sync Schedule
+  // dropdown is shown, so its options are gated correctly from the start.
+  // clearForm() (called synchronously above) already rendered the options
+  // once using whatever plan was cached at the time — for a brand-new config
+  // re-apply the fastest-allowed default now that the plan is confirmed.
+  // Edit mode doesn't need this: fillForm() (called below) re-renders the
+  // options itself and sets the field from the saved config either way.
+  await ensureCurrentPlan();
+  if (!id) {
+    const defaultMinutes = renderIntervalPresetOptions();
+    const defaultPreset = SYNC_INTERVAL_PRESETS.find(p => p.minutes === defaultMinutes);
+    if (fCron) fCron.value = defaultPreset ? defaultPreset.cron : '*/30 * * * *';
+    if (fIntervalPreset) {
+      fIntervalPreset.value = String(defaultMinutes);
+      fIntervalPreset.dispatchEvent(new Event('change'));
+    }
+  }
+
   // 2. Load connections and populate the dropdowns
   _connectionsCache = await loadConnections(true);
 
@@ -4159,11 +4182,12 @@ function clearForm() {
   if (fSourceList) fSourceList.innerHTML = '<option value="">-- Select Connection --</option>';
   if (fTtTag) fTtTag.innerHTML = '';
   
-  fCron.value        = '*/5 * * * *';
-  if (fIntervalValue) fIntervalValue.value = 5;
-  if (fIntervalUnit) {
-    fIntervalUnit.value = 'minutes';
-    fIntervalUnit.dispatchEvent(new Event('change'));
+  const defaultMinutes = renderIntervalPresetOptions();
+  const defaultPreset = SYNC_INTERVAL_PRESETS.find(p => p.minutes === defaultMinutes);
+  fCron.value = defaultPreset ? defaultPreset.cron : '*/30 * * * *';
+  if (fIntervalPreset) {
+    fIntervalPreset.value = String(defaultMinutes);
+    fIntervalPreset.dispatchEvent(new Event('change'));
   }
 
   if (lastRunRow) lastRunRow.style.display = 'none';
@@ -4194,24 +4218,168 @@ function clearForm() {
   triggerFormFieldVisibility();
 }
 
-function parseCron(cronStr) {
-  if (!cronStr) return [5, 'minutes', '*/5 * * * *'];
-  if (cronStr.startsWith('*/') && cronStr.endsWith(' * * * *')) {
-    const mins = cronStr.split(' ')[0].replace('*/', '');
-    return [mins, 'minutes', cronStr];
+// Fixed set of sync-frequency choices. Each maps a plain-English label to an
+// exact cron string — the user picks how often to sync, not the cron syntax.
+// Options faster than the workspace's plan allows are shown disabled (see
+// renderIntervalPresetOptions) rather than letting the user pick something
+// the server will reject on save.
+const SYNC_INTERVAL_PRESETS = [
+  { minutes: 5,    cron: '*/5 * * * *',   label: 'Every 5 minutes' },
+  { minutes: 15,   cron: '*/15 * * * *',  label: 'Every 15 minutes' },
+  { minutes: 30,   cron: '*/30 * * * *',  label: 'Every 30 minutes' },
+  { minutes: 60,   cron: '0 * * * *',     label: 'Every hour' },
+  { minutes: 180,  cron: '0 */3 * * *',   label: 'Every 3 hours' },
+  { minutes: 360,  cron: '0 */6 * * *',   label: 'Every 6 hours' },
+  { minutes: 720,  cron: '0 */12 * * *',  label: 'Every 12 hours' },
+  { minutes: 1440, cron: '0 0 * * *',     label: 'Once a day' },
+];
+
+// window._currentPlan is populated by loadWorkspaceQuota() (GET /api/billing/plan).
+// If the wizard opens before that's resolved, fetch it directly so the
+// preset list can be gated correctly the first time too.
+async function ensureCurrentPlan() {
+  if (window._currentPlan) return window._currentPlan;
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch('/api/billing/plan', { headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    if (res.ok && data.success) window._currentPlan = data.plan;
+  } catch (e) {
+    console.warn('[ensureCurrentPlan] Could not load plan', e);
   }
-  if (cronStr.startsWith('0 */') && cronStr.endsWith(' * * *')) {
-    const hrs = cronStr.split(' ')[1].replace('*/', '');
-    return [hrs, 'hours', cronStr];
-  }
-  return [5, 'advanced', cronStr];
+  return window._currentPlan;
 }
 
-function buildCron(val, unit, raw) {
-  if (unit === 'advanced') return raw || '*/5 * * * *';
-  if (unit === 'minutes') return `*/${val || 5} * * * *`;
-  if (unit === 'hours') return `0 */${val || 1} * * *`;
-  return '*/5 * * * *';
+// Rebuilds the Sync Schedule dropdown's options, disabling any preset faster
+// than the workspace's plan allows. Returns the fastest ALLOWED preset's
+// minutes value, for use as the default on a new config.
+function renderIntervalPresetOptions() {
+  if (!fIntervalPreset) return 5;
+  const planMin = window._currentPlan?.minSyncIntervalMinutes || 30;
+  const planName = window._currentPlan?.name || 'Free';
+
+  fIntervalPreset.innerHTML = SYNC_INTERVAL_PRESETS.map(p => {
+    const locked = p.minutes < planMin;
+    const label = locked ? `🔒 ${p.label} (upgrade to unlock)` : p.label;
+    return `<option value="${p.minutes}" ${locked ? 'disabled' : ''}>${escHtml(label)}</option>`;
+  }).join('') + `<option value="advanced">Custom (advanced cron)</option>`;
+
+  if (intervalPlanHint) {
+    intervalPlanHint.textContent = `Your ${planName} plan syncs as often as every ${planMin} minute${planMin === 1 ? '' : 's'}.`;
+  }
+
+  const fastestAllowed = SYNC_INTERVAL_PRESETS.find(p => p.minutes >= planMin) || SYNC_INTERVAL_PRESETS[SYNC_INTERVAL_PRESETS.length - 1];
+  return fastestAllowed.minutes;
+}
+
+// Best-effort, dependency-free estimate of a cron expression's minimum
+// interval in minutes — used only for instant client-side feedback on the
+// Custom (advanced cron) field. Mirrors src/core/plan.js's cronToMinutes()
+// (sample real fire times rather than pattern-matching "*/N", so it can't be
+// fooled by an equivalent schedule written differently), but reimplemented
+// here since this is a no-build vanilla-JS page and can't import the
+// server's cron-parser dependency. The server's check is still the one that
+// actually gets enforced — this just avoids making the user wait for a
+// failed save to find out. Returns null (and skips the check) for syntax it
+// doesn't recognize (names like JAN/MON, L/W/# specials, >3-day intervals)
+// rather than guessing.
+function parseCronField(field, min, max) {
+  const allowed = new Set();
+  for (const part of field.split(',')) {
+    let m;
+    if (part === '*') {
+      for (let v = min; v <= max; v++) allowed.add(v);
+    } else if ((m = part.match(/^\*\/(\d+)$/))) {
+      const step = parseInt(m[1], 10);
+      if (!step) return null;
+      for (let v = min; v <= max; v += step) allowed.add(v);
+    } else if ((m = part.match(/^(\d+)-(\d+)\/(\d+)$/))) {
+      const a = parseInt(m[1], 10), b = parseInt(m[2], 10), step = parseInt(m[3], 10);
+      if (!step) return null;
+      for (let v = a; v <= b; v += step) allowed.add(v);
+    } else if ((m = part.match(/^(\d+)-(\d+)$/))) {
+      const a = parseInt(m[1], 10), b = parseInt(m[2], 10);
+      for (let v = a; v <= b; v++) allowed.add(v);
+    } else if (/^\d+$/.test(part)) {
+      allowed.add(parseInt(part, 10));
+    } else {
+      return null;
+    }
+  }
+  return allowed;
+}
+
+function estimateCronMinInterval(cronExpr) {
+  if (!cronExpr || typeof cronExpr !== 'string') return null;
+  const parts = cronExpr.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  const [minF, hourF, domF, monF, dowF] = parts;
+  const minutes = parseCronField(minF, 0, 59);
+  const hours = parseCronField(hourF, 0, 23);
+  const doms = parseCronField(domF, 1, 31);
+  const months = parseCronField(monF, 1, 12);
+  const dows = parseCronField(dowF, 0, 6);
+  if (!minutes || !hours || !doms || !months || !dows) return null;
+
+  // Standard cron rule: when BOTH day-of-month and day-of-week are
+  // restricted (neither is "*"), a date matches if it satisfies EITHER one.
+  const domWild = domF === '*';
+  const dowWild = dowF === '*';
+  function matches(date) {
+    if (!minutes.has(date.getMinutes())) return false;
+    if (!hours.has(date.getHours())) return false;
+    if (!months.has(date.getMonth() + 1)) return false;
+    const domMatch = doms.has(date.getDate());
+    const dowMatch = dows.has(date.getDay());
+    if (domWild && dowWild) return true;
+    if (domWild) return dowMatch;
+    if (dowWild) return domMatch;
+    return domMatch || dowMatch;
+  }
+
+  const MAX_SAMPLES = 3;
+  const MAX_MINUTES_AHEAD = 4320; // 3 days — enough for any realistic sync interval
+  const fires = [];
+  const cursor = new Date();
+  cursor.setSeconds(0, 0);
+  cursor.setMinutes(cursor.getMinutes() + 1);
+  for (let steps = 0; fires.length < MAX_SAMPLES && steps < MAX_MINUTES_AHEAD; steps++) {
+    if (matches(cursor)) fires.push(cursor.getTime());
+    cursor.setMinutes(cursor.getMinutes() + 1);
+  }
+  if (fires.length < 2) return null;
+
+  let minGap = Infinity;
+  for (let i = 1; i < fires.length; i++) {
+    minGap = Math.min(minGap, (fires[i] - fires[i - 1]) / 60000);
+  }
+  return Math.round(minGap);
+}
+
+function updateCronWarning() {
+  const warningEl = document.getElementById('interval-cron-warning');
+  if (!warningEl || !fCron) return;
+  const planMin = window._currentPlan?.minSyncIntervalMinutes || 30;
+  const planName = window._currentPlan?.name || 'Free';
+  const estimate = estimateCronMinInterval(fCron.value);
+  if (estimate !== null && estimate < planMin) {
+    warningEl.textContent = `This runs about every ${estimate} minute${estimate === 1 ? '' : 's'} — your ${planName} plan requires at least ${planMin} minutes. Activating this config will be blocked until it's slower.`;
+    warningEl.style.display = 'block';
+  } else {
+    warningEl.style.display = 'none';
+  }
+}
+
+function parseCron(cronStr) {
+  if (!cronStr) return [null, cronStr];
+  const preset = SYNC_INTERVAL_PRESETS.find(p => p.cron === cronStr);
+  return preset ? [preset.minutes, cronStr] : [null, cronStr];
+}
+
+function buildCron(presetValue, raw) {
+  if (presetValue === 'advanced') return raw || '*/30 * * * *';
+  const preset = SYNC_INTERVAL_PRESETS.find(p => String(p.minutes) === String(presetValue));
+  return preset ? preset.cron : (raw || '*/30 * * * *');
 }
 
 async function fillForm(cfg, opts = {}) {
@@ -4254,14 +4422,23 @@ async function fillForm(cfg, opts = {}) {
     fTtTag.value = syncTag;
   }
   
-  const cronStr = cfg.cronSchedule || '*/5 * * * *';
-  const [val, unit, raw] = parseCron(cronStr);
-  if (fIntervalValue) fIntervalValue.value = val;
-  if (fIntervalUnit) {
-    fIntervalUnit.value = unit;
-    fIntervalUnit.dispatchEvent(new Event('change'));
+  renderIntervalPresetOptions();
+  const cronStr = cfg.cronSchedule || '*/30 * * * *';
+  const [presetMinutes] = parseCron(cronStr);
+  fCron.value = cronStr;
+  if (fIntervalPreset) {
+    if (presetMinutes !== null) {
+      // A saved config's option may be disabled (below the current plan's
+      // minimum, e.g. after a downgrade) — still select it so the user can
+      // see what's actually configured, rather than silently swapping it.
+      const opt = fIntervalPreset.querySelector(`option[value="${presetMinutes}"]`);
+      if (opt) opt.disabled = false;
+      fIntervalPreset.value = String(presetMinutes);
+    } else {
+      fIntervalPreset.value = 'advanced';
+    }
+    fIntervalPreset.dispatchEvent(new Event('change'));
   }
-  fCron.value = raw;
   
   if (lastRunRow && fLastRun) {
     if (cfg.lastRunAt) {
@@ -4359,7 +4536,7 @@ function buildFormPayload(payloadStatus) {
     creationSource: creationSource,
     syncType:    fSyncType.value,
     deleteAfterSync: fDeleteAfter.checked,
-    cronSchedule: buildCron(fIntervalValue?.value, fIntervalUnit?.value, fCron?.value),
+    cronSchedule: buildCron(fIntervalPreset?.value, fCron?.value),
     platform1: (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === p1ConnId)?.provider) || _dropdownSourceProvider || null,
     platform2: (typeof _connectionsCache !== 'undefined' && _connectionsCache.find(c => c.id === p2ConnId)?.provider) || _dropdownDestProvider || null,
     platform1ConnectionId: p1ConnId,
@@ -4396,6 +4573,21 @@ async function saveConfig(e, isSubmit = false) {
 
   const status = isSubmit ? 'active' : 'draft';
   const payload = buildFormPayload(status);
+
+  // Mirror src/core/plan.js's enforcePlanLimits() min-interval check here so
+  // an over-fast custom cron is caught instantly instead of round-tripping
+  // to a rejected save — the server check is still what's actually
+  // authoritative (this is a best-effort estimate; see estimateCronMinInterval).
+  if (isSubmit) {
+    const planMin = window._currentPlan?.minSyncIntervalMinutes || 30;
+    const planName = window._currentPlan?.name || 'Free';
+    const estimate = estimateCronMinInterval(payload.cronSchedule);
+    if (estimate !== null && estimate < planMin) {
+      showPlanError(`Your ${planName} plan requires a minimum sync interval of ${planMin} minutes. This schedule runs about every ${estimate} minute(s). Upgrade to sync faster.`);
+      isSavingConfig = false;
+      return;
+    }
+  }
 
   if (!payload.platform1ConnectionId) {
     showToast('Please complete the setup for Platform 1.', 'error');
