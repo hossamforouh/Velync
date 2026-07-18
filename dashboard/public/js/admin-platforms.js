@@ -188,7 +188,15 @@ export function initAdminPlatforms(dbInstance, authInstance) {
   function resetTabs() { showStep(0); }
 
   function toCamelCase(str) {
-    return str.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase());
+    return str
+      .toLowerCase()
+      .replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase())
+      // A non-alphanumeric run with nothing after it (e.g. a label ending in
+      // punctuation, like "Template (optional)") isn't matched by the regex
+      // above since it requires a following character to uppercase — left
+      // unstripped, this is exactly how "Template (optional)" produced the
+      // id "templateOptional)" instead of "templateOptional".
+      .replace(/[^a-zA-Z0-9]+$/, '');
   }
 
   function updateDependencyDropdowns() {
