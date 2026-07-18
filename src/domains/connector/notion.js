@@ -107,7 +107,17 @@ class NotionConnector extends Connector {
       return (dbs || []).map(d => ({ value: d.id, label: d.title }));
     }
     if (fieldId === 'templates') {
-      const templates = await svc.listTemplates().catch(() => []);
+      // Templates belong to one specific database, so without a databaseId
+      // there's genuinely nothing to fetch yet (the user hasn't picked a
+      // database in the wizard) — that's a legitimate empty state, not a
+      // failure, so we return [] before ever calling the Notion API. This is
+      // different from swallowing a REAL failure: once a databaseId IS
+      // present, any error from listTemplates() below is still allowed to
+      // throw (no .catch(() => [])) so a genuine failure (e.g. an
+      // invalid/revoked token) surfaces to the user instead of being hidden
+      // behind a misleading "no templates found".
+      if (!databaseId) return [];
+      const templates = await svc.listTemplates();
       return (templates || []).map(t => ({ value: t.id, label: t.name }));
     }
     return [];
