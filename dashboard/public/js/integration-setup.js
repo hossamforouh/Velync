@@ -198,11 +198,11 @@ function populateSetupView(p1Id, p2Id) {
   // Configure button opens the side panel in Create New Config mode
   const configureBtn = document.getElementById('setup-configure-btn');
   configureBtn.onclick = null;
-  configureBtn.addEventListener('click', () => {
-    if (window.openPanel) {
-      window.currentConfigCreationSource = 'marketplace';
-      window.openPanel();
-    }
+  configureBtn.addEventListener('click', async () => {
+    if (!window.openPanel) return;
+    if (window.confirmConfigCreationAllowed && !(await window.confirmConfigCreationAllowed())) return;
+    window.currentConfigCreationSource = 'marketplace';
+    window.openPanel();
   });
 }
 

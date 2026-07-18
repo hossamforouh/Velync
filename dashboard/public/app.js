@@ -22,20 +22,79 @@ import { startLoad, endLoad, isLoading } from './js/loading.js';
 import { getSkeletonFormHTML, getSkeletonTableHTML, getEmptySpinnerHTML, setButtonLoading, getEmptyStateRowHTML } from './js/loading-components.js';
 import { wireRowActionsMenus } from './js/row-actions-menu.js';
 
+function openBillingSettings() {
+  const modal = document.getElementById('settings-modal');
+  const billingTab = modal?.querySelector('.settings-tab[data-tab="billing"]');
+  if (modal && billingTab) {
+    modal.classList.add('show');
+    billingTab.click();
+  }
+}
+
 /** Show a plan-limit toast with an Upgrade button that opens billing settings */
 function showPlanError(msg) {
   const isPlanError = /upgrade|plan.*limit|max.*config/i.test(msg);
   showToast(msg, 'error', isPlanError ? {
     actionLabel: 'Upgrade',
-    onAction() {
-      const modal = document.getElementById('settings-modal');
-      const billingTab = modal?.querySelector('.settings-tab[data-tab="billing"]');
-      if (modal && billingTab) {
-        modal.classList.add('show');
-        billingTab.click();
-      }
-    },
+    onAction: openBillingSettings,
   } : undefined);
+}
+
+// Fetches the workspace's current active-config usage against its plan
+// limit fresh each time (not the cached window._currentPlan, which can be
+// stale/unset if this is the first thing the user does after loading the
+// page) — used to warn *before* someone spends time in the 3-step wizard
+// only to have Submit rejected at the very end by enforcePlanLimits().
+// Fails open (treats as "no limit info") on any network error so a
+// transient blip never blocks config creation outright.
+async function checkActiveConfigLimit() {
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch('/api/billing/plan', { headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    if (!res.ok || !data.success) return { atLimit: false };
+    window._currentPlan = data.plan;
+    const { plan, usage } = data;
+    const max = plan.maxActiveConfigs;
+    const used = usage.activeConfigs;
+    if (max && max > 0 && used >= max) {
+      return {
+        atLimit: true,
+        planName: plan.name,
+        used,
+        max,
+      };
+    }
+    return { atLimit: false };
+  } catch (e) {
+    return { atLimit: false };
+  }
+}
+
+// Shared gate for every entry point that can create a new sync config (New
+// Config button/menu item, Duplicate). Only warns when at the *active*
+// config limit — drafts and paused configs are intentionally uncapped by
+// plan tier (see enforcePlanLimits(), which only checks status === 'active')
+// so this doesn't block legitimately preparing configs in advance. Returns
+// true if the caller should proceed, false if the user cancelled.
+async function confirmConfigCreationAllowed() {
+  const limit = await checkActiveConfigLimit();
+  if (!limit.atLimit) return true;
+
+  const choice = await threeWayConfirmDialog({
+    title: 'Active flow limit reached',
+    message: `Your ${limit.planName} plan allows ${limit.max} active flow${limit.max !== 1 ? 's' : ''}, and you're already using ${limit.used}. You can still create this as a draft and activate it later, or upgrade now to activate it right away.`,
+    saveText: 'Upgrade Plan',
+    saveClass: 'btn-primary',
+    discardText: 'Continue as Draft',
+    discardClass: 'btn-secondary',
+    cancelText: 'Cancel',
+  });
+  if (choice === 'save') {
+    openBillingSettings();
+    return false;
+  }
+  return choice === 'discard';
 }
 
 // ─── View Cache (Tab Switching) ────────────────────────────────
@@ -1475,6 +1534,74 @@ onAuthStateChanged(auth, async (user) => {
 
     // Load configs in background — renders when done
     loadConfigs();
+    // Also populate the Active Flows page's plan-usage line — previously
+    // loadWorkspaceQuota() only ran when Settings was opened, so the plan's
+    // active-config limit was invisible on the page where "New Config"
+    // actually lives.
+    // Declared here (not inside the Settings-modal wiring block below) so
+    // this call site and the one inside that block can both reach it —
+    // it was previously trapped inside `if (settingsMenu && settingsModal)`,
+    // making it unreachable from here and throwing a silent, uncaught
+    // ReferenceError on every page load.
+    async function loadWorkspaceQuota() {
+      const badge = document.getElementById('workspace-quota-badge');
+      const progress = document.getElementById('workspace-quota-progress');
+      const text = document.getElementById('workspace-quota-text');
+      // The Settings-modal indicator (badge/progress/text) requires all
+      // three; the Active Flows page indicator (flowsText) is independent
+      // and shown right where "New Config" actually lives — Settings is
+      // one click removed from where someone hits the limit, so the plan
+      // constraint was easy to be surprised by. Update both from one fetch.
+      const flowsText = document.getElementById('flows-quota-text');
+      const hasSettingsUI = badge && progress && text;
+      if (!hasSettingsUI && !flowsText) return;
+
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const res = await fetch('/api/billing/plan', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load plan');
+
+        const { plan, usage } = data;
+        // Cached globally so renderCards() (a synchronous render loop) can
+        // read the workspace's webhookSyncEnabled flag without an await —
+        // used to show honest "real-time" vs "checked every N min" text
+        // per config (WEBHOOK_SYNC_PLAN.md §5 Stage 6). Re-render once the
+        // plan is known in case cards already rendered with the default text.
+        const plchanged = JSON.stringify(window._currentPlan) !== JSON.stringify(plan);
+        window._currentPlan = plan;
+        if (plchanged && typeof renderCards === 'function' && configs.length > 0) renderCards();
+        const used = usage.activeConfigs;
+        const max = plan.maxActiveConfigs;
+        const unlimited = !max || max <= 0;
+        const ratio = unlimited ? 0 : used / max;
+        const atLimit = !unlimited && used >= max;
+
+        if (hasSettingsUI) {
+          badge.textContent = `${plan.name} Tier`;
+          progress.style.width = unlimited ? '0%' : `${Math.min(ratio, 1) * 100}%`;
+          progress.style.background = atLimit ? 'var(--rose)' : '';
+          text.textContent = unlimited
+            ? `${used} active flow${used !== 1 ? 's' : ''} used. Unlimited on your plan.`
+            : `${used} of ${max} active flows used.${atLimit ? ' Upgrade to add more.' : ''}`;
+        }
+        if (flowsText) {
+          flowsText.style.display = 'block';
+          flowsText.style.color = atLimit ? 'var(--rose)' : '';
+          flowsText.textContent = unlimited
+            ? `${plan.name} plan — ${used} active flow${used !== 1 ? 's' : ''}, unlimited.`
+            : `${plan.name} plan — ${used} of ${max} active flow${max !== 1 ? 's' : ''} used.${atLimit ? ' Upgrade to activate more.' : ''}`;
+        }
+      } catch (err) {
+        if (hasSettingsUI) {
+          badge.textContent = '—';
+          text.textContent = 'Failed to load usage: ' + err.message;
+        }
+      }
+    }
+    loadWorkspaceQuota();
     
     // Wire hub nav to re-render on each visit
     const navHub = document.getElementById('nav-hub');
@@ -2009,47 +2136,6 @@ onAuthStateChanged(auth, async (user) => {
           btnConfirm.addEventListener('click', onConfirm);
           btnCancel.addEventListener('click', onCancel);
         });
-      }
-
-      async function loadWorkspaceQuota() {
-        const badge = document.getElementById('workspace-quota-badge');
-        const progress = document.getElementById('workspace-quota-progress');
-        const text = document.getElementById('workspace-quota-text');
-        if (!badge || !progress || !text) return;
-
-        try {
-          const token = await auth.currentUser.getIdToken();
-          const res = await fetch('/api/billing/plan', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const data = await res.json();
-          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load plan');
-
-          const { plan, usage } = data;
-          // Cached globally so renderCards() (a synchronous render loop) can
-          // read the workspace's webhookSyncEnabled flag without an await —
-          // used to show honest "real-time" vs "checked every N min" text
-          // per config (WEBHOOK_SYNC_PLAN.md §5 Stage 6). Re-render once the
-          // plan is known in case cards already rendered with the default text.
-          const plchanged = JSON.stringify(window._currentPlan) !== JSON.stringify(plan);
-          window._currentPlan = plan;
-          if (plchanged && typeof renderCards === 'function' && configs.length > 0) renderCards();
-          const used = usage.activeConfigs;
-          const max = plan.maxActiveConfigs;
-          const unlimited = !max || max <= 0;
-          const ratio = unlimited ? 0 : used / max;
-          const atLimit = !unlimited && used >= max;
-
-          badge.textContent = `${plan.name} Tier`;
-          progress.style.width = unlimited ? '0%' : `${Math.min(ratio, 1) * 100}%`;
-          progress.style.background = atLimit ? 'var(--rose)' : '';
-          text.textContent = unlimited
-            ? `${used} active flow${used !== 1 ? 's' : ''} used. Unlimited on your plan.`
-            : `${used} of ${max} active flows used.${atLimit ? ' Upgrade to add more.' : ''}`;
-        } catch (err) {
-          badge.textContent = '—';
-          text.textContent = 'Failed to load usage: ' + err.message;
-        }
       }
 
       async function loadCollaborators() {
@@ -3515,6 +3601,7 @@ async function openPanel(id = null) {
   panelOverlay.classList.add('open');
 }
 window.openPanel = openPanel; // Expose globally for external scripts
+window.confirmConfigCreationAllowed = confirmConfigCreationAllowed; // Expose globally so any entry point that opens the panel (e.g. the Marketplace "Configure Sync" button) can gate on the plan's active-flow limit too
 
 let _dropdownSourceProvider = null;
 let _dropdownDestProvider = null;
@@ -3728,9 +3815,10 @@ async function closePanel() {
   window.resetConfigDirty();
 }
 
-function duplicateConfig(id) {
+async function duplicateConfig(id) {
   const cfg = configs.find(c => c.id === id);
   if (!cfg) return;
+  if (!(await confirmConfigCreationAllowed())) return;
 
   editingId = null;
   clearForm();
@@ -5160,10 +5248,13 @@ window.addEventListener('connections-refreshed', async (e) => {
 });
 
 // Spreadsheet Grid Toolbar listeners
-if (tbAdd) tbAdd.addEventListener('click', () => openPanel());
+async function openPanelIfAllowed() {
+  if (await confirmConfigCreationAllowed()) openPanel();
+}
+if (tbAdd) tbAdd.addEventListener('click', openPanelIfAllowed);
 const btnAddConfig = document.getElementById('btn-add-config');
-if (btnAddConfig) btnAddConfig.addEventListener('click', () => openPanel());
-if (menuAddConfig) menuAddConfig.addEventListener('click', (e) => { e.preventDefault(); openPanel(); });
+if (btnAddConfig) btnAddConfig.addEventListener('click', openPanelIfAllowed);
+if (menuAddConfig) menuAddConfig.addEventListener('click', (e) => { e.preventDefault(); openPanelIfAllowed(); });
 
 if (tbEdit) {
   tbEdit.addEventListener('click', () => {

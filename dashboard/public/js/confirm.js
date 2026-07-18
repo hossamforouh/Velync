@@ -164,12 +164,12 @@ export function threeWayConfirmDialog({
     document.addEventListener('keydown', escHandler);
 
     overlay.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal" role="dialog" aria-modal="true" style="max-width: 480px;">
         <h3>${escHtml(title)}</h3>
         <p>${escHtml(message)}</p>
-        <div class="modal-actions" style="display: flex; gap: 8px;">
+        <div class="modal-actions" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between;">
           <button class="btn btn-secondary" id="confirm-cancel">${escHtml(cancelText)}</button>
-          <div style="margin-left: auto; display: flex; gap: 8px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
             <button class="btn ${escHtml(discardClass)}" id="confirm-discard">${escHtml(discardText)}</button>
             <button class="btn ${escHtml(saveClass)}" id="confirm-save">${escHtml(saveText)}</button>
           </div>
