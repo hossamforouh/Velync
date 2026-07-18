@@ -330,6 +330,14 @@ async function setStatusForIds(ids, newStatus, btn) {
       body: JSON.stringify({ status: newStatus }),
     })));
     showToast(`Marked ${STATUS_LABEL[newStatus].toLowerCase()}`, 'success');
+    // Per-row buttons get thrown away by the tbody re-render loadClientErrors()
+    // triggers, so resetting them is moot — but the persistent bulk-action
+    // button in the toolbar survives every render, and setButtonLoading(true)
+    // above set btn.disabled = true. Without resetting it here, the button
+    // stays permanently disabled after its first successful use: later
+    // renders update its visible text/count (updateSelectionUI) but never
+    // touch .disabled, so it looks normal yet silently ignores every click.
+    setButtonLoading(btn, false);
     loadClientErrors(true);
   } catch (err) {
     showToast('Failed to update: ' + err.message, 'error');
@@ -350,6 +358,11 @@ async function deleteIds(ids, btn) {
       }
     }
     showToast(`Deleted ${success} of ${ids.length}`, success === ids.length ? 'success' : 'info');
+    // See setStatusForIds() above for why this reset is required even on
+    // the success path — the bulk delete button is the persistent one this
+    // was actually observed on (it survives loadClientErrors()'s re-render;
+    // per-row delete buttons don't, so they never showed the symptom).
+    setButtonLoading(btn, false);
     loadClientErrors(true);
   } catch (err) {
     showToast('Failed to delete: ' + err.message, 'error');
