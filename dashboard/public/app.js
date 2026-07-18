@@ -3647,18 +3647,37 @@ function populateConnectionDropdowns(connections, id = null, p1Provider = null, 
   }
 }
 
-function handleConnectionChange(prefix) {
+async function handleConnectionChange(prefix) {
   const connId = document.getElementById(prefix === 'p1' ? 'f-source-connection' : 'f-dest-connection')?.value;
   const containerId = prefix === 'p1' ? 'source-dynamic-container' : 'dest-dynamic-container';
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  const conn = connId ? _connectionsCache.find(c => c.id === connId) : null;
+
+  // Keep the node card's logo/name in sync with whichever connection was
+  // just picked. setConnectButtonProviders() is otherwise only called once
+  // when the wizard opens (using whatever provider it was opened with, e.g.
+  // from a marketplace integration) — for a manually-created config that
+  // starts with no provider known, the Source/Destination cards stayed on
+  // the generic placeholder icon even after a real connection was selected.
+  //
+  // window.cachedPlatforms is deliberately nulled by openNodeModal() (to
+  // force a fresh reload each time the node modal opens) — this connection
+  // dropdown lives inside that modal, so without re-ensuring the cache here,
+  // getPlatformLogoSvg()/getPlatformDisplayName() would always see an empty
+  // cache and silently fall back to the generic placeholder/raw provider id.
+  if (!window.cachedPlatforms) {
+    try { await ensureCachedPlatforms(); } catch (e) { console.warn('[handleConnectionChange] Could not load platforms', e); }
+  }
+  const newP1 = prefix === 'p1' ? (conn?.provider || null) : _dropdownSourceProvider;
+  const newP2 = prefix === 'p2' ? (conn?.provider || null) : _dropdownDestProvider;
+  setConnectButtonProviders(newP1, newP2);
+
   if (!connId) {
     container.innerHTML = '';
     return;
   }
-
-  const conn = _connectionsCache.find(c => c.id === connId);
   if (!conn) return;
 
   container.innerHTML = getEmptySpinnerHTML('Loading fields…');
