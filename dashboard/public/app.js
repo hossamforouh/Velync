@@ -3479,14 +3479,72 @@ async function toggleConfig(id, checkbox) {
   }
 }
 
-// ─── Panel open/close ─────────────────────────────────────────
-async function openPanel(id = null) {
-  editingId = id;
-  if (!id) {
-    window.currentConfigId = null;
-  } else {
-    window.currentConfigId = id;
+// renderSchemaForPlatform() renders each dynamic_select/dynamic_multi_select
+// field (e.g. Notion's "Database", TickTick's "List") with a placeholder
+// option and then fetches the real option list in a fire-and-forget
+// setTimeout — while that fetch is in flight the field's value is a
+// genuinely empty "Fetching…" placeholder (marked with an `is-loading`
+// class), even though the saved value it's about to restore is already
+// known. Nothing awaited that fetch, so a config's required fields could
+// look empty for a brief window right after opening the panel — long
+// enough for the "Next Step" validation (or a fast click) to incorrectly
+// report "please finish configuring" data that was actually already there.
+// Polls rather than hooking a proper promise through renderSchemaForPlatform
+// because that function is shared by several call sites and its fetches are
+// genuinely fire-and-forget by design (e.g. the "Refresh" button reuses the
+// same code path); this only blocks the specific moment a caller needs the
+// field settled, without changing that function's own contract.
+async function waitForDynamicFieldsToSettle(containerId, timeoutMs = 8000) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  // Give renderSchemaForPlatform's setTimeout(fn, 0) a tick to actually
+  // fire and flip a field to .is-loading before we check for it — otherwise
+  // this could return immediately, before loading even started.
+  await new Promise(r => setTimeout(r, 50));
+  const start = Date.now();
+  while (container.querySelector('.is-loading') && Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, 100));
   }
+}
+
+// Loads everything that depends on a config's two connections — the
+// platform-specific settings (Notion database, TickTick list, target
+// entity...) and field mappings. Shared by both edit mode and duplicate
+// mode in openPanel() below, which need the exact same data-loading
+// pipeline against two different documents (the one being edited, vs. a
+// same-shape in-memory copy that hasn't been saved yet). Duplicating this
+// logic instead of sharing it is exactly how it went missing from the
+// duplicate flow the first time around — see duplicateConfig().
+async function loadConfigSchemas(cfg, connectionsCache) {
+  const p1Conn = connectionsCache.find(c => c.id === cfg.platform1ConnectionId);
+  if (p1Conn) {
+    window.renderSchemaForPlatform(p1Conn.provider, 'source-dynamic-container', 'p1', cfg.p1Settings || {});
+    const entity = cfg.p1Settings?.targetEntity || 'Tasks';
+    await fetchSourceSchema(cfg.platform1ConnectionId, p1Conn.provider, entity);
+    await waitForDynamicFieldsToSettle('source-dynamic-container');
+  }
+
+  const p2Conn = connectionsCache.find(c => c.id === cfg.platform2ConnectionId);
+  if (p2Conn) {
+    window.renderSchemaForPlatform(p2Conn.provider, 'dest-dynamic-container', 'p2', cfg.p2Settings || {});
+    await waitForDynamicFieldsToSettle('dest-dynamic-container');
+    await fetchDestSchema(cfg.platform2ConnectionId, p2Conn.provider, cfg.p2Settings || {});
+  }
+
+  // Restore mappings only when both schemas are available (connections configured)
+  if (p1Conn && p2Conn) {
+    restoreFieldMappings(cfg);
+  }
+}
+
+// ─── Panel open/close ─────────────────────────────────────────
+// `duplicateFromId` puts the panel in "New Config" mode (editingId stays
+// null, so Save creates a fresh document) while sourcing its initial data
+// from an existing config — same data-loading pipeline as editing that
+// config, just not editing it.
+async function openPanel(id = null, { duplicateFromId = null } = {}) {
+  editingId = id;
+  window.currentConfigId = id || null;
   clearForm();
   window.resetConfigDirty();
 
@@ -3495,6 +3553,20 @@ async function openPanel(id = null) {
   if (formContainer) {
     formContainer.innerHTML = getSkeletonFormHTML();
   }
+
+  // Block "Next Step"/"Save" until the panel has actually finished loading
+  // (including loadConfigSchemas() below settling any in-flight dynamic
+  // fields) — #form-container doesn't exist in the DOM, so the skeleton
+  // swap above has never actually covered the real Connect step buttons;
+  // nothing was stopping a fast click from hitting the validation gate
+  // while a duplicated/edited config's platform settings were still
+  // loading, which read as "please finish configuring" data that was
+  // actually already there. Uses setButtonLoading (not a bare .disabled)
+  // so it's visibly a transient loading state rather than looking stuck.
+  const btnStep1Next = document.getElementById('btn-step1-next');
+  const btnStep1Save = document.getElementById('btn-step1-save');
+  if (btnStep1Next) setButtonLoading(btnStep1Next, true, 'Next Step →', 'Loading…');
+  if (btnStep1Save) btnStep1Save.disabled = true;
 
   const loadKey = 'openPanel';
   startLoad(loadKey);
@@ -3517,10 +3589,11 @@ async function openPanel(id = null) {
   // clearForm() (called synchronously above) already rendered the options
   // once using whatever plan was cached at the time — for a brand-new config
   // re-apply the fastest-allowed default now that the plan is confirmed.
-  // Edit mode doesn't need this: fillForm() (called below) re-renders the
-  // options itself and sets the field from the saved config either way.
+  // Edit/duplicate modes don't need this: fillForm() (called below)
+  // re-renders the options itself and sets the field from the source
+  // config's own schedule either way.
   await ensureCurrentPlan();
-  if (!id) {
+  if (!id && !duplicateFromId) {
     const defaultMinutes = renderIntervalPresetOptions();
     const defaultPreset = SYNC_INTERVAL_PRESETS.find(p => p.minutes === defaultMinutes);
     if (fCron) fCron.value = defaultPreset ? defaultPreset.cron : '*/30 * * * *';
@@ -3533,16 +3606,18 @@ async function openPanel(id = null) {
   // 2. Load connections and populate the dropdowns
   _connectionsCache = await loadConnections(true);
 
-  // Determine platform providers for filtering connection dropdowns
+  // Determine platform providers for filtering connection dropdowns.
+  // Editing and duplicating both derive these from an existing config —
+  // `sourceId` is that config's id either way, just used differently below.
+  const sourceId = id || duplicateFromId;
   let p1Provider = null;
   let p2Provider = null;
 
-  if (id) {
-    // Edit mode: derive providers from saved connections
-    let cfg = configs.find(c => c.id === id);
+  if (sourceId) {
+    let cfg = configs.find(c => c.id === sourceId);
     if (!cfg) {
       try {
-        const fetched = await fetchSyncConfig(id);
+        const fetched = await fetchSyncConfig(sourceId);
         if (fetched) {
           cfg = fetched;
           configs.push(cfg);
@@ -3568,36 +3643,39 @@ async function openPanel(id = null) {
     p2Provider = typeof integ.platform2 === 'string' ? integ.platform2 : (integ.platform2?.key || integ.platform2?.id);
   }
 
-  populateConnectionDropdowns(_connectionsCache, id, p1Provider, p2Provider);
+  // Pass sourceId (not just `id`) so populateConnectionDropdowns pre-selects
+  // the exact connections the source config used — for duplication that's
+  // the correct behavior too (copy what the original had), not just "pick
+  // the newest connection for this provider".
+  populateConnectionDropdowns(_connectionsCache, sourceId, p1Provider, p2Provider);
   setConnectButtonProviders(p1Provider, p2Provider);
 
   if (id) {
     panelTitle.innerHTML = feather.icons['edit-2'].toSvg({width: 18, height: 18, style: 'margin-right: 6px; vertical-align: text-bottom;'}) + ' Edit Config';
-    
+
     let cfg = configs.find(c => c.id === id);
-      
+
     if (cfg) {
       fillForm(cfg, { skipMappings: true });
       // Note: populateConnectionDropdowns was already called above with provider info.
-      
-      const p1Conn = _connectionsCache.find(c => c.id === cfg.platform1ConnectionId);
-      if (p1Conn) {
-        window.renderSchemaForPlatform(p1Conn.provider, 'source-dynamic-container', 'p1', cfg.p1Settings || {});
-        const entity = cfg.p1Settings?.targetEntity || 'Tasks';
-        await fetchSourceSchema(cfg.platform1ConnectionId, p1Conn.provider, entity);
-      }
-      
-      const p2Conn = _connectionsCache.find(c => c.id === cfg.platform2ConnectionId);
-      if (p2Conn) {
-        window.renderSchemaForPlatform(p2Conn.provider, 'dest-dynamic-container', 'p2', cfg.p2Settings || {});
-      }
-
-      // Restore mappings only when both schemas are available (connections configured)
-      if (p1Conn && p2Conn) {
-        restoreFieldMappings(cfg);
-      }
+      await loadConfigSchemas(cfg, _connectionsCache);
       // Clear dirty flag — fillForm/restoreFieldMappings may fire change events
       window.resetConfigDirty();
+    }
+  } else if (duplicateFromId) {
+    panelTitle.innerHTML = feather.icons['copy'].toSvg({width: 18, height: 18, style: 'margin-right: 6px; vertical-align: text-bottom;'}) + ' Duplicate Config';
+
+    const original = configs.find(c => c.id === duplicateFromId);
+    if (original) {
+      const copy = JSON.parse(JSON.stringify(original));
+      copy.id = ''; // Save must create a new document, not overwrite the original
+      copy.description = copy.description ? `${copy.description} (Copy)` : 'Copy Config';
+
+      fillForm(copy, { skipMappings: true });
+      // Note: populateConnectionDropdowns was already called above with provider info.
+      await loadConfigSchemas(copy, _connectionsCache);
+      window.resetConfigDirty();
+      fDescription.focus();
     }
   } else {
     panelTitle.innerHTML = feather.icons['plus'].toSvg({width: 18, height: 18, style: 'margin-right: 6px; vertical-align: text-bottom;'}) + ' New Config';
@@ -3605,10 +3683,12 @@ async function openPanel(id = null) {
 
   } finally {
     endLoad(loadKey);
+    if (btnStep1Next) setButtonLoading(btnStep1Next, false, 'Next Step →');
+    if (btnStep1Save) btnStep1Save.disabled = false;
   }
 
   goToStep(1);
-  if (!id) {
+  if (!id && !duplicateFromId) {
     document.getElementById('f-source-connection')?.dispatchEvent(new Event('change'));
     document.getElementById('f-dest-connection')?.dispatchEvent(new Event('change'));
   }
@@ -3838,25 +3918,17 @@ async function closePanel() {
   window.resetConfigDirty();
 }
 
+// Opens the panel pre-loaded with a copy of an existing config — connection
+// dropdowns, platform-specific settings (Notion database, TickTick list...),
+// and field mappings all come from the same data-loading pipeline openPanel()
+// already uses for editing (see loadConfigSchemas()), just targeting a new,
+// unsaved document instead of the original.
 async function duplicateConfig(id) {
   const cfg = configs.find(c => c.id === id);
   if (!cfg) return;
   if (!(await confirmConfigCreationAllowed())) return;
 
-  editingId = null;
-  clearForm();
-
-  // Make a copy and clear the ID, append "(Copy)" to description
-  const copy = JSON.parse(JSON.stringify(cfg));
-  copy.id = '';
-  copy.description = copy.description ? `${copy.description} (Copy)` : 'Copy Config';
-  
-  fillForm(copy);
-
-  panelTitle.innerHTML = feather.icons['copy'].toSvg({width: 18, height: 18, style: 'margin-right: 6px; vertical-align: text-bottom;'}) + ' Duplicate Config';
-  sidePanel.classList.add('open');
-  panelOverlay.classList.add('open');
-  fDescription.focus();
+  await openPanel(null, { duplicateFromId: id });
 }
 
 function formatPropertyType(typeStr) {
@@ -4286,6 +4358,38 @@ async function fetchSourceSchema(connectionId, platform, entityType) {
   }
 }
 
+// Destination-side counterpart to fetchSourceSchema(). Previously
+// notionDbProperties was only ever populated as a side effect of the AI
+// /suggest-mappings call — fine while that call always ran on every "Next
+// Step" click, but once loadDefaultMappingsPreset() started correctly
+// skipping regeneration for edit/duplicate (to preserve existing mappings
+// as-is), notionDbProperties stayed {} for those flows. addMappingRow()
+// then had only the '__content__' placeholder to offer, so every restored
+// row silently collapsed onto it — surfacing as "Destination field
+// '__content__' is mapped multiple times" at save time even though the
+// user never touched those dropdowns. Fetching it here, before
+// restoreFieldMappings() runs, makes sure real destination fields are
+// available so restored mappings render against their actual saved value.
+async function fetchDestSchema(connectionId, platform, context = {}) {
+  if (!connectionId || !platform) return;
+  try {
+    const user = auth.currentUser;
+    const idToken = await user.getIdToken();
+    const res = await fetch(`${API_URL}/schema`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+      body: JSON.stringify({ connectionId, platform, context })
+    });
+    const data = await res.json();
+    if (data.success) {
+      notionDbProperties = data.schema || {};
+    }
+  } catch (err) {
+    console.warn('Failed to fetch destination schema:', err);
+    showToast('Failed to load destination schema fields', 'error');
+  }
+}
+
 function triggerFormFieldVisibility() {
   const syncType = fSyncType.value;
   if (syncType === 'Bidirectional') {
@@ -4633,6 +4737,17 @@ function restoreFieldMappings(cfg) {
     mappings.forEach(m => addMappingRow(m.sourceField || m.ticktickField, m.destField || m.notionProperty));
     window._lastMappedSourceId = cfg.platform1ConnectionId || document.getElementById('f-source-connection')?.value;
     window._lastMappedDestId = cfg.platform2ConnectionId || document.getElementById('f-dest-connection')?.value;
+    // loadDefaultMappingsPreset() only skips re-generating AI suggestions
+    // when these two context strings ALSO match its own freshly-computed
+    // ones — this function used to set the connection ids but never these,
+    // so its "nothing changed, keep what's there" guard could never
+    // actually pass. btn-step1-next calls loadDefaultMappingsPreset()
+    // unconditionally on every advance to Map Fields, so a config's mapped
+    // fields (however they got there — restored from a save, or just
+    // copied by duplicateConfig()) were silently thrown away and replaced
+    // with fresh AI guesses the moment the user clicked "Next Step".
+    window._lastMappedSourceContext = JSON.stringify(window.harvestDynamicFields ? window.harvestDynamicFields('source-dynamic-container') : {});
+    window._lastMappedDestContext = JSON.stringify(window.harvestDynamicFields ? window.harvestDynamicFields('dest-dynamic-container') : {});
   } else {
     loadDefaultMappingsPreset();
   }
