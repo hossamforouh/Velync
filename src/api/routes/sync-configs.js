@@ -380,6 +380,8 @@ router.put('/sync-configs/:configId', verifyAuth, [
     merged.workspaceId = ctx.workspaceId;
     merged.ownerId = existingData.ownerId;
     merged.updatedAt = new Date().toISOString();
+    merged.updatedById = uid;
+    merged.updatedByName = req.user.name || req.user.email || uid;
     await configRef.set(merged, { merge: true });
 
     logger.info('sync-configs', `Config updated "${configId}" in workspace "${ctx.workspaceId}"`);

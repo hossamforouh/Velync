@@ -600,7 +600,7 @@
             <div style="display:flex;flex-direction:column;gap:2px;">
               <h1 class="section-title">Sync Configurations</h1>
               <p class="section-desc">Create and manage data synchronization flows between your connected platforms. Each configuration defines what data to sync, how often, and between which sources.</p>
-              <p class="section-desc" id="flows-quota-text" style="display:none;"></p>
+              <div class="quota-indicator" id="flows-quota-text" style="display:none;"></div>
             </div>
           </div>
 
@@ -631,7 +631,6 @@
                   <th class="sortable" data-col="status">Status <span class="sort-icon"></span></th>
                   <th>Schedule</th>
                   <th class="sortable" data-col="lastRunAt">Last Run <span class="sort-icon"></span></th>
-                  <th class="sortable" data-col="owner">Owner <span class="sort-icon"></span></th>
                   <th class="col-actions">Actions</th>
                 </tr>
               </thead>
@@ -643,7 +642,6 @@
                   <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
                   <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 150px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
                   <td data-label="Last Run"><div class="skeleton-line" style="width: 80px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
-                  <td data-label="Owner"><div class="skeleton-line" style="width: 100px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
                   <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
                 </tr>
                 <tr>
@@ -653,7 +651,6 @@
                   <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
                   <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 130px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
                   <td data-label="Last Run"><div class="skeleton-line" style="width: 80px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
-                  <td data-label="Owner"><div class="skeleton-line" style="width: 90px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
                   <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
                 </tr>
                 <tr>
@@ -663,7 +660,6 @@
                   <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
                   <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 140px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
                   <td data-label="Last Run"><div class="skeleton-line" style="width: 70px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
-                  <td data-label="Owner"><div class="skeleton-line" style="width: 100px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
                   <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
                 </tr>
                 <tr>
@@ -673,7 +669,6 @@
                   <td data-label="Status"><div class="skeleton-line" style="width: 44px; height: 24px; border-radius: 12px; align-self: flex-end;"></div></td>
                   <td data-label="Sync Schedule"><div class="skeleton-line" style="width: 160px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
                   <td data-label="Last Run"><div class="skeleton-line" style="width: 80px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
-                  <td data-label="Owner"><div class="skeleton-line" style="width: 110px; height: 16px; border-radius: 6px; align-self: flex-end;"></div></td>
                   <td class="col-actions"><div class="skeleton-line" style="width: 32px; height: 32px; border-radius: 6px;"></div></td>
                 </tr>
               </tbody>
@@ -1852,6 +1847,37 @@
       <div class="modal-actions">
         <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
         <button class="btn btn-danger" id="modal-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Config Details Modal ────────────────────────────── -->
+  <div class="modal-overlay" id="config-details-modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="config-details-modal-title">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <h3 id="config-details-modal-title" style="margin-bottom:2px;">Config Details</h3>
+          <p class="modal-name" id="config-details-name" style="margin:0;font-size:0.85rem;color:var(--text-3);"></p>
+        </div>
+        <button class="panel-close" id="config-details-modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="config-details-list">
+        <div class="config-details-row">
+          <span class="config-details-label">Created By</span>
+          <span class="config-details-value" id="config-details-created-by">—</span>
+        </div>
+        <div class="config-details-row">
+          <span class="config-details-label">Creation Date</span>
+          <span class="config-details-value" id="config-details-created-at">—</span>
+        </div>
+        <div class="config-details-row">
+          <span class="config-details-label">Last Updated By</span>
+          <span class="config-details-value" id="config-details-updated-by">—</span>
+        </div>
+        <div class="config-details-row">
+          <span class="config-details-label">Last Updated Date</span>
+          <span class="config-details-value" id="config-details-updated-at">—</span>
+        </div>
       </div>
     </div>
   </div>

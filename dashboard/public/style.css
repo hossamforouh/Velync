@@ -375,19 +375,6 @@ body::after {
   z-index: 100;
 }
 
-.sidebar::-webkit-scrollbar {
-  width: 4px;
-}
-
-.sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-  background: rgba(129, 140, 248, 0.15);
-  border-radius: 4px;
-}
-
 /* ── TomSelect Overrides ────────────────────────────────────── */
 .ts-control {
   background: var(--bg-card) !important;
@@ -1359,12 +1346,6 @@ header.legacy-header {
   width: 110px;
 }
 
-/* Owner column */
-.configs-table th:nth-child(7),
-.configs-table td:nth-child(7) {
-  width: 100px;
-}
-
 .configs-table th.sortable {
   cursor: pointer;
   padding-right: 18px;
@@ -2179,28 +2160,83 @@ header.legacy-header {
   flex: 1;
   overflow-y: auto;
   padding: 28px;
+}
+
+/* ── Unified Scrollbar Style ───────────────────────────────────
+   One themed scrollbar shared by every scrollable panel/table/dropdown
+   in the app (this exact rule started life as a Settings-modal-only
+   fix — see the sync-configs table screenshot report of a native gray
+   scrollbar there while Settings had a thin on-brand one). Add a
+   container to this selector list rather than writing a new
+   ::-webkit-scrollbar block per class.
+   scrollbar-color only styles Firefox — Chrome/Safari/Edge ignore it and
+   fall back to the native OS scrollbar (a bright, thick, theme-blind
+   bar) unless the ::-webkit-scrollbar rules below are also given. */
+.panel-body,
+.settings-content,
+.sidebar,
+.content-area,
+.grid-table-scroll,
+.grid-table-wrapper.frozen-wrapper,
+.connections-table-wrap,
+.usage-modal,
+.platform-tabs,
+.ds-multi-select.has-options {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 
-/* scrollbar-color above only styles Firefox — Chrome/Safari/Edge ignore it
-   and fall back to the native OS scrollbar (a bright, thick, theme-blind
-   bar), which is what was showing on hover in the Settings modal. These
-   give WebKit/Blink browsers the same thin, dark, on-brand scrollbar. */
-.panel-body::-webkit-scrollbar {
+.panel-body::-webkit-scrollbar,
+.settings-content::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar,
+.content-area::-webkit-scrollbar,
+.grid-table-scroll::-webkit-scrollbar,
+.grid-table-wrapper.frozen-wrapper::-webkit-scrollbar,
+.connections-table-wrap::-webkit-scrollbar,
+.usage-modal::-webkit-scrollbar,
+.platform-tabs::-webkit-scrollbar,
+.ds-multi-select.has-options::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
-.panel-body::-webkit-scrollbar-track {
+.panel-body::-webkit-scrollbar-track,
+.settings-content::-webkit-scrollbar-track,
+.sidebar::-webkit-scrollbar-track,
+.content-area::-webkit-scrollbar-track,
+.grid-table-scroll::-webkit-scrollbar-track,
+.grid-table-wrapper.frozen-wrapper::-webkit-scrollbar-track,
+.connections-table-wrap::-webkit-scrollbar-track,
+.usage-modal::-webkit-scrollbar-track,
+.platform-tabs::-webkit-scrollbar-track,
+.ds-multi-select.has-options::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.panel-body::-webkit-scrollbar-thumb {
+.panel-body::-webkit-scrollbar-thumb,
+.settings-content::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb,
+.content-area::-webkit-scrollbar-thumb,
+.grid-table-scroll::-webkit-scrollbar-thumb,
+.grid-table-wrapper.frozen-wrapper::-webkit-scrollbar-thumb,
+.connections-table-wrap::-webkit-scrollbar-thumb,
+.usage-modal::-webkit-scrollbar-thumb,
+.platform-tabs::-webkit-scrollbar-thumb,
+.ds-multi-select.has-options::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 4px;
 }
 
-.panel-body::-webkit-scrollbar-thumb:hover {
+.panel-body::-webkit-scrollbar-thumb:hover,
+.settings-content::-webkit-scrollbar-thumb:hover,
+.sidebar::-webkit-scrollbar-thumb:hover,
+.content-area::-webkit-scrollbar-thumb:hover,
+.grid-table-scroll::-webkit-scrollbar-thumb:hover,
+.grid-table-wrapper.frozen-wrapper::-webkit-scrollbar-thumb:hover,
+.connections-table-wrap::-webkit-scrollbar-thumb:hover,
+.usage-modal::-webkit-scrollbar-thumb:hover,
+.platform-tabs::-webkit-scrollbar-thumb:hover,
+.ds-multi-select.has-options::-webkit-scrollbar-thumb:hover {
   background: var(--border-hover, var(--border));
 }
 
@@ -2983,6 +3019,39 @@ header.legacy-header {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+}
+
+/* ── Config Details Modal ──────────────────────────────────────── */
+.config-details-list {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-details-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.config-details-row:last-child {
+  border-bottom: none;
+}
+
+.config-details-label {
+  font-size: 0.8rem;
+  color: var(--text-3);
+}
+
+.config-details-value {
+  font-size: 0.875rem;
+  color: var(--text-1);
+  font-weight: 500;
+  text-align: right;
 }
 
 /* ── Toast notifications ──────────────────────────────────────── */
@@ -4533,6 +4602,68 @@ input:-webkit-autofill {
   border: 1px solid rgba(251, 113, 133, 0.3);
 }
 
+/* ── Plan-usage quota indicator (Active Flows page) ────────────
+   Was a bare line of red text when at the plan limit — no visual
+   weight, no obvious next step. Now a pill matching the .badge-* look
+   used everywhere else, with an icon and (when at the limit) an inline
+   Upgrade button instead of a hint the user has to act on elsewhere. */
+.quota-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  width: fit-content;
+  margin-top: 4px;
+}
+
+.quota-indicator .quota-indicator-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.quota-indicator .quota-indicator-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.quota-indicator.quota-indicator--limit {
+  background: rgba(251, 113, 133, 0.1);
+  border-color: rgba(251, 113, 133, 0.3);
+  color: var(--danger);
+}
+
+.quota-indicator.quota-indicator--near {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: var(--amber);
+}
+
+.quota-indicator-upgrade-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--grad);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.quota-indicator-upgrade-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
 /* ── Execution Logs Filter Pills ────────────────────────────── */
 .logs-filter-pills {
   display: flex;
@@ -4900,25 +5031,6 @@ input:-webkit-autofill {
   flex: 1;
   padding: 40px;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-.settings-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.settings-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.settings-content::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 4px;
-}
-
-.settings-content::-webkit-scrollbar-thumb:hover {
-  background: var(--border-hover);
 }
 
 .settings-pane {
@@ -6060,17 +6172,6 @@ input:-webkit-autofill {
   max-height: 200px;
   overflow-y: auto;
   padding: 10px;
-}
-
-.ds-multi-select.has-options::-webkit-scrollbar {
-  width: 4px;
-}
-.ds-multi-select.has-options::-webkit-scrollbar-track {
-  background: transparent;
-}
-.ds-multi-select.has-options::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 4px;
 }
 
 /* Placeholder / empty state */

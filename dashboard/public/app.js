@@ -1588,11 +1588,19 @@ onAuthStateChanged(auth, async (user) => {
             : `${used} of ${max} active flows used.${atLimit ? ' Upgrade to add more.' : ''}`;
         }
         if (flowsText) {
-          flowsText.style.display = 'block';
-          flowsText.style.color = atLimit ? 'var(--rose)' : '';
-          flowsText.textContent = unlimited
-            ? `${plan.name} plan — ${used} active flow${used !== 1 ? 's' : ''}, unlimited.`
-            : `${plan.name} plan — ${used} of ${max} active flow${max !== 1 ? 's' : ''} used.${atLimit ? ' Upgrade to activate more.' : ''}`;
+          flowsText.style.display = 'inline-flex';
+          const nearLimit = !unlimited && !atLimit && used >= max - 1 && max > 1;
+          flowsText.className = 'quota-indicator' + (atLimit ? ' quota-indicator--limit' : nearLimit ? ' quota-indicator--near' : '');
+          const icon = atLimit
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>';
+          const label = unlimited
+            ? `${escHtml(plan.name)} plan &middot; ${used} active flow${used !== 1 ? 's' : ''} &middot; Unlimited`
+            : `${escHtml(plan.name)} plan &middot; ${used} of ${max} active flow${max !== 1 ? 's' : ''} used`;
+          const upgradeBtn = atLimit ? `<button type="button" class="quota-indicator-upgrade-btn" id="btn-quota-upgrade">Upgrade</button>` : '';
+          flowsText.innerHTML = `<span class="quota-indicator-icon">${icon}</span><span>${label}</span>${upgradeBtn}`;
+          const btnUpgrade = document.getElementById('btn-quota-upgrade');
+          if (btnUpgrade) btnUpgrade.addEventListener('click', openBillingSettings);
         }
       } catch (err) {
         if (hasSettingsUI) {
@@ -3186,7 +3194,7 @@ function renderCards() {
   // If search matches nothing
   if (sortedConfigs.length === 0) {
     tableBody.innerHTML = getEmptyStateRowHTML({
-      colspan: 8,
+      colspan: 7,
       iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
       title: 'No match found',
       message: 'Adjust your filter or search terms and try again.',
@@ -3219,17 +3227,10 @@ function renderCards() {
     }
     const p1Logo = getPlatformLogoSvg(p1Id);
     const p2Logo = getPlatformLogoSvg(p2Id);
-    let ownerName = cfg.ownerName || cfg.createdBy || '—';
-    if (!cfg.ownerName && cfg.ownerId) {
-      if (auth.currentUser && cfg.ownerId === auth.currentUser.uid && auth.currentUser.displayName) {
-        ownerName = auth.currentUser.displayName;
-      } else if (window.usersCache && window.usersCache[cfg.ownerId] && window.usersCache[cfg.ownerId] !== 'fetching') {
-        const cachedUser = window.usersCache[cfg.ownerId];
-        ownerName = cachedUser.name || cachedUser.displayName || cachedUser.email || ownerName;
-      } else if (!window.usersCache[cfg.ownerId]) {
-        fetchUserForCache(cfg.ownerId);
-      }
-    }
+    // Pre-warms window.usersCache for cfg.ownerId so it's ready by the time
+    // the "View Details" modal needs it — the modal itself can't await a
+    // fetch mid-render without becoming async for every row.
+    resolveDisplayName(cfg.ownerId, cfg.ownerName || cfg.createdBy);
     const lastRun = cfg.lastRunAt ? fmtDate(cfg.lastRunAt) : '—';
 
     // Parse the cron schedule into a readable text format. Webhook push
@@ -3244,10 +3245,13 @@ function renderCards() {
     } else if (p1SupportsWebhooks && window._currentPlan?.webhookSyncEnabled) {
       scheduleText = '<span>⚡ Real-time<span class="info-tip" tabindex="0" role="note" aria-label="Changes in the source database sync within seconds via webhook. Falls back to the interval below if a webhook is ever missed.">i<span class="info-tip-bubble">Changes in the source database sync within seconds via webhook. Falls back to the interval below if a webhook is ever missed.</span></span></span>';
     } else if (cfg.cronSchedule) {
-      const [cVal, cUnit] = parseCron(cfg.cronSchedule);
-      let displayUnit = cUnit.charAt(0).toUpperCase() + cUnit.slice(1);
-      if (cVal == 1 && displayUnit.endsWith('s')) displayUnit = displayUnit.slice(0, -1);
-      scheduleText = cUnit === 'advanced' ? 'Custom' : `Every ${cVal} ${displayUnit}`;
+      // parseCron()'s second return value is the raw cron string itself,
+      // not a unit word — reconstructing "Every {cVal} {cUnit}" from it
+      // produced garbage like "Every 30 */30 * * * *". The presets already
+      // carry a correctly-formatted label (irregulars like "Every hour"
+      // included), so just look one up instead of trying to re-derive it.
+      const preset = SYNC_INTERVAL_PRESETS.find(p => p.cron === cfg.cronSchedule);
+      scheduleText = preset ? preset.label : 'Custom';
     }
 
     row.innerHTML = `
@@ -3277,13 +3281,15 @@ function renderCards() {
       <td data-label="Last Run">
         <span class="card-value">${lastRun}</span>
       </td>
-      <td data-label="Owner">
-        <span class="card-value">${escHtml(ownerName)}</span>
-      </td>
       <td class="col-actions">
         <div class="row-actions-dropdown">
           <button class="row-action-btn btn-row-more" data-id="${cfg.id}" type="button" title="More actions">⋮</button>
           <div class="row-actions-menu">
+            <button class="row-action-menu-item btn-row-view-details" data-id="${cfg.id}" type="button">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              View Details
+            </button>
+            <div class="row-actions-menu-divider"></div>
             <button class="row-action-menu-item btn-row-edit" data-id="${cfg.id}" type="button">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Edit
@@ -3320,6 +3326,9 @@ function renderCards() {
     tableBody.addEventListener('click', (e) => {
       const row = e.target.closest('tr');
       if (!row || !row.dataset.id) return;
+
+      const viewDetailsBtn = e.target.closest('.btn-row-view-details');
+      if (viewDetailsBtn) { e.stopPropagation(); openConfigDetailsModal(viewDetailsBtn.dataset.id); return; }
 
       const editBtn = e.target.closest('.btn-row-edit');
       if (editBtn) { e.stopPropagation(); openPanel(editBtn.dataset.id); return; }
@@ -3421,12 +3430,12 @@ async function loadConfigs(silent = false) {
   } catch (err) {
     tableBody.innerHTML = `
       <tr class="table-empty-row">
-        <td colspan="8" style="color: var(--rose); font-weight: 500; text-align: center; padding: 20px;">
+        <td colspan="7" style="color: var(--rose); font-weight: 500; text-align: center; padding: 20px;">
           ${feather.icons['alert-triangle'].toSvg({width: 18, height: 18, style: 'vertical-align: middle; color: var(--warning);'})} ${!navigator.onLine ? 'No internet available' : 'Could not load configs: ' + escHtml(err.message)}
         </td>
       </tr>
       <tr class="table-empty-row">
-        <td colspan="8" style="text-align: center; padding: 0 20px 20px;">
+        <td colspan="7" style="text-align: center; padding: 0 20px 20px;">
           <button class="btn btn-sm btn-secondary" id="btn-retry-load" type="button">
             ${feather.icons['refresh-cw'].toSvg({width: 12, height: 12})} Retry
           </button>
@@ -3445,11 +3454,17 @@ async function loadConfigs(silent = false) {
 // config actually re-runs plan enforcement (max active configs, connector
 // tiers, min sync interval) instead of silently bypassing it.
 async function toggleConfig(id, checkbox) {
-  const prev = checkbox.checked;
+  // Captured BEFORE anything else — by the time this handler runs (bound to
+  // the checkbox's 'change' event), the browser has already flipped
+  // checkbox.checked to the NEW value, so using that as "the state to
+  // revert to on failure" was a no-op: on a rejected activation the toggle
+  // stayed visually ON even though the backend left it paused (matches the
+  // "Toggle failed: ... Upgrade to add more." report — the switch never
+  // switched back). wasActive reflects the actual last-known data state.
+  const cfg = configs.find(c => c.id === id);
+  const wasActive = cfg ? configIsActive(cfg) : false;
   checkbox.disabled = true;
   try {
-    const cfg = configs.find(c => c.id === id);
-    const wasActive = cfg ? configIsActive(cfg) : false;
     const newStatus = wasActive ? 'paused' : 'active';
     await updateConfigViaApi(id, { status: newStatus });
 
@@ -3457,7 +3472,7 @@ async function toggleConfig(id, checkbox) {
     renderCards();
     showToast(`Config ${newStatus === 'active' ? 'activated' : 'paused'}`, newStatus === 'active' ? 'success' : 'info');
   } catch (err) {
-    checkbox.checked = prev;
+    checkbox.checked = wasActive;
     showToast('Toggle failed: ' + err.message, 'error');
   } finally {
     checkbox.disabled = false;
@@ -5057,7 +5072,16 @@ document.getElementById('btn-step1-next')?.addEventListener('click', () => {
   if (!p1) { showToast('Please complete the setup for Platform 1.', 'error'); return; }
   if (!p2) { showToast('Please complete the setup for Platform 2.', 'error'); return; }
   if (p1 === p2) { showToast('The source and destination accounts cannot be the same.', 'error'); return; }
-  
+  // Connection selected isn't the whole story — each platform's own
+  // settings (e.g. which Notion database, which TickTick list) live in
+  // #source-dynamic-container/#dest-dynamic-container inside these
+  // sections and are marked `required` by the schema-driven render. This
+  // was previously unchecked here, so "Next" would happily advance to Map
+  // Fields with a platform node still showing its "needs setup" warning
+  // triangle — updateNodeStatuses() already flags this, just wasn't gating.
+  if (!isSectionValid('section-source')) { showToast('Please finish configuring Platform 1 — click its node to set it up.', 'error'); updateNodeStatuses(); return; }
+  if (!isSectionValid('section-dest')) { showToast('Please finish configuring Platform 2 — click its node to set it up.', 'error'); updateNodeStatuses(); return; }
+
   loadDefaultMappingsPreset();
   goToStep(2);
 });
@@ -5733,6 +5757,60 @@ function fmtDate(iso) {
     return new Date(iso).toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
   } catch { return iso; }
 }
+
+// Resolves a display name for a uid, preferring an already-known name
+// (stored on the document itself, e.g. cfg.ownerName) over a cache lookup —
+// older documents predating that field, or predating updatedByName, fall
+// back to whatever's in window.usersCache, kicking off a fetch (and
+// returning '—' for this render) if it isn't cached yet.
+function resolveDisplayName(uid, knownName) {
+  if (knownName) return knownName;
+  if (!uid) return '—';
+  if (auth.currentUser && uid === auth.currentUser.uid && auth.currentUser.displayName) {
+    return auth.currentUser.displayName;
+  }
+  if (window.usersCache && window.usersCache[uid] && window.usersCache[uid] !== 'fetching') {
+    const cachedUser = window.usersCache[uid];
+    return cachedUser.name || cachedUser.displayName || cachedUser.email || '—';
+  }
+  if (!window.usersCache || !window.usersCache[uid]) fetchUserForCache(uid);
+  return '—';
+}
+
+// ─── Config Details Modal ──────────────────────────────────────
+function openConfigDetailsModal(configId) {
+  const cfg = configs.find(c => c.id === configId);
+  if (!cfg) { showToast('Config not found', 'error'); return; }
+
+  const overlay = document.getElementById('config-details-modal-overlay');
+  if (!overlay) return;
+
+  const createdBy = resolveDisplayName(cfg.ownerId, cfg.ownerName || cfg.createdBy);
+  // updatedByName only exists on configs saved since this field was added —
+  // older configs that haven't been edited since show '—' rather than a
+  // guess, but updatedAt has always been set (including at creation), so
+  // the date is never a guess even when the name is unknown.
+  const updatedBy = cfg.updatedByName
+    ? cfg.updatedByName
+    : (cfg.updatedById ? resolveDisplayName(cfg.updatedById, null) : '—');
+
+  document.getElementById('config-details-name').textContent = cfg.description || cfg.id;
+  document.getElementById('config-details-created-by').textContent = createdBy;
+  document.getElementById('config-details-created-at').textContent = cfg.createdAt ? fmtDate(cfg.createdAt) : '—';
+  document.getElementById('config-details-updated-by').textContent = updatedBy;
+  document.getElementById('config-details-updated-at').textContent = cfg.updatedAt ? fmtDate(cfg.updatedAt) : '—';
+
+  overlay.classList.add('open');
+}
+
+function closeConfigDetailsModal() {
+  document.getElementById('config-details-modal-overlay')?.classList.remove('open');
+}
+
+document.getElementById('config-details-modal-close')?.addEventListener('click', closeConfigDetailsModal);
+document.getElementById('config-details-modal-overlay')?.addEventListener('click', (e) => {
+  if (e.target.id === 'config-details-modal-overlay') closeConfigDetailsModal();
+});
 
 // ─── God Mode Workspace Switcher ──────────────────────────────
 function initWorkspaceDropdownSkeleton() {
