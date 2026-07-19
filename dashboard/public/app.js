@@ -1190,6 +1190,8 @@ const fDeleteAfter   = document.getElementById('f-delete-after');
 
 const deleteAfterRow = document.getElementById('delete-after-row');
 const btnAddMapping  = document.getElementById('btn-add-mapping');
+const btnPreviewMapping = document.getElementById('btn-preview-mapping');
+const mappingPreviewResults = document.getElementById('mapping-preview-results');
 const mappingsContainer = document.getElementById('mappings-container');
 const fSourceList        = document.getElementById('f-source-list');
 const fTtTag         = document.getElementById('f-tt-tag');
@@ -3694,6 +3696,11 @@ async function openPanel(id = null, { duplicateFromId = null } = {}) {
   }
   sidePanel.classList.add('open');
   panelOverlay.classList.add('open');
+  // Move focus into the panel so keyboard/screen-reader users land somewhere
+  // sensible instead of on whatever was focused on the dimmed page behind
+  // it. Duplicate mode already focuses the Description field above (a more
+  // useful landing spot than the panel itself), so it's left alone here.
+  if (!duplicateFromId) sidePanel.focus();
 }
 window.openPanel = openPanel; // Expose globally for external scripts
 window.confirmConfigCreationAllowed = confirmConfigCreationAllowed; // Expose globally so any entry point that opens the panel (e.g. the Marketplace "Configure Sync" button) can gate on the plan's active-flow limit too
@@ -4011,15 +4018,71 @@ function addMappingRow(sourceField = '', destField = '', confidence = null, reas
   `;
 
   row.querySelector('.map-source').addEventListener('change', () => updateStatusMappingUI());
-  row.querySelector('.map-dest').addEventListener('change', () => updateStatusMappingUI());
+  row.querySelector('.map-dest').addEventListener('change', () => { updateStatusMappingUI(); checkMappingConflicts(); });
 
-  row.querySelector('.btn-remove-mapping').addEventListener('click', () => {
+  row.querySelector('.btn-remove-mapping').addEventListener('click', async () => {
+    // Only prompt when the row actually has something in it — an empty row
+    // a user just added and immediately decided against removing shouldn't
+    // need a confirmation, but one with real selections (theirs or an AI
+    // suggestion) losing it to a misclick is exactly the kind of thing that
+    // should be confirmable, not instant and silent.
+    const srcVal = (row.querySelector('.map-source') || row.querySelector('.map-ticktick'))?.value;
+    const destVal = (row.querySelector('.map-dest') || row.querySelector('.map-notion'))?.value;
+    if (srcVal || destVal) {
+      const ok = await confirmDialog({
+        title: 'Remove this mapping?',
+        message: 'This field mapping will be removed. You can re-add it manually if you change your mind.',
+        confirmText: 'Remove',
+        confirmClass: 'btn-danger',
+      });
+      if (!ok) return;
+    }
     row.remove();
     updateStatusMappingUI();
+    checkMappingConflicts();
   });
 
   mappingsContainer.appendChild(row);
   updateStatusMappingUI();
+  checkMappingConflicts();
+}
+
+// Live counterpart to the duplicate-destination-field check that used to
+// only run at Save/Submit — highlights every row involved in a collision
+// as soon as it happens (not just at the end of the wizard) and lists the
+// conflicting field names in a banner under the mapping list. Save-time
+// validation still blocks the actual save; this just surfaces the same
+// problem earlier, at the row that caused it, instead of a bare toast.
+function checkMappingConflicts() {
+  const warningEl = document.getElementById('mapping-conflict-warning');
+  const rows = Array.from(mappingsContainer.querySelectorAll('.mapping-row'));
+  const destCounts = {};
+  rows.forEach(row => {
+    const destSelect = row.querySelector('.map-dest') || row.querySelector('.map-notion');
+    const val = destSelect?.value;
+    if (!val || val === '__error') return;
+    destCounts[val] = (destCounts[val] || 0) + 1;
+  });
+  const conflictingLabels = new Set();
+  rows.forEach(row => {
+    const destSelect = row.querySelector('.map-dest') || row.querySelector('.map-notion');
+    const val = destSelect?.value;
+    const hasConflict = !!val && val !== '__error' && destCounts[val] > 1;
+    row.style.borderColor = hasConflict ? 'var(--rose)' : 'var(--border)';
+    row.style.background = hasConflict ? 'rgba(251, 113, 133, 0.06)' : 'rgba(255, 255, 255, 0.02)';
+    if (hasConflict) {
+      conflictingLabels.add(destSelect.options[destSelect.selectedIndex]?.text || val);
+    }
+  });
+  if (!warningEl) return conflictingLabels.size > 0;
+  if (conflictingLabels.size > 0) {
+    warningEl.style.display = 'flex';
+    warningEl.innerHTML = `${feather.icons['alert-triangle'].toSvg({width: 14, height: 14, style: 'flex-shrink:0;'})}<span>Mapped to the same destination more than once: ${Array.from(conflictingLabels).map(l => escHtml(l)).join(', ')}. Each destination field can only receive one mapping.</span>`;
+  } else {
+    warningEl.style.display = 'none';
+    warningEl.innerHTML = '';
+  }
+  return conflictingLabels.size > 0;
 }
 
 let currentModalTarget = null;
@@ -4390,6 +4453,112 @@ async function fetchDestSchema(connectionId, platform, context = {}) {
   }
 }
 
+// "Preview Sample Data" (Map Fields step) — fetches a couple of real source
+// records through the mapping the user has built so far and shows them as
+// they'd actually land on the destination side, before anything is saved
+// or synced. Read-only: only ever calls the source connector's fetch(),
+// never writes to the destination, so there's no risk of this touching
+// real data anywhere.
+async function previewMappingSample() {
+  const sourceConnId = document.getElementById('f-source-connection')?.value;
+  if (!sourceConnId) { showToast('Select a source connection first.', 'error'); return; }
+
+  // Dropdown option text includes a " [Type: X]" suffix (useful when picking
+  // a field, since it disambiguates same-named fields of different types) —
+  // stripped back out here since it just reads as clutter in a results
+  // table where every column already implies its own type.
+  const stripTypeSuffix = (label) => (label || '').replace(/\s*\[Type:[^\]]*\]\s*$/i, '');
+
+  const rows = Array.from(mappingsContainer.querySelectorAll('.mapping-row'));
+  const mappings = rows.map(row => {
+    const srcSelect = row.querySelector('.map-source') || row.querySelector('.map-ticktick');
+    const destSelect = row.querySelector('.map-dest') || row.querySelector('.map-notion');
+    return {
+      sourceField: srcSelect?.value,
+      sourceLabel: stripTypeSuffix(srcSelect?.options[srcSelect.selectedIndex]?.text) || srcSelect?.value,
+      destLabel: stripTypeSuffix(destSelect?.options[destSelect.selectedIndex]?.text) || destSelect?.value,
+    };
+  }).filter(m => m.sourceField);
+
+  if (mappings.length === 0) {
+    showToast('Add at least one field mapping to preview.', 'error');
+    return;
+  }
+
+  const sourceConn = typeof _connectionsCache !== 'undefined' ? _connectionsCache.find(c => c.id === sourceConnId) : null;
+  const sourcePlatform = sourceConn?.provider || _dropdownSourceProvider;
+  if (!sourcePlatform) { showToast('Could not determine the source platform.', 'error'); return; }
+
+  const entity = (window.harvestDynamicFields && window.harvestDynamicFields('source-dynamic-container')['targetEntity']) || 'Tasks';
+  const context = window.harvestDynamicFields ? window.harvestDynamicFields('source-dynamic-container') : {};
+
+  setButtonLoading(btnPreviewMapping, true, 'Preview Sample Data', 'Loading…');
+  try {
+    const user = auth.currentUser;
+    const idToken = await user.getIdToken();
+    const res = await fetch(`${API_URL}/preview-mapping`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+      body: JSON.stringify({
+        sourceConnectionId: sourceConnId,
+        sourcePlatform,
+        sourceEntityType: entity,
+        context,
+        sourceFields: mappings.map(m => m.sourceField),
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      mappingPreviewResults.style.display = 'block';
+      mappingPreviewResults.innerHTML = `<div style="padding: 12px; text-align: center; color: #ef4444; font-size: 0.85rem;">${escHtml(data.error || 'Failed to load preview data.')}</div>`;
+      return;
+    }
+    if (!data.samples || data.samples.length === 0) {
+      mappingPreviewResults.style.display = 'block';
+      mappingPreviewResults.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-3); font-size: 0.85rem;">No records found to preview yet.</div>`;
+      return;
+    }
+    const arrowIcon = feather.icons['arrow-right'].toSvg({ width: 12, height: 12, style: 'flex-shrink:0; opacity:0.5; margin: 0 6px; vertical-align: -2px;' });
+    const headerCells = [
+      `<th style="text-align:left; padding: 10px 14px; font-size: 0.72rem; font-weight: 700; color: var(--text-3); border-bottom: 1px solid var(--border); white-space: nowrap;">Record</th>`,
+      ...mappings.map(m => `<th style="text-align:left; padding: 10px 14px; font-size: 0.8rem; font-weight: 600; color: var(--text-1); border-bottom: 1px solid var(--border); white-space: nowrap;">${escHtml(m.sourceLabel)}${arrowIcon}${escHtml(m.destLabel)}</th>`),
+    ].join('');
+    const bodyRows = data.samples.map((sample, i) => {
+      const rowBg = i % 2 === 1 ? 'background: rgba(255, 255, 255, 0.015);' : '';
+      const cells = [
+        `<td style="padding: 10px 14px; font-size: 0.82rem; font-weight: 600; color: var(--text-1); border-bottom: 1px solid var(--border); vertical-align: top; white-space: nowrap;">${escHtml(sample.title || 'Untitled')}</td>`,
+        ...mappings.map(m => {
+          let val = sample.fields[m.sourceField];
+          if (val === null || val === undefined || val === '') val = '<span style="color:var(--text-3); font-style: italic;">Empty</span>';
+          else val = escHtml(String(val)).slice(0, 120);
+          return `<td style="padding: 10px 14px; font-size: 0.82rem; color: var(--text-2); border-bottom: 1px solid var(--border); vertical-align: top;">${val}</td>`;
+        }),
+      ].join('');
+      return `<tr style="${rowBg}">${cells}</tr>`;
+    }).join('');
+    mappingPreviewResults.style.display = 'block';
+    mappingPreviewResults.innerHTML = `
+      <div style="overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card, var(--bg-2));">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead style="background: var(--glass, rgba(255,255,255,0.03));"><tr>${headerCells}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+      <div class="form-hint" style="margin-top: 8px; display:flex; align-items:center; gap:6px;">
+        ${feather.icons['info'].toSvg({ width: 12, height: 12, style: 'flex-shrink:0;' })}
+        <span>Showing ${data.samples.length} of ${data.totalAvailable} record${data.totalAvailable !== 1 ? 's' : ''} currently at the source. Nothing here has been synced — this is a read-only preview.</span>
+      </div>
+    `;
+    if (window.feather) window.feather.replace();
+  } catch (err) {
+    console.warn('[previewMappingSample] Failed:', err);
+    mappingPreviewResults.style.display = 'block';
+    mappingPreviewResults.innerHTML = `<div style="padding: 12px; text-align: center; color: #ef4444; font-size: 0.85rem;">Network error loading preview. Please try again.</div>`;
+  } finally {
+    setButtonLoading(btnPreviewMapping, false, 'Preview Sample Data');
+  }
+}
+
 function triggerFormFieldVisibility() {
   const syncType = fSyncType.value;
   if (syncType === 'Bidirectional') {
@@ -4453,7 +4622,10 @@ function clearForm() {
 
   notionDbProperties = {};
   mappingsContainer.innerHTML = '';
-  
+  if (mappingPreviewResults) { mappingPreviewResults.style.display = 'none'; mappingPreviewResults.innerHTML = ''; }
+  const conflictWarningEl = document.getElementById('mapping-conflict-warning');
+  if (conflictWarningEl) { conflictWarningEl.style.display = 'none'; conflictWarningEl.innerHTML = ''; }
+
   currentStatusState = { options: [], incomplete: [], incompleteDefault: '', complete: [], completeDefault: '' };
   // cleared state instead of tomselect
   if (window.fStatusIncompleteDefault) fStatusIncompleteDefault.innerHTML = '';
@@ -4881,23 +5053,36 @@ async function saveConfig(e, isSubmit = false) {
     }
   }
 
-  // Validate duplicate destination fields
+  // Validate duplicate destination fields. checkMappingConflicts() has
+  // already been keeping the mapping rows visually flagged live as the
+  // user works (see addMappingRow) — reuse it here so a Submit clicked
+  // from a later step still jumps back and highlights exactly which rows
+  // collide, instead of leaving the user to hunt for a bare toast message.
   const mappedDestFields = new Set();
+  let duplicateDestField = null;
   for (const m of payload.fieldMappings) {
-    if (mappedDestFields.has(m.destField)) {
-      showToast(`Validation Error: Destination field '${m.destField}' is mapped multiple times.`, 'error');
-      isSavingConfig = false;
-      if (btnSave) btnSave.disabled = false;
-      if (btnSubmit) btnSubmit.disabled = false;
-      return;
-    }
+    if (mappedDestFields.has(m.destField)) { duplicateDestField = m.destField; break; }
     mappedDestFields.add(m.destField);
   }
+  if (duplicateDestField) {
+    goToStep(2);
+    checkMappingConflicts();
+    mappingsContainer.querySelector('.mapping-row[style*="rose"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showToast(`Validation Error: Destination field '${duplicateDestField}' is mapped multiple times.`, 'error');
+    isSavingConfig = false;
+    if (btnSave) btnSave.disabled = false;
+    if (btnSubmit) btnSubmit.disabled = false;
+    return;
+  }
 
-  // Validate required destination fields
+  // Validate required destination fields — no specific row to highlight
+  // here (the problem is a missing row, not a wrong one), so this jumps to
+  // the mapping section and scrolls it into view instead.
   if (typeof notionDbProperties !== 'undefined') {
     for (const [key, prop] of Object.entries(notionDbProperties)) {
       if (prop.required && !mappedDestFields.has(key)) {
+        goToStep(2);
+        mappingsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
         showToast(`Validation Error: Required destination field '${prop.label || key}' must be mapped.`, 'error');
         isSavingConfig = false;
         if (btnSave) btnSave.disabled = false;
@@ -5611,6 +5796,7 @@ fSyncType.addEventListener('change', () => {
 });
 
 btnAddMapping.addEventListener('click', () => addMappingRow('', ''));
+btnPreviewMapping?.addEventListener('click', previewMappingSample);
 
 
 
@@ -5684,10 +5870,25 @@ if (fSourceList) {
 }
 
 
-// Close modal on Escape. The New/Edit Config panel is intentionally excluded —
-// it's a multi-step wizard and an accidental Escape shouldn't back you out of it.
+// Close modal / node sub-modal / wizard panel on Escape. The wizard panel
+// used to be deliberately excluded here over concern that an accidental
+// Escape would back a user out mid-edit — but closePanel() already prompts
+// to save/discard/cancel whenever there are unsaved changes (same guard as
+// the ✕ button and the overlay click), so that risk doesn't actually apply;
+// leaving it out just meant Escape silently did nothing on the busiest
+// panel in the app. Only closes it if nothing is already layered on top
+// (the node sub-modal or a confirm dialog), so Escape closes one thing at
+// a time from the outside in, not everything at once.
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeNodeModal(); }
+  if (e.key !== 'Escape') return;
+  if (nodeModalOverlay && nodeModalOverlay.classList.contains('open')) {
+    closeNodeModal();
+    return;
+  }
+  closeModal();
+  if (sidePanel && sidePanel.classList.contains('open')) {
+    closePanel();
+  }
 });
 
 // ─── Node Config Modal Logic ────────────────────────────────────

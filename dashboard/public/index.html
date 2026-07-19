@@ -1561,10 +1561,10 @@
   <div class="panel-overlay" id="panel-overlay"></div>
 
   <!-- ── Side panel ─────────────────────────────────────── -->
-  <aside class="side-panel" id="side-panel">
+  <aside class="side-panel" id="side-panel" tabindex="-1">
     <div class="panel-header">
       <h2 id="panel-title">New Config</h2>
-      <button class="panel-close" id="panel-close">✕</button>
+      <button class="panel-close" id="panel-close" aria-label="Close">✕</button>
     </div>
 
     <div class="panel-body">
@@ -1706,6 +1706,15 @@
             </div>
             <div class="form-hint" style="margin-bottom: 0.75rem;">Map fields from the source platform to the destination platform properties.</div>
             <div id="mappings-container" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+            <div id="mapping-conflict-warning" class="mapping-conflict-warning" style="display:none;" role="alert"></div>
+
+            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);">
+              <button type="button" id="btn-preview-mapping" class="btn btn-secondary btn-sm" style="padding: 6px 10px; font-size: 0.8rem;">
+                <i data-feather="eye" style="width:12px;height:12px;"></i> Preview Sample Data
+              </button>
+              <div class="form-hint" style="margin-top: 6px;">See a few real records mapped through before you deploy, so mistakes show up here instead of in your destination.</div>
+              <div id="mapping-preview-results" style="display:none; margin-top: 12px;"></div>
+            </div>
           </div>
 
           <div class="form-section" id="section-status-mapping" style="display: none;">
@@ -2413,7 +2422,7 @@
   <!-- Self-hosted (was unpkg) so an icon CDN outage can't break rendering. -->
   <script src="/vendor/feather.min.js?v=4.29.2"></script>
 
-  <script type="module" src="app.js?v=9"></script>
+  <script type="module" src="app.js?v=11"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       // Guard: if feather somehow failed to load (e.g. blocked by an

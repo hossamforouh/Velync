@@ -2360,13 +2360,24 @@ header.legacy-header {
   line-height: 1.5;
 }
 
+/* Sticky to the bottom of .panel-body's own scrollport (not a separate
+   .panel-footer — each wizard step keeps its own action bar so the buttons
+   shown always match the visible step) so Save/Next/Submit stay reachable
+   without scrolling past the flow diagram or field-mapping list first.
+   Negative margins + a negative `bottom` bleed it back out to the edges of
+   .panel-body's 28px padding so it reads as a flush footer bar rather than
+   floating with a gap beneath it. */
 .step-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-top: 20px;
+  padding: 20px 28px;
   border-top: 1px solid var(--border);
-  margin-top: 24px;
+  margin: 24px -28px -28px;
+  position: sticky;
+  bottom: -28px;
+  background: var(--bg-2);
+  z-index: 5;
 }
 
 /* ── Step 1 Connection Area ──────────────────────────────────── */
@@ -2947,6 +2958,23 @@ header.legacy-header {
   font-size: 11px;
   color: var(--text-3);
   margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* Live field-mapping conflict banner — shown as soon as two rows point at
+   the same destination field, instead of only being caught at Save/Submit
+   time. */
+.mapping-conflict-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0.75rem;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(251, 113, 133, 0.1);
+  border: 1px solid rgba(251, 113, 133, 0.3);
+  color: var(--rose);
+  font-size: 0.82rem;
   line-height: 1.4;
 }
 

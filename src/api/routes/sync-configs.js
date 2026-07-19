@@ -142,6 +142,62 @@ router.post('/suggest-mappings', verifyAuth, suggestLimiter, [
   }
 });
 
+// ─── Preview mapped sample data (wizard "Preview" step) ────────
+// Lets the wizard show what a handful of *real* source records look like
+// once mapped, before the config is ever saved or activated — read-only,
+// same as suggest-mappings: only ever calls the source connector's fetch(),
+// never touches the destination in any way (no create/update calls), so
+// there is nothing here that could write real data anywhere.
+router.post('/preview-mapping', verifyAuth, suggestLimiter, [
+  body('sourceConnectionId').isString().trim().notEmpty(),
+  body('sourcePlatform').isString().trim().notEmpty(),
+  body('sourceEntityType').optional().isString(),
+  body('context').optional().isObject(),
+  body('sourceFields').isArray({ min: 1 }),
+  body('sourceFields.*').isString(),
+], validate, async (req, res) => {
+  try {
+    const { sourceConnectionId, sourcePlatform, sourceEntityType, context = {}, sourceFields } = req.body;
+
+    const sourceCreds = await resolveConnectionTokens(req.user.uid, sourceConnectionId);
+    const resolvedSourcePlatform = await resolveConnectorKey(sourcePlatform);
+
+    let SourceConnectorClass;
+    try {
+      SourceConnectorClass = getConnector(resolvedSourcePlatform);
+    } catch (e) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+
+    const sourceInstance = new SourceConnectorClass({ ...sourceCreds, ...context });
+    const resolvedEntityType = sourceEntityType || (sourceInstance.getEntityTypes?.() || ['default'])[0];
+
+    // fetch()'s 2nd arg is the *filter* (e.g. TickTick's { listName }), not
+    // credentials context — passing {} here always queried the default
+    // "Inbox" list regardless of what the user actually selected in the
+    // wizard, which is why this returned nothing for anyone using a
+    // non-default list/project. `context` (already spread into the
+    // connector's credentials above for connectors that read it from
+    // there) is exactly what a real Load-Data call for this same list uses
+    // as its filter, so it belongs here too.
+    const items = await sourceInstance.fetch(resolvedEntityType, context, {});
+    const PREVIEW_LIMIT = 3;
+    const samples = items.slice(0, PREVIEW_LIMIT).map(item => {
+      const fields = {};
+      for (const key of sourceFields) fields[key] = item[key] ?? null;
+      return {
+        title: sourceInstance.getDisplayTitle ? sourceInstance.getDisplayTitle(item) : (item.title || item.name || 'Untitled'),
+        fields,
+      };
+    });
+
+    res.json({ success: true, samples, totalAvailable: items.length });
+  } catch (err) {
+    logger.error('sync-configs', 'Preview mapping failed', { error: err.message });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── List sync configs for the caller's workspace ──────────────
 // Was previously a raw client-side Firestore read from the Flows page
 // (app.js's loadConfigs), the Marketplace view (hub.js), and saveConfig's
