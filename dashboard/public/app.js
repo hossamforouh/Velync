@@ -979,12 +979,73 @@ const db = getFirestore(app);
   };
 })();
 
+// ─── Maintenance mode ───────────────────────────────────────
+// The backend (src/api/middleware/maintenance.js) already blocks every
+// /api/* call with a 503 while maintenanceMode is on — that half worked
+// fine. What was missing entirely was the frontend ever looking at it: the
+// settings fetch below only ever checked `res.ok`, so a 503 here was
+// silently swallowed and the app just carried on rendering normally with
+// every subsequent API call quietly failing. These two functions are the
+// actual gate.
+function showMaintenanceOverlay(message) {
+  const overlay = document.getElementById('maintenance-overlay');
+  const msgEl = document.getElementById('maintenance-overlay-message');
+  if (msgEl && message) msgEl.textContent = message;
+  if (overlay) overlay.style.display = 'flex';
+  const banner = document.getElementById('maintenance-admin-banner');
+  if (banner) banner.style.display = 'none';
+  // Only offer it when a session actually exists to sign out of — a
+  // logged-out visitor hitting this page has nothing to sign out of, and
+  // showing the button anyway would just be confusing.
+  const signoutBtn = document.getElementById('btn-maintenance-signout');
+  if (signoutBtn) signoutBtn.style.display = auth.currentUser ? 'inline-flex' : 'none';
+}
+function hideMaintenanceOverlay() {
+  const overlay = document.getElementById('maintenance-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+function setMaintenanceAdminBanner(show) {
+  const banner = document.getElementById('maintenance-admin-banner');
+  if (banner) banner.style.display = show ? 'flex' : 'none';
+}
+
 // ─── Global Settings Initialization ───────────────────────────
-(async () => {
+// Called once unauthenticated on page load (covers the logged-out landing
+// page) and again with a real ID token once auth resolves. The maintenance
+// middleware inspects the Authorization header itself regardless of
+// whether the route requires it, so attaching a superadmin's token here is
+// what actually lets them past the block — a non-superadmin's authenticated
+// call still 503s, same as the anonymous one, which is correct: they
+// should still be blocked once logged in.
+//
+// Critical: the block is only ever shown when `idToken` is set (i.e. from
+// an authenticated call). Firebase sign-in itself never touches our /api/*
+// backend — it talks straight to Google — so it isn't actually blocked by
+// maintenance mode at all. Showing the overlay on the anonymous pre-login
+// check anyway (an earlier version of this did) hides the login form along
+// with everything else, which means a superadmin who isn't already logged
+// in has no way to prove who they are and get past the block — a real
+// lockout, worse than the bug this was meant to fix. Logged-out visitors
+// always see the normal landing page; enforcement starts once someone
+// actually logs in and turns out not to be a superadmin.
+async function checkGlobalSettings(idToken) {
   try {
-    const res = await fetch('/api/settings/global');
+    const headers = idToken ? { 'Authorization': `Bearer ${idToken}` } : {};
+    const res = await fetch('/api/settings/global', { headers });
+    if (res.status === 503) {
+      if (!idToken) return; // pre-login: never block, see note above
+      const data = await res.json().catch(() => ({}));
+      showMaintenanceOverlay(data.error);
+      return;
+    }
     if (res.ok) {
       const data = await res.json();
+      hideMaintenanceOverlay();
+      // Reaching here while maintenanceMode is true only happens for a
+      // superadmin (anyone else would have hit the 503 branch above) —
+      // flag it non-blockingly so it doesn't get left on by accident.
+      setMaintenanceAdminBanner(!!data.maintenanceMode);
+
       if (data.whatsappNumber) {
         const waLink = document.getElementById('whatsapp-fab-link');
         if (waLink) waLink.href = `https://wa.me/${data.whatsappNumber}`;
@@ -992,15 +1053,27 @@ const db = getFirestore(app);
         if (adminWaInput) adminWaInput.value = data.whatsappNumber;
       }
       const maintCheck = document.getElementById('admin-maintenance-mode');
-      if (maintCheck && data.maintenanceMode) maintCheck.checked = data.maintenanceMode;
+      if (maintCheck) maintCheck.checked = !!data.maintenanceMode;
       const maintMsg = document.getElementById('admin-maintenance-message');
       if (maintMsg && data.maintenanceMessage) maintMsg.value = data.maintenanceMessage;
     }
   } catch (err) {
+    // Network errors here are left alone (not treated as maintenance) —
+    // the real gate is server-side on every other API call regardless, so
+    // failing this one specific check open just avoids a flaky connection
+    // falsely locking everyone out client-side.
     console.error("Error fetching global settings:", err);
-    showToast('Failed to load global settings', 'error');
   }
-})();
+}
+checkGlobalSettings();
+// Maintenance can be toggled on mid-session — re-check periodically so an
+// already-logged-in user gets blocked within a reasonable window instead
+// of only ever being checked once at page load. Matches the middleware's
+// own 30s cache TTL closely enough without hammering the endpoint.
+setInterval(async () => {
+  const user = auth.currentUser;
+  await checkGlobalSettings(user ? await user.getIdToken() : undefined);
+}, 45000);
 
 // ─── Info-tip tooltips (global, event-delegated) ───────────────
 // `.info-tip-bubble` is authored inline next to its icon for markup
@@ -1438,6 +1511,9 @@ onAuthStateChanged(auth, async (user) => {
         checkSuperadmin(),
         processPendingInvites(user), // hits the backend directly; bypasses Firestore rules
         loadAndApplyPlanBadge(auth), // shows the paid-plan crown badge on the avatar, if applicable
+        // Re-check with a real token now that we're logged in — a superadmin
+        // needs this to actually get past the block (see checkGlobalSettings).
+        user.getIdToken().then(checkGlobalSettings),
       ]);
 
       if (shouldLogLogin) reportUsageEvent(user, 'user_login');
@@ -2947,6 +3023,23 @@ btnLogout.addEventListener('click', async () => {
     if (authForm) authForm.reset();
   } catch (error) {
     showToast('Logout failed: ' + error.message, 'error');
+  }
+});
+
+// checkGlobalSettings() no longer blocks the anonymous (pre-login) check
+// (see its own comment — that was the login-page lockout bug), so once
+// signed out there's genuinely nothing left blocking the login form
+// underneath. onAuthStateChanged's own listener already reveals it
+// (authOverlay display) the moment signOut() fires — this just needs to
+// get the maintenance overlay itself out of the way so that page is
+// actually visible instead of still covered.
+document.getElementById('btn-maintenance-signout')?.addEventListener('click', async () => {
+  try {
+    await signOut(auth);
+    hideMaintenanceOverlay();
+    setMaintenanceAdminBanner(false);
+  } catch (error) {
+    showToast('Sign out failed: ' + error.message, 'error');
   }
 });
 

@@ -370,6 +370,46 @@
       color: var(--text-1, #f1f5f9);
       font-weight: 500;
     }
+    #maintenance-overlay {
+      display: none;
+      flex-direction: column;
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(10, 8, 25, 0.97);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 10050; /* above #global-loader (9999) and every modal/panel */
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    .maintenance-card {
+      max-width: 420px;
+      text-align: center;
+      color: var(--text-1, #f1f5f9);
+    }
+    .maintenance-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(129, 140, 248, 0.12);
+      color: var(--violet, #818CF8);
+    }
+    .maintenance-card h2 {
+      font-size: 1.3rem;
+      margin-bottom: 10px;
+    }
+    .maintenance-card p {
+      color: var(--text-3, #94a3b8);
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
   </style>
   <div id="global-loader">
     <div class="loader-logo-container">
@@ -386,6 +426,21 @@
       </svg>
     </div>
     <div class="loading-text">Initializing workspace…</div>
+  </div>
+
+  <!-- ── Maintenance Mode Block ───────────────────────────────
+       Full-screen, non-dismissible — shown to anyone the backend
+       actually blocks (503 from the maintenance middleware). Sits above
+       everything else in the app, including the loader and login page. -->
+  <div id="maintenance-overlay" style="display:none;">
+    <div class="maintenance-card">
+      <div class="maintenance-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      </div>
+      <h2>Down for Maintenance</h2>
+      <p id="maintenance-overlay-message">Service is under maintenance. Please try again later.</p>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-maintenance-signout" style="display:none; margin-top: 20px;">Sign Out</button>
+    </div>
   </div>
 
   <!-- ── Platform Shell ─────────────────────────────────────── -->
@@ -441,6 +496,13 @@
     <div id="verify-email-banner" style="display:none;background:rgba(245,158,11,0.12);border-bottom:1px solid rgba(245,158,11,0.3);color:#fbbf24;padding:10px 20px;font-size:0.88rem;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;text-align:center;">
       <span>Please verify your email address to secure your account.</span>
       <button id="btn-resend-verification" type="button" class="btn btn-secondary btn-sm">Resend verification email</button>
+    </div>
+
+    <!-- Superadmin-only: seen instead of the full block (their requests bypass
+         it), so maintenance mode being left on isn't easy to forget about. -->
+    <div id="maintenance-admin-banner" style="display:none;background:rgba(251,113,133,0.12);border-bottom:1px solid rgba(251,113,133,0.3);color:var(--rose);padding:10px 20px;font-size:0.88rem;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;text-align:center;">
+      <i data-feather="alert-triangle" style="width:14px;height:14px;"></i>
+      <span>Maintenance mode is <strong>ON</strong> — regular users are currently blocked from the app. You can see this because you're a superadmin.</span>
     </div>
 
     <!-- ── Platform Body: Sidebar + Content Area ──────────── -->
@@ -2422,7 +2484,7 @@
   <!-- Self-hosted (was unpkg) so an icon CDN outage can't break rendering. -->
   <script src="/vendor/feather.min.js?v=4.29.2"></script>
 
-  <script type="module" src="app.js?v=11"></script>
+  <script type="module" src="app.js?v=16"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       // Guard: if feather somehow failed to load (e.g. blocked by an
