@@ -950,6 +950,38 @@
               <div class="stat-pill"><span class="dot orange"></span><span>Active Configs: <strong id="admin-ws-active">—</strong></span></div>
               <div class="stat-pill"><span class="dot yellow"></span><span>Paid: <strong id="admin-ws-paid">—</strong></span></div>
             </div>
+
+            <!-- Cost-model reconciliation: compares this month's tracked estimate
+                 against the actual Google Cloud bill so an admin knows how far to
+                 trust the "Est. Cost" figures. -->
+            <div class="recon-card" id="admin-recon-card">
+              <div class="recon-head">
+                <span class="recon-title">Cost accuracy
+                  <span class="info-tip" tabindex="0" role="note" aria-label="Est. Cost is a model (usage × rate) covering tracked internal operations only. Enter your real monthly Google Cloud bill to see how much of it the model actually captures.">i<span class="info-tip-bubble">"Est. Cost" is a model (usage × configured rate) that only covers what we instrument — syncs, AI, and database operations. It excludes fixed infrastructure and dashboard browsing. Enter your real monthly Google Cloud bill here to see what fraction the model captures (coverage), so you know how far to trust the per-workspace numbers.</span></span>
+                </span>
+                <span class="recon-month" id="admin-recon-month">—</span>
+              </div>
+              <div class="recon-metrics">
+                <div class="recon-metric">
+                  <div class="recon-metric-label">Tracked (est.)</div>
+                  <div class="recon-metric-value" id="admin-recon-tracked">—</div>
+                </div>
+                <div class="recon-metric">
+                  <div class="recon-metric-label">Actual GCP bill</div>
+                  <div class="recon-metric-input">
+                    <span class="recon-dollar">$</span>
+                    <input type="number" id="admin-recon-actual" min="0" step="0.01" placeholder="0.00" />
+                    <button class="btn btn-secondary btn-toolbar-sm" id="admin-recon-save" type="button">Save</button>
+                  </div>
+                </div>
+                <div class="recon-metric">
+                  <div class="recon-metric-label">Coverage</div>
+                  <div class="recon-metric-value" id="admin-recon-coverage">—</div>
+                </div>
+              </div>
+              <div class="recon-hint" id="admin-recon-hint"></div>
+            </div>
+
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
               <h3 style="margin:0;font-size:1rem;">Workspaces</h3>
               <div style="display:flex;align-items:center;gap:10px;">
@@ -965,7 +997,7 @@
             <div class="connections-table-wrap">
               <table class="connections-table" id="admin-ws-table">
                 <thead>
-                  <tr><th>Name</th><th>Owner</th><th>Plan</th><th>Members</th><th>Est. Cost (mo)</th><th>ID</th><th>Actions</th></tr>
+                  <tr><th>Name</th><th>Owner</th><th>Plan</th><th>Members</th><th>Est. Cost (mo)<span class="info-tip" tabindex="0" role="note" aria-label="Estimated monthly cost for this workspace — a model based on tracked usage times configured rates. Covers syncs, AI suggestions, and database operations; excludes fixed infrastructure and dashboard browsing. Click a value for the breakdown.">i<span class="info-tip-bubble">Estimated monthly cost — usage × configured rate, covering syncs, AI suggestions, and database operations. Excludes fixed infrastructure and dashboard browsing, so treat it as a comparative signal, not an invoice. Click any value for the full breakdown.</span></span></th><th>ID</th><th>Actions</th></tr>
                 </thead>
                 <tbody id="admin-ws-tbody">
                   <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>

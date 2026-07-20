@@ -778,4 +778,10 @@ describe('usage tracking collections (usage_events / usage_summaries / usage_wor
     await assertFails(ctx.stranger().firestore().collection('usage_meta').doc('write_failures').get());
     await assertFails(ctx.superAdmin().firestore().collection('usage_meta').doc('write_failures').set({ count: 0 }));
   });
+
+  it('usage_actuals: read and write always denied (admin-recorded GCP bill, server-only)', async () => {
+    await assertFails(ctx.stranger().firestore().collection('usage_actuals').doc('2026-07').get());
+    await assertFails(ctx.superAdmin().firestore().collection('usage_actuals').doc('2026-07').get());
+    await assertFails(ctx.superAdmin().firestore().collection('usage_actuals').doc('2026-07').set({ actualBillUsd: 100 }));
+  });
 });

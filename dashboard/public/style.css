@@ -939,81 +939,218 @@ header.legacy-header {
   color: rgba(255, 255, 255, 0.75);
 }
 
-.usage-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+/* ── Cost-model reconciliation card (Admin → Workspaces) ────── */
+.recon-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 24px;
+}
+.recon-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.recon-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.recon-month {
+  font-size: 0.78rem;
+  color: var(--text-3);
+}
+.recon-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-end;
+}
+.recon-metric-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  margin-bottom: 5px;
+}
+.recon-metric-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-1);
+  line-height: 1.1;
+}
+.recon-metric-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.recon-metric-input .recon-dollar {
+  color: var(--text-3);
+  font-size: 0.95rem;
+}
+.recon-metric-input input {
+  width: 110px;
+  padding: 6px 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-size: 0.9rem;
+  outline: none;
+}
+.recon-metric-input input:focus { border-color: var(--violet); }
+.recon-coverage-good { color: var(--green); }
+.recon-coverage-warn { color: var(--amber); }
+.recon-coverage-bad { color: var(--rose); }
+.recon-hint {
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* Section headers inside the usage modal */
+.usage-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  margin: 22px 0 12px;
+}
+.usage-section-title:first-of-type { margin-top: 0; }
+.usage-section-sub {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-3);
+  opacity: 0.7;
+  margin-left: 6px;
+}
+
+/* Shared dot colors (used by driver labels) */
+.usage-drivers .dot,
+.usage-chips .dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+}
+.dot.violet { background: var(--violet); }
+.dot.indigo { background: var(--indigo); }
+.dot.cyan { background: var(--cyan); }
+.dot.rose { background: var(--rose); }
+.dot.amber { background: var(--amber); }
+.dot.green { background: var(--green); }
+
+/* ── Cost drivers — ranked bars ─────────────────────────────── */
+.usage-drivers {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.usage-driver-row { display: flex; flex-direction: column; gap: 5px; }
+
+.usage-driver-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 12px;
 }
 
-.usage-stat-card {
-  background: var(--glass);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  transition: var(--transition);
-}
-
-.usage-stat-card:hover {
-  background: var(--glass-hover);
-}
-
-.usage-stat-card-empty {
-  opacity: 0.5;
-}
-
-.usage-stat-card-label {
+.usage-driver-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
-  color: var(--text-2);
-  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
 }
 
-.usage-stat-card-label .dot {
-  width: 8px;
+.usage-driver-cost {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+.usage-driver-pct {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  margin-left: 8px;
+}
+
+.usage-driver-bar {
   height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  border-radius: 5px;
+  background: var(--glass);
+  overflow: hidden;
 }
 
-.usage-stat-card-label .dot.violet { background: var(--violet); }
-.usage-stat-card-label .dot.indigo { background: var(--indigo); }
-.usage-stat-card-label .dot.cyan { background: var(--cyan); }
-.usage-stat-card-label .dot.rose { background: var(--rose); }
-.usage-stat-card-label .dot.amber { background: var(--amber); }
-.usage-stat-card-label .dot.green { background: var(--green); }
+.usage-driver-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+.usage-driver-bar-fill.violet { background: var(--violet); }
+.usage-driver-bar-fill.indigo { background: var(--indigo); }
+.usage-driver-bar-fill.cyan { background: var(--cyan); }
+.usage-driver-bar-fill.rose { background: var(--rose); }
+.usage-driver-bar-fill.amber { background: var(--amber); }
+.usage-driver-bar-fill.green { background: var(--green); }
 
-.usage-stat-card-count {
-  font-size: 22px;
+.usage-driver-count {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.usage-empty-note {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-3);
+  font-size: 13px;
+  background: var(--glass);
+  border-radius: var(--radius);
+}
+
+/* ── Activity — compact no-cost chips ───────────────────────── */
+.usage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.usage-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+}
+
+.usage-chip-empty { opacity: 0.45; }
+
+.usage-chip-count {
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-1);
 }
 
-.usage-stat-card-cost {
-  font-size: 13px;
+.usage-chip-label {
+  font-size: 12px;
   color: var(--text-2);
-  margin-top: 2px;
-}
-
-.usage-stat-card-nocost {
-  color: var(--text-3);
-  font-style: italic;
-}
-
-.usage-stat-est-tag {
-  font-size: 10px;
-  color: var(--text-3);
-  text-transform: uppercase;
 }
 
 @media (max-width: 600px) {
-  .usage-modal {
-    max-width: 94vw;
-  }
-  .usage-stat-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  }
+  .usage-modal { max-width: 94vw; }
 }
 
 /* ── Section header ──────────────────────────────────────────── */

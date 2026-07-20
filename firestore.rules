@@ -250,5 +250,11 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+    // Admin-recorded actual GCP bill per month, for cost-model reconciliation
+    // (see /api/admin/usage/reconciliation). Server-only like the rest.
+    match /usage_actuals/{month} {
+      allow read: if false;
+      allow write: if false;
+    }
   }
 }

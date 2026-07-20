@@ -26,6 +26,11 @@ export function initAdminWorkspaces(authInstance) {
   const refresh = document.getElementById('admin-ws-refresh');
   if (refresh) refresh.addEventListener('click', () => loadAll());
 
+  const reconSave = document.getElementById('admin-recon-save');
+  if (reconSave) reconSave.addEventListener('click', saveReconciliation);
+  const reconInput = document.getElementById('admin-recon-actual');
+  if (reconInput) reconInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveReconciliation(); });
+
   const more = document.getElementById('admin-ws-load-more');
   if (more) more.addEventListener('click', () => loadWorkspaces(false));
 
@@ -89,6 +94,86 @@ async function apiPatch(path, body) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
+}
+
+async function apiPut(path, body) {
+  const token = auth && auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const res = await fetch(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+// ─── Cost-model reconciliation card ─────────────────────────────
+// Shows this month's tracked estimate vs. the admin-entered actual GCP bill,
+// and the coverage ratio (tracked ÷ actual) — how much of the real bill the
+// model captures. Low coverage = the estimate is missing a lot; a ratio near
+// 1 = the model tracks reality well.
+function renderCoverage(coverageRatio) {
+  const el = document.getElementById('admin-recon-coverage');
+  const hint = document.getElementById('admin-recon-hint');
+  if (!el) return;
+  if (coverageRatio === null || coverageRatio === undefined) {
+    el.textContent = '—';
+    el.className = 'recon-metric-value';
+    if (hint) hint.textContent = 'Enter your actual monthly Google Cloud bill to measure how much of it the tracked estimate captures.';
+    return;
+  }
+  const pct = Math.round(coverageRatio * 100);
+  el.textContent = `${pct}%`;
+  // Bands: within 20% of reality is "good", 50–80% "warn", below 50% "bad".
+  const band = pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'bad';
+  el.className = `recon-metric-value recon-coverage-${band}`;
+  if (hint) {
+    hint.textContent = band === 'good'
+      ? 'The tracked estimate captures most of your real bill — per-workspace figures are reasonably trustworthy.'
+      : band === 'warn'
+        ? 'The estimate captures roughly half to most of your real bill — useful for comparison, but treat absolute figures as a floor.'
+        : 'The estimate captures well under half your real bill — most cost is untracked (fixed infra, dashboard usage). Use only for relative comparison, not absolute cost.';
+  }
+}
+
+async function loadReconciliation() {
+  const monthEl = document.getElementById('admin-recon-month');
+  const trackedEl = document.getElementById('admin-recon-tracked');
+  const actualInput = document.getElementById('admin-recon-actual');
+  try {
+    const data = await apiGet('/api/admin/usage/reconciliation');
+    if (monthEl) monthEl.textContent = data.month;
+    if (trackedEl) trackedEl.textContent = fmtCost(data.trackedTotalUsd || 0);
+    if (actualInput && document.activeElement !== actualInput) {
+      actualInput.value = data.actualBillUsd != null ? data.actualBillUsd : '';
+    }
+    renderCoverage(data.coverageRatio);
+  } catch (err) {
+    if (trackedEl) trackedEl.textContent = '—';
+  }
+}
+
+async function saveReconciliation() {
+  const monthEl = document.getElementById('admin-recon-month');
+  const actualInput = document.getElementById('admin-recon-actual');
+  const saveBtn = document.getElementById('admin-recon-save');
+  const month = monthEl?.textContent;
+  const actualBillUsd = parseFloat(actualInput?.value);
+  if (!month || month === '—' || !Number.isFinite(actualBillUsd) || actualBillUsd < 0) {
+    showToast('Enter a valid non-negative bill amount.', 'error');
+    return;
+  }
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+  try {
+    const data = await apiPut('/api/admin/usage/reconciliation', { month, actualBillUsd });
+    renderCoverage(data.coverageRatio);
+    showToast('Actual bill saved.', 'success');
+  } catch (err) {
+    showToast('Failed to save: ' + err.message, 'error');
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+  }
 }
 
 let planModalWorkspace = null;
@@ -194,7 +279,7 @@ function closeUsageModal() {
 
 async function loadAll() {
   hasLoaded = true;
-  await Promise.all([loadStats(), loadWorkspaces(true)]);
+  await Promise.all([loadStats(), loadReconciliation(), loadWorkspaces(true)]);
 }
 
 async function loadStats() {

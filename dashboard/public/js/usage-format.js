@@ -7,6 +7,7 @@ export const TYPE_LABELS = {
   sync_execution: 'Sync Executions',
   compute_estimate: 'Compute (ms)',
   api_call: 'Platform API Calls',
+  ai_mapping_suggestion: 'AI Mapping Suggestions',
   firestore_read: 'Firestore Reads',
   firestore_write: 'Firestore Writes',
   firestore_delete: 'Firestore Deletes',
@@ -45,33 +46,74 @@ export function fmtCount(v) {
 }
 
 /**
- * Build a grid of stat cards for one entity's (workspace, in practice) usage
- * breakdown for a month — one card per activity type showing count and,
- * for cost-driving types, the estimated $ alongside it. Cards with zero
- * activity are visually de-emphasized rather than hidden, so the grid shape
- * stays stable and an admin can see at a glance what simply hasn't happened
- * yet vs. what's actively costing money.
+ * Render one entity's (workspace, in practice) usage breakdown for a month,
+ * organized for quick analysis rather than a flat wall of equal cards:
+ *
+ *   1. Hero — the one number that matters (total estimated cost) + scope note.
+ *   2. Cost drivers — ONLY the things that actually cost money, ranked biggest
+ *      first, each with a proportion bar + $ + share-% so "what's driving this
+ *      workspace's cost" is answerable at a glance (e.g. "AI is 70% of it").
+ *   3. Activity — the no-direct-cost counts (logins, flows, …) as compact
+ *      chips, de-emphasized since they don't affect the bill.
+ *
+ * This replaces the old 12-equal-cards grid, which forced the reader to hunt
+ * through cost and non-cost items at the same visual weight.
  */
-export function renderUsageStatCardsHtml(activityTypes, entity) {
-  const cards = activityTypes.map(({ type, costDriving }) => {
-    const cell = entity.totals[type] || { count: 0, costUsd: costDriving ? 0 : null };
+export function renderUsageBreakdownHtml(activityTypes, entity) {
+  const total = Number(entity.grandTotalCostUsd) || 0;
+
+  // Cost drivers: cost-driving types that actually incurred cost, ranked desc.
+  const drivers = activityTypes
+    .filter(({ costDriving }) => costDriving)
+    .map(({ type }) => {
+      const cell = entity.totals[type] || { count: 0, costUsd: 0 };
+      return { type, count: cell.count || 0, cost: Number(cell.costUsd) || 0 };
+    })
+    .filter(d => d.cost > 0 || d.count > 0)
+    .sort((a, b) => b.cost - a.cost);
+
+  const driversHtml = drivers.length
+    ? drivers.map(d => {
+        const pct = total > 0 ? Math.round((d.cost / total) * 100) : 0;
+        const color = TYPE_COLORS[d.type] || 'violet';
+        return `
+          <div class="usage-driver-row">
+            <div class="usage-driver-head">
+              <span class="usage-driver-label"><span class="dot ${color}"></span>${escapeHtml(TYPE_LABELS[d.type] || d.type)}</span>
+              <span class="usage-driver-cost">${fmtCost(d.cost)}<span class="usage-driver-pct">${pct}%</span></span>
+            </div>
+            <div class="usage-driver-bar"><span class="usage-driver-bar-fill ${color}" style="width:${Math.max(pct, 2)}%"></span></div>
+            <div class="usage-driver-count">${fmtCount(d.count)} ${escapeHtml((TYPE_LABELS[d.type] || '').toLowerCase()) || 'events'}</div>
+          </div>`;
+      }).join('')
+    : `<div class="usage-empty-note">No billable activity recorded this month.</div>`;
+
+  // Activity: intensity metrics (no direct cost) as compact chips.
+  const activity = activityTypes.filter(({ costDriving }) => !costDriving);
+  const activityHtml = activity.map(({ type }) => {
+    const cell = entity.totals[type] || { count: 0 };
     const isEmpty = !cell.count;
-    const color = TYPE_COLORS[type] || 'violet';
     return `
-      <div class="usage-stat-card${isEmpty ? ' usage-stat-card-empty' : ''}">
-        <div class="usage-stat-card-label"><span class="dot ${color}"></span>${escapeHtml(TYPE_LABELS[type] || type)}</div>
-        <div class="usage-stat-card-count">${fmtCount(cell.count)}</div>
-        ${costDriving
-          ? `<div class="usage-stat-card-cost">${fmtCost(cell.costUsd)} <span class="usage-stat-est-tag">est.</span></div>`
-          : `<div class="usage-stat-card-cost usage-stat-card-nocost">no direct cost</div>`}
+      <div class="usage-chip${isEmpty ? ' usage-chip-empty' : ''}">
+        <span class="usage-chip-count">${fmtCount(cell.count)}</span>
+        <span class="usage-chip-label">${escapeHtml(TYPE_LABELS[type] || type)}</span>
       </div>`;
   }).join('');
 
   return `
     <div class="usage-hero-total">
       <div class="usage-hero-total-label">Total Estimated Cost</div>
-      <div class="usage-hero-total-value">${fmtCost(entity.grandTotalCostUsd)}</div>
-      <div class="usage-hero-total-caption">Estimate only — count × configured rate, not invoice-grade</div>
+      <div class="usage-hero-total-value">${fmtCost(total)}</div>
+      <div class="usage-hero-total-caption">Estimate only — tracked internal operations (syncs, AI, database). Excludes fixed infrastructure &amp; dashboard usage.</div>
     </div>
-    <div class="usage-stat-grid">${cards}</div>`;
+
+    <div class="usage-section-title">Cost drivers</div>
+    <div class="usage-drivers">${driversHtml}</div>
+
+    <div class="usage-section-title">Activity <span class="usage-section-sub">no direct cost</span></div>
+    <div class="usage-chips">${activityHtml}</div>`;
 }
+
+// Back-compat alias — the previous flat-grid renderer's name. Kept so any
+// caller not yet updated still works; new layout applies either way.
+export const renderUsageStatCardsHtml = renderUsageBreakdownHtml;

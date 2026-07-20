@@ -130,6 +130,16 @@ router.post('/suggest-mappings', verifyAuth, suggestLimiter, [
 
     const data = await suggestMappings(sourceSchema, destSchema);
 
+    // Attribute the (real, paid) Gemini call to the caller's workspace so it
+    // shows up in cost tracking — the AI suggestion is by far the most
+    // expensive single operation in the app, and was previously invisible to
+    // the "Est. Cost" estimate. Best-effort and non-blocking: logUsageEvent
+    // self-handles its own errors, and we don't hold the response on it or a
+    // workspace lookup hiccup.
+    db.collection('users').doc(req.user.uid).get()
+      .then(u => logUsageEvent(req.user.uid, u.exists ? (u.data().workspaceId || null) : null, 'ai_mapping_suggestion', { units: 1 }))
+      .catch(() => {});
+
     res.json({
       success: true,
       suggestions: data.suggestions || [],

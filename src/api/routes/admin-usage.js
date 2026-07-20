@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { query, validationResult } = require('express-validator');
+const { query, body, validationResult } = require('express-validator');
 const { verifyAuth } = require('../middleware/auth');
 const { isSuperAdmin } = require('../../core/superadmin');
 const logger = require('../../core/logger');
@@ -153,6 +153,71 @@ router.get('/admin/usage/workspace/:workspaceId', verifyAuth, requireSuperAdmin,
     });
   } catch (err) {
     logger.error('admin-usage', 'Failed to load workspace usage', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Cost-model reconciliation ─────────────────────────────────
+// The "Est. Cost" figure is a model (count × configured rate) and only
+// covers what we instrument — it can drift from the real Google Cloud bill
+// (fixed infra, storage, untracked dashboard reads, etc. are outside the
+// model). Letting an admin record the ACTUAL monthly bill and comparing it
+// to the tracked total gives a coverage ratio — the single most useful
+// number for knowing how far to trust the estimate. Stored per-month in
+// usage_actuals/{month}. Registered before /admin/usage/:userId so
+// "reconciliation" isn't swallowed as a userId.
+
+/** Sum the tracked estimated cost across all users for a month. */
+async function trackedTotalForMonth(month) {
+  const snap = await db.collection('usage_summaries').where('yearMonth', '==', month).get();
+  return snap.docs.reduce((sum, d) => sum + (Number(d.data().grandTotalCostUsd) || 0), 0);
+}
+
+router.get('/admin/usage/reconciliation', verifyAuth, requireSuperAdmin, [monthValidator], validate, async (req, res) => {
+  try {
+    const month = req.query.month || yearMonthOf();
+    const [trackedTotalUsd, actualDoc] = await Promise.all([
+      trackedTotalForMonth(month),
+      db.collection('usage_actuals').doc(month).get(),
+    ]);
+    const actual = actualDoc.exists ? actualDoc.data() : null;
+    const actualBillUsd = actual && Number.isFinite(Number(actual.actualBillUsd)) ? Number(actual.actualBillUsd) : null;
+    // coverage = what fraction of the real bill our model actually captured.
+    // Null when no actual recorded, or actual is 0 (avoid divide-by-zero).
+    const coverageRatio = actualBillUsd && actualBillUsd > 0 ? trackedTotalUsd / actualBillUsd : null;
+    return res.json({
+      month,
+      trackedTotalUsd,
+      actualBillUsd,
+      coverageRatio,
+      note: actual?.note || null,
+      updatedAt: actual?.updatedAt || null,
+    });
+  } catch (err) {
+    logger.error('admin-usage', 'Failed to load reconciliation', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/admin/usage/reconciliation', verifyAuth, requireSuperAdmin, [
+  body('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+  body('actualBillUsd').isFloat({ min: 0 }).withMessage('actualBillUsd must be a non-negative number'),
+  body('note').optional().isString().trim().isLength({ max: 500 }),
+], validate, async (req, res) => {
+  try {
+    const { month, actualBillUsd, note } = req.body;
+    await db.collection('usage_actuals').doc(month).set({
+      month,
+      actualBillUsd: Number(actualBillUsd),
+      note: note || null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user.uid,
+    }, { merge: true });
+    const trackedTotalUsd = await trackedTotalForMonth(month);
+    const coverageRatio = actualBillUsd > 0 ? trackedTotalUsd / Number(actualBillUsd) : null;
+    return res.json({ success: true, month, trackedTotalUsd, actualBillUsd: Number(actualBillUsd), coverageRatio });
+  } catch (err) {
+    logger.error('admin-usage', 'Failed to save reconciliation', { error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });

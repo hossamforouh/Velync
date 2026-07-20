@@ -26,6 +26,7 @@ const ACTIVITY_TYPES = {
   sync_execution: { costDriving: true, rateKey: 'costPerSyncExecution' },
   compute_estimate: { costDriving: true, rateKey: 'costPerComputeMs' }, // units = ms
   api_call: { costDriving: true, rateKey: 'costPerApiCall' },
+  ai_mapping_suggestion: { costDriving: true, rateKey: 'costPerAiMappingSuggestion' },
   firestore_read: { costDriving: true, rateKey: 'costPerRead' },
   firestore_write: { costDriving: true, rateKey: 'costPerWrite' },
   firestore_delete: { costDriving: true, rateKey: 'costPerDelete' },
@@ -44,6 +45,13 @@ const ACTIVITY_TYPES = {
 // Sync execution overhead: Cloud Run request pricing $0.40/million invocations.
 // api_call: no direct per-call charge from GCP; default approximates egress
 // (~10 KB/call at $0.12/GB ≈ $1 per million calls).
+// ai_mapping_suggestion: one Gemini 2.5 Flash call (via Vertex) — a mapping
+// request sends both schemas (~2k input tokens) and gets a structured list
+// back (~600 output tokens). At Flash pricing (~$0.30/1M in, ~$2.50/1M out)
+// that's ≈ $0.0006 + $0.0015 ≈ $0.002/call. This is BY FAR the most expensive
+// single action in the app (~1000× a Firestore read), so tracking it is what
+// makes the cost estimate meaningful rather than sync-only. Flat per-call
+// default; admin-tunable in app_settings/usage_rates like every other rate.
 const DEFAULT_RATES = {
   costPerRead: 0.0000006,
   costPerWrite: 0.0000018,
@@ -51,6 +59,7 @@ const DEFAULT_RATES = {
   costPerComputeMs: 0.000000025,
   costPerSyncExecution: 0.0000004,
   costPerApiCall: 0.000001,
+  costPerAiMappingSuggestion: 0.002,
 };
 
 let ratesCache = null;
