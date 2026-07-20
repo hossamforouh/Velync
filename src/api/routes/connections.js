@@ -49,6 +49,12 @@ router.post('/connections', verifyAuth, [
     if (platform.authType === 'oauth') {
       return res.status(400).json({ error: 'This platform uses the OAuth connect flow, not manual credentials.' });
     }
+    // The connections.js frontend already excludes Coming Soon platforms
+    // from the "Add New Connection" picker — this is the authoritative
+    // backstop against any client that skips that filter.
+    if ((platform.status || 'Active') === 'Coming Soon') {
+      return res.status(400).json({ error: `${platform.name || provider} is coming soon and can't be connected yet.` });
+    }
 
     const connRef = await db.collection('connected_accounts').add({
       provider,

@@ -305,6 +305,58 @@ router.post('/sync-configs', verifyAuth, [
       return res.status(400).json({ error: resolveErr.message });
     }
 
+    // Same-platform backstop — the wizard already prevents picking this
+    // combination in the UI, but platform1/platform2 are re-derived here
+    // from the connections themselves, so this is the actual authoritative
+    // check regardless of what the client sent.
+    if (platform1 === platform2) {
+      return res.status(400).json({ error: "Source and destination cannot both be the same platform." });
+    }
+
+    // A coming-soon platform shouldn't be usable to create a brand-new
+    // sync. Not applied on PUT — an existing config that was created
+    // before its platform got flipped to Coming Soon must stay editable.
+    const [platform1Doc, platform2Doc] = await Promise.all([
+      db.collection('platforms').doc(platform1).get(),
+      db.collection('platforms').doc(platform2).get(),
+    ]);
+    const comingSoonName = [platform1Doc, platform2Doc].find(
+      d => d.exists && (d.data().status || 'Active') === 'Coming Soon'
+    )?.data()?.name;
+    if (comingSoonName) {
+      return res.status(400).json({ error: `${comingSoonName} is coming soon and can't be used in a sync yet.` });
+    }
+
+    // Directionality rollout gate — same "create only" scoping as the
+    // coming-soon check above, for the same reason: an existing config
+    // stays on whatever direction it was built with even if the admin
+    // later narrows what's offered for new ones. This is per-Marketplace-
+    // Integration (not a single global switch) because different platform
+    // pairings reach production readiness on different schedules — e.g.
+    // Destination-to-Source might already be live for TickTick<->Notion
+    // while a brand-new pairing still only supports Source-to-Destination.
+    // Platform pairs with no matching Integration doc (a manual pairing an
+    // admin never added to the Marketplace) fall back to the safe default.
+    const requestedSyncType = req.body.syncType || 'Source_to_Dest';
+    // Marketplace integrations are a small, admin-curated collection — a
+    // full-collection scan + in-memory pair match avoids needing a
+    // composite index on platform1.id/platform2.id for what's effectively
+    // a lookup table, matching the '.where(...).get()' single-field-query
+    // pattern already used elsewhere for this same collection (see
+    // admin-platforms.js's dependency check).
+    const integrationsSnap = await db.collection('integrations').get();
+    const integrationDoc = integrationsSnap.docs.find(d => {
+      const data = d.data();
+      const a = data.platform1?.id, b = data.platform2?.id;
+      return (a === platform1 && b === platform2) || (a === platform2 && b === platform1);
+    });
+    const enabledDirections = integrationDoc?.data()?.enabledSyncDirections?.length
+      ? integrationDoc.data().enabledSyncDirections
+      : ['Source_to_Dest'];
+    if (!enabledDirections.includes(requestedSyncType)) {
+      return res.status(400).json({ error: `The "${requestedSyncType.replace(/_/g, ' ')}" sync direction isn't available yet.` });
+    }
+
     // Plan enforcement (throws on violation)
     try {
       await enforceTotalConfigCap(ctx.workspaceId);
@@ -405,6 +457,9 @@ router.put('/sync-configs/:configId', verifyAuth, [
       } catch (resolveErr) {
         return res.status(400).json({ error: resolveErr.message });
       }
+    }
+    if (merged.platform1 === merged.platform2) {
+      return res.status(400).json({ error: "Source and destination cannot both be the same platform." });
     }
 
     // Resolve the effective new status

@@ -23,10 +23,18 @@ const requireSuperAdmin = async (req, res, next) => {
   next();
 };
 
-const INTEGRATION_FIELDS = ['name', 'description', 'status', 'tags', 'platform1', 'platform2'];
+const INTEGRATION_FIELDS = ['name', 'description', 'status', 'tags', 'platform1', 'platform2', 'enabledSyncDirections'];
 // 'Disabled' is filtered out of the public Marketplace listing client-side
 // (dashboard/public/js/hub.js) — it still exists here so admins can manage it.
 const INTEGRATION_STATUSES = ['Active', 'Coming Soon', 'Disabled'];
+
+// Which sync directions real users can pick when creating a NEW config for
+// THIS specific platform pairing. Per-integration (not global) because a
+// pairing can have Destination-to-Source shipped already while a
+// still-Coming-Soon pairing hasn't — see sync-configs.js POST for where
+// this is actually enforced (create only; existing configs stay editable
+// regardless of what's turned on/off here later).
+const SYNC_DIRECTIONS = ['Source_to_Dest', 'Dest_to_Source', 'Bidirectional'];
 
 function pickIntegrationFields(body) {
   const data = {};
@@ -36,13 +44,29 @@ function pickIntegrationFields(body) {
   return data;
 }
 
+// A Marketplace pairing of a platform with itself isn't a real integration
+// — the admin-integrations.js frontend already blocks picking this, but
+// nothing here re-derives platform1/platform2 the way sync-configs.js does
+// for user-created configs, so this is the only authoritative check.
+function rejectSamePlatform(data, res) {
+  if (data.platform1?.id && data.platform2?.id && data.platform1.id === data.platform2.id) {
+    res.status(400).json({ error: 'Platform 1 and Platform 2 cannot be the same platform.' });
+    return true;
+  }
+  return false;
+}
+
 // Create a new integration
 router.post('/admin/integrations', verifyAuth, requireSuperAdmin, [
   body('name').isString().trim().notEmpty(),
   body('status').optional().isIn(INTEGRATION_STATUSES),
+  body('enabledSyncDirections').optional().isArray(),
+  body('enabledSyncDirections.*').isIn(SYNC_DIRECTIONS),
 ], validate, async (req, res) => {
   try {
     const data = pickIntegrationFields(req.body);
+    if (rejectSamePlatform(data, res)) return;
+    if (!data.enabledSyncDirections) data.enabledSyncDirections = ['Source_to_Dest'];
     const docRef = await db.collection('integrations').add(data);
     await logAdminActivity({
       uid: req.user.uid, userEmail: req.user.email,
@@ -59,10 +83,13 @@ router.post('/admin/integrations', verifyAuth, requireSuperAdmin, [
 router.put('/admin/integrations/:integrationId', verifyAuth, requireSuperAdmin, [
   body('name').optional().isString().trim().isLength({ min: 1 }),
   body('status').optional().isIn(INTEGRATION_STATUSES),
+  body('enabledSyncDirections').optional().isArray(),
+  body('enabledSyncDirections.*').isIn(SYNC_DIRECTIONS),
 ], validate, async (req, res) => {
   try {
     const { integrationId } = req.params;
     const data = pickIntegrationFields(req.body);
+    if (rejectSamePlatform(data, res)) return;
 
     const existingSnap = await db.collection('integrations').doc(integrationId).get();
     const changes = computeChanges(existingSnap.data(), data, INTEGRATION_FIELDS);

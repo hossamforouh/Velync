@@ -410,6 +410,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       updateLogoPreview();
       document.getElementById('f-plat-connector-key').value = platform.connectorKey || '';
       document.getElementById('f-plat-tier').value = platform.tier || 'basic';
+      document.getElementById('f-plat-status').value = platform.status || 'Active';
       document.getElementById('f-plat-auth-type').value = platform.authType || 'manual';
       document.getElementById('f-plat-auth-url').value = platform.authUrl || '';
       document.getElementById('f-plat-token-url').value = platform.tokenUrl || '';
@@ -440,6 +441,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
       updateLogoPreview();
       document.getElementById('f-plat-connector-key').value = '';
       document.getElementById('f-plat-tier').value = 'basic';
+      document.getElementById('f-plat-status').value = 'Active';
       document.getElementById('f-plat-auth-type').value = 'manual';
       document.getElementById('f-plat-auth-url').value = '';
       document.getElementById('f-plat-token-url').value = '';
@@ -523,6 +525,7 @@ export function initAdminPlatforms(dbInstance, authInstance) {
         logo: document.getElementById('f-plat-logo').value.trim(),
         connectorKey: document.getElementById('f-plat-connector-key').value,
         tier: document.getElementById('f-plat-tier').value,
+        status: document.getElementById('f-plat-status').value,
         authType: document.getElementById('f-plat-auth-type').value,
         authUrl: document.getElementById('f-plat-auth-url').value.trim(),
         tokenUrl: document.getElementById('f-plat-token-url').value.trim(),
@@ -806,6 +809,7 @@ function renderPlatformTable() {
       case 'name': aVal = a.name || ''; bVal = b.name || ''; break;
       case 'authType': aVal = a.authType || ''; bVal = b.authType || ''; break;
       case 'tier': aVal = a.tier || 'basic'; bVal = b.tier || 'basic'; break;
+      case 'status': aVal = a.status || 'Active'; bVal = b.status || 'Active'; break;
       case 'integrationCount':
         aVal = integrationCountByPlatform[a.id] || 0;
         bVal = integrationCountByPlatform[b.id] || 0;
@@ -821,7 +825,7 @@ function renderPlatformTable() {
 
   if (sorted.length === 0) {
     tbody.innerHTML = getEmptyStateRowHTML({
-      colspan: 6,
+      colspan: 7,
       iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16"></path></svg>',
       title: platSearchTerm ? 'No matching platforms' : 'No platforms found',
       message: platSearchTerm
@@ -858,6 +862,10 @@ function renderPlatformTable() {
     const tierHtml = tier === 'premium'
       ? `<span class="badge badge-info">Premium</span>`
       : `<span class="badge">Basic</span>`;
+    const status = p.status || 'Active';
+    const statusHtml = status === 'Coming Soon'
+      ? `<span class="badge badge-warning">Coming Soon</span>`
+      : `<span class="badge badge-success">Active</span>`;
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -865,6 +873,7 @@ function renderPlatformTable() {
       <td data-label="Name">${nameCell}</td>
       <td data-label="Auth Type">${authTypeDisplay}</td>
       <td data-label="Tier">${tierHtml}</td>
+      <td data-label="Status">${statusHtml}</td>
       <td data-label="Integrations" style="text-align:center;">${intCount}</td>
       <td data-label="Actions" class="col-actions">
         <div class="row-actions-dropdown">

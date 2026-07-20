@@ -29,8 +29,14 @@ const requireSuperAdmin = async (req, res, next) => {
 // since `platforms` is readable by any authenticated user for the connect-flow UI.
 const PLATFORM_FIELDS = [
   'name', 'logo', 'authType', 'authUrl', 'tokenUrl', 'clientId',
-  'guideUrl', 'attributes', 'configSchema', 'connectorKey', 'tier',
+  'guideUrl', 'attributes', 'configSchema', 'connectorKey', 'tier', 'status',
 ];
+
+// Mirrors the integrations collection's status enum. 'Coming Soon' is the
+// point of this field: a platform can exist in the admin panel (schema
+// built, logo uploaded, ready to demo) without being connectable or
+// selectable by real users yet — flip to 'Active' once it's actually live.
+const PLATFORM_STATUSES = ['Active', 'Coming Soon'];
 
 function pickPlatformFields(body) {
   const data = {};
@@ -68,10 +74,12 @@ router.post('/admin/platforms', verifyAuth, requireSuperAdmin, [
   body('name').isString().trim().notEmpty(),
   body('connectorKey').optional().isString().trim(),
   body('tier').optional().isIn(['basic', 'premium']),
+  body('status').optional().isIn(PLATFORM_STATUSES),
 ], validate, async (req, res) => {
   try {
     const data = pickPlatformFields(req.body);
     if (!data.tier) data.tier = 'basic';
+    if (!data.status) data.status = 'Active';
     const docRef = db.collection('platforms').doc();
     data.key = docRef.id;
     await docRef.set(data);
@@ -96,6 +104,7 @@ router.put('/admin/platforms/:platformId', verifyAuth, requireSuperAdmin, [
   body('name').optional().isString().trim().isLength({ min: 1 }),
   body('connectorKey').optional().isString().trim(),
   body('tier').optional().isIn(['basic', 'premium']),
+  body('status').optional().isIn(PLATFORM_STATUSES),
 ], validate, async (req, res) => {
   try {
     const { platformId } = req.params;

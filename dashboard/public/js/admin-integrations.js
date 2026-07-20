@@ -7,6 +7,8 @@ import { wireRowActionsMenus } from './row-actions-menu.js';
 let firestoreDb = null;
 let authInstance = null;
 
+const SYNC_DIRECTIONS = ['Source_to_Dest', 'Dest_to_Source', 'Bidirectional'];
+
 // Integration create/edit/delete goes through backend routes (not direct
 // Firestore writes — the `integrations` collection's write rule is `if false`).
 // The backend also handles audit logging server-side now.
@@ -105,6 +107,8 @@ export function initAdminIntegrations(db, auth) {
 
       if (p2Val) p2Select.value = p2Val;
       else p2Select.value = '';
+
+      excludeSamePlatform();
     },
     (err) => {
       console.warn('[admin-integrations] Platforms listener error:', err);
@@ -181,6 +185,12 @@ export function initAdminIntegrations(db, auth) {
 
       document.getElementById('f-int-platform1').value = integration.platform1?.id || integration.platform1?.key || '';
       document.getElementById('f-int-platform2').value = integration.platform2?.id || integration.platform2?.key || '';
+
+      const enabledDirs = integration.enabledSyncDirections || ['Source_to_Dest'];
+      SYNC_DIRECTIONS.forEach(v => {
+        const cb = document.getElementById('f-int-sync-dir-' + v);
+        if (cb) cb.checked = enabledDirs.includes(v);
+      });
     } else {
       document.getElementById('integration-panel-title').textContent = 'Add Integration';
       document.getElementById('f-int-doc-id').value = '';
@@ -191,6 +201,11 @@ export function initAdminIntegrations(db, auth) {
 
       document.getElementById('f-int-platform1').value = '';
       document.getElementById('f-int-platform2').value = '';
+
+      SYNC_DIRECTIONS.forEach(v => {
+        const cb = document.getElementById('f-int-sync-dir-' + v);
+        if (cb) cb.checked = v === 'Source_to_Dest';
+      });
     }
 
     modalOverlay.classList.add('open');
@@ -212,6 +227,38 @@ export function initAdminIntegrations(db, auth) {
   btnCancel.addEventListener('click', _closeModal);
   modalOverlay.addEventListener('click', _closeModal);
 
+  // A Marketplace integration pairing a platform with itself isn't a real
+  // integration — block it at selection, not just on Save. Disables (not
+  // removes) the matching option in the OTHER select so the list doesn't
+  // jump around, and clears+warns if the other side's current pick just
+  // became invalid.
+  function excludeSamePlatform() {
+    const p1Select = document.getElementById('f-int-platform1');
+    const p2Select = document.getElementById('f-int-platform2');
+    if (!p1Select || !p2Select) return;
+
+    const disableMatching = (select, blockedId) => {
+      let hadToClear = false;
+      for (const opt of select.options) {
+        if (!opt.value) continue;
+        const matches = !!blockedId && opt.value === blockedId;
+        opt.disabled = matches;
+        opt.hidden = matches;
+        if (matches && select.value === opt.value) hadToClear = true;
+      }
+      if (hadToClear) select.value = '';
+      return hadToClear;
+    };
+
+    const clearedP2 = disableMatching(p2Select, p1Select.value);
+    const clearedP1 = disableMatching(p1Select, p2Select.value);
+    if (clearedP2 || clearedP1) {
+      showToast('Platform 1 and Platform 2 cannot be the same platform.', 'error');
+    }
+  }
+  document.getElementById('f-int-platform1')?.addEventListener('change', excludeSamePlatform);
+  document.getElementById('f-int-platform2')?.addEventListener('change', excludeSamePlatform);
+
   // Form Submit (Save)
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -228,7 +275,10 @@ export function initAdminIntegrations(db, auth) {
         name: document.getElementById('f-int-name').value.trim(),
         description: document.getElementById('f-int-desc').value.trim(),
         status: document.getElementById('f-int-status').value,
-        tags: tagsArray
+        tags: tagsArray,
+        enabledSyncDirections: SYNC_DIRECTIONS.filter(
+          v => document.getElementById('f-int-sync-dir-' + v)?.checked
+        ),
       };
 
       const p1Id = document.getElementById('f-int-platform1').value;
@@ -247,6 +297,13 @@ export function initAdminIntegrations(db, auth) {
           id: p2Obj.id,
           name: p2Obj.name
         };
+      }
+
+      if (integrationData.platform1?.id && integrationData.platform2?.id
+          && integrationData.platform1.id === integrationData.platform2.id) {
+        showToast('Platform 1 and Platform 2 cannot be the same platform.', 'error');
+        setButtonLoading(btnSave, false);
+        return;
       }
 
       if (docId) {

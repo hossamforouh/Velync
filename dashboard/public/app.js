@@ -302,6 +302,19 @@ async function ensureCachedPlatforms() {
   return window.cachedPlatforms;
 }
 
+// GET /api/integrations — used by applySyncDirectionOptions() to look up
+// the currently-selected platform pair's own enabledSyncDirections (each
+// Marketplace Integration controls this independently — see that function).
+async function ensureCachedIntegrations() {
+  if (window.cachedIntegrations) return window.cachedIntegrations;
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch('/api/integrations', { headers: { 'Authorization': `Bearer ${token}` } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  window.cachedIntegrations = data.integrations;
+  return window.cachedIntegrations;
+}
+
 // GET /api/sync-configs/:configId — single-config fetch, replacing a direct
 // Firestore getDoc(). Returns null (not throw) for a 404 so callers can
 // treat "doesn't exist" the same way `snap.exists()` used to.
@@ -1028,6 +1041,62 @@ function setMaintenanceAdminBanner(show) {
 // lockout, worse than the bug this was meant to fix. Logged-out visitors
 // always see the normal landing page; enforcement starts once someone
 // actually logs in and turns out not to be a superadmin.
+// ─── Per-Integration Sync Directionality rollout ───────────────
+// All three directions exist in the schema/engine today, but which ones
+// are actually usable depends on the specific platform PAIR — one
+// Marketplace Integration might already have Destination-to-Source built
+// while a newer pairing only supports Source-to-Destination so far. So
+// this isn't a single global switch: each `integrations` doc carries its
+// own `enabledSyncDirections` (admin-editable in that Integration's
+// editor), and this function resolves it for whichever pair is currently
+// selected in the wizard.
+const SYNC_DIRECTION_LABELS = {
+  Source_to_Dest: 'Source to Destination',
+  Dest_to_Source: 'Destination to Source',
+  Bidirectional: 'Bidirectional (Two-way)',
+};
+const SYNC_DIRECTION_ORDER = ['Source_to_Dest', 'Dest_to_Source', 'Bidirectional'];
+
+// Rebuilds #f-sync-type's options from the enabled list for the currently
+// selected source/destination platform pair (_dropdownSourceProvider /
+// _dropdownDestProvider). `keepValue` is always included even if not
+// currently enabled — editing a config that used a direction the admin has
+// since turned back off must not silently strip/change that config's own
+// saved value. Falls back to Source-to-Destination only when no platform
+// pair is selected yet, or no matching Integration doc exists for it (a
+// manual pairing an admin never added to the Marketplace).
+async function applySyncDirectionOptions(keepValue) {
+  if (!fSyncType) return;
+  const currentValue = fSyncType.value;
+
+  let enabledList = ['Source_to_Dest'];
+  const p1Id = window.cachedPlatforms?.find(p => p.id === _dropdownSourceProvider || p.key === _dropdownSourceProvider)?.id;
+  const p2Id = window.cachedPlatforms?.find(p => p.id === _dropdownDestProvider || p.key === _dropdownDestProvider)?.id;
+  if (p1Id && p2Id) {
+    try {
+      const integrations = await ensureCachedIntegrations();
+      const match = integrations.find(it => {
+        const a = it.platform1?.id, b = it.platform2?.id;
+        return (a === p1Id && b === p2Id) || (a === p2Id && b === p1Id);
+      });
+      if (match?.enabledSyncDirections?.length) enabledList = match.enabledSyncDirections;
+    } catch (e) {
+      console.warn('[applySyncDirectionOptions] Could not load integrations', e);
+    }
+  }
+
+  const enabled = new Set(enabledList);
+  if (keepValue) enabled.add(keepValue);
+  const values = SYNC_DIRECTION_ORDER.filter(v => enabled.has(v));
+  fSyncType.innerHTML = values.map(v =>
+    `<option value="${v}">${escHtml(SYNC_DIRECTION_LABELS[v])}</option>`
+  ).join('');
+  // Preserve whatever was selected if it's still an option; otherwise fall
+  // back to the first (safest) available direction rather than leaving the
+  // select on a now-nonexistent value.
+  fSyncType.value = values.includes(keepValue || currentValue) ? (keepValue || currentValue) : (values[0] || '');
+}
+
 async function checkGlobalSettings(idToken) {
   try {
     const headers = idToken ? { 'Authorization': `Bearer ${idToken}` } : {};
@@ -1577,7 +1646,7 @@ onAuthStateChanged(auth, async (user) => {
             body: JSON.stringify({
               whatsappNumber: num,
               maintenanceMode,
-              maintenanceMessage
+              maintenanceMessage,
             })
           });
           if (!res.ok) {
@@ -3851,14 +3920,50 @@ function setConnectButtonProviders(p1Provider, p2Provider) {
   // Store on window for openNodeModal to read
   window._p1DisplayName = p1Name;
   window._p2DisplayName = p2Name;
+
+  const mh1 = document.getElementById('mapping-header-source-label');
+  const mh2 = document.getElementById('mapping-header-dest-label');
+  if (mh1) mh1.textContent = p1Name + ' Field';
+  if (mh2) mh2.textContent = p2Name + ' Field';
 }
 
 function buildSelectHtml(connections) {
   return {
     html: '<option value="">-- Select Connection --</option>' +
-      connections.map(c => `<option value="${c.id}">${escHtml(c.label)}</option>`).join(''),
+      connections.map(c => `<option value="${c.id}" data-provider="${escAttr(c.provider)}">${escHtml(c.label)}</option>`).join(''),
     hasConns: connections.length > 0
   };
+}
+
+// Best practice: block picking the same platform for both sides of a sync
+// at the point of selection, not just at save time — a user shouldn't be
+// able to pick "My Notion" as source then discover only on Submit that
+// "My Notion (2)" as destination is rejected for being the same platform.
+// Disables (doesn't remove) same-provider options in the OTHER dropdown so
+// the list doesn't visually jump around, and clears+warns if the other
+// side's current selection just became invalid.
+function enforceDistinctPlatforms() {
+  const disableMatching = (select, blockedProvider) => {
+    let hadToClear = false;
+    for (const opt of select.options) {
+      if (!opt.value) continue;
+      const matches = !!blockedProvider && opt.dataset.provider === blockedProvider;
+      opt.disabled = matches;
+      opt.hidden = matches;
+      if (matches && select.value === opt.value) hadToClear = true;
+    }
+    if (hadToClear) {
+      select.value = '';
+      select.dispatchEvent(new Event('change'));
+    }
+    return hadToClear;
+  };
+
+  const clearedDest = disableMatching(fDestConnection, _dropdownSourceProvider);
+  const clearedSource = disableMatching(fSourceConnection, _dropdownDestProvider);
+  if (clearedDest || clearedSource) {
+    showToast('Source and destination cannot use the same platform — please pick a different one.', 'error');
+  }
 }
 
 function populateConnectionDropdowns(connections, id = null, p1Provider = null, p2Provider = null) {
@@ -3870,8 +3975,23 @@ function populateConnectionDropdowns(connections, id = null, p1Provider = null, 
   // Remove any connecting indicators
   document.querySelectorAll('#section-source .loader1, #section-dest .loader2').forEach(el => el.remove());
 
-  const p1Conns = p1Provider ? connections.filter(c => c.provider === p1Provider) : connections;
-  const p2Conns = p2Provider ? connections.filter(c => c.provider === p2Provider) : connections;
+  // Coming-soon platforms shouldn't be pickable for a brand-new manual sync
+  // — but only gated here for that case (blank New Config, no fixed
+  // provider yet). Editing an existing config, or opening one already
+  // pinned to a specific provider (Marketplace/duplicate), must still show
+  // its real connections even if that platform was marked Coming Soon
+  // *after* the config was created — this isn't the place to break
+  // something that already exists.
+  let availableConnections = connections;
+  if (!id && !p1Provider && !p2Provider && window.cachedPlatforms) {
+    availableConnections = connections.filter(c => {
+      const plat = window.cachedPlatforms.find(p => p.id === c.provider || p.key === c.provider);
+      return (plat?.status || 'Active') !== 'Coming Soon';
+    });
+  }
+
+  const p1Conns = p1Provider ? availableConnections.filter(c => c.provider === p1Provider) : availableConnections;
+  const p2Conns = p2Provider ? availableConnections.filter(c => c.provider === p2Provider) : availableConnections;
 
   const p1Result = buildSelectHtml(p1Conns);
   const p2Result = buildSelectHtml(p2Conns);
@@ -3935,6 +4055,7 @@ function populateConnectionDropdowns(connections, id = null, p1Provider = null, 
       fDestConnection.dispatchEvent(new Event('change'));
     }
   }
+  enforceDistinctPlatforms();
 }
 
 async function handleConnectionChange(prefix) {
@@ -3975,6 +4096,12 @@ async function handleConnectionChange(prefix) {
   const newP1 = prefix === 'p1' ? (connId ? (conn?.provider ?? _dropdownSourceProvider) : null) : _dropdownSourceProvider;
   const newP2 = prefix === 'p2' ? (connId ? (conn?.provider ?? _dropdownDestProvider) : null) : _dropdownDestProvider;
   setConnectButtonProviders(newP1, newP2);
+  enforceDistinctPlatforms();
+  // Live-refresh which sync directions are offered now that the platform
+  // pair may have changed — e.g. switching the source from a pairing that
+  // already has Destination-to-Source built to one that only supports
+  // Source-to-Destination so far.
+  applySyncDirectionOptions(fSyncType?.value);
 
   if (!connId) {
     container.innerHTML = '';
@@ -4087,7 +4214,7 @@ function addMappingRow(sourceField = '', destField = '', confidence = null, reas
   row.innerHTML = `
     <select class="map-source select-arrow" style="flex: 1; padding: 10px 32px 10px 12px; border-radius: 8px; background-color: transparent; color: var(--text-1); border: 1px solid transparent; font-size: 0.9rem; font-weight: 500; outline: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';" onmouseout="this.style.backgroundColor='transparent'; this.style.borderColor='transparent';">${sOptions}</select>
     
-    <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--glass); color: var(--text-3);">
+    <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(129,140,248,0.15); color: var(--primary);">
       ${feather.icons['arrow-right'].toSvg({width: 16, height: 16})}
     </div>
     
@@ -4110,7 +4237,7 @@ function addMappingRow(sourceField = '', destField = '', confidence = null, reas
     </button>
   `;
 
-  row.querySelector('.map-source').addEventListener('change', () => updateStatusMappingUI());
+  row.querySelector('.map-source').addEventListener('change', () => { updateStatusMappingUI(); checkMappingConflicts(); });
   row.querySelector('.map-dest').addEventListener('change', () => { updateStatusMappingUI(); checkMappingConflicts(); });
 
   row.querySelector('.btn-remove-mapping').addEventListener('click', async () => {
@@ -4150,32 +4277,53 @@ function checkMappingConflicts() {
   const warningEl = document.getElementById('mapping-conflict-warning');
   const rows = Array.from(mappingsContainer.querySelectorAll('.mapping-row'));
   const destCounts = {};
+  const sourceCounts = {};
   rows.forEach(row => {
     const destSelect = row.querySelector('.map-dest') || row.querySelector('.map-notion');
-    const val = destSelect?.value;
-    if (!val || val === '__error') return;
-    destCounts[val] = (destCounts[val] || 0) + 1;
+    const destVal = destSelect?.value;
+    if (destVal && destVal !== '__error') destCounts[destVal] = (destCounts[destVal] || 0) + 1;
+
+    const sourceSelect = row.querySelector('.map-source') || row.querySelector('.map-ticktick');
+    const sourceVal = sourceSelect?.value;
+    if (sourceVal) sourceCounts[sourceVal] = (sourceCounts[sourceVal] || 0) + 1;
   });
-  const conflictingLabels = new Set();
+  const conflictingDestLabels = new Set();
+  const conflictingSourceLabels = new Set();
   rows.forEach(row => {
     const destSelect = row.querySelector('.map-dest') || row.querySelector('.map-notion');
-    const val = destSelect?.value;
-    const hasConflict = !!val && val !== '__error' && destCounts[val] > 1;
+    const destVal = destSelect?.value;
+    const hasDestConflict = !!destVal && destVal !== '__error' && destCounts[destVal] > 1;
+
+    const sourceSelect = row.querySelector('.map-source') || row.querySelector('.map-ticktick');
+    const sourceVal = sourceSelect?.value;
+    const hasSourceConflict = !!sourceVal && sourceCounts[sourceVal] > 1;
+
+    const hasConflict = hasDestConflict || hasSourceConflict;
     row.style.borderColor = hasConflict ? 'var(--rose)' : 'var(--border)';
     row.style.background = hasConflict ? 'rgba(251, 113, 133, 0.06)' : 'rgba(255, 255, 255, 0.02)';
-    if (hasConflict) {
-      conflictingLabels.add(destSelect.options[destSelect.selectedIndex]?.text || val);
+    if (hasDestConflict) {
+      conflictingDestLabels.add(destSelect.options[destSelect.selectedIndex]?.text || destVal);
+    }
+    if (hasSourceConflict) {
+      conflictingSourceLabels.add(sourceSelect.options[sourceSelect.selectedIndex]?.text || sourceVal);
     }
   });
-  if (!warningEl) return conflictingLabels.size > 0;
-  if (conflictingLabels.size > 0) {
+  if (!warningEl) return conflictingDestLabels.size > 0 || conflictingSourceLabels.size > 0;
+  const messages = [];
+  if (conflictingSourceLabels.size > 0) {
+    messages.push(`Used as the source more than once: ${Array.from(conflictingSourceLabels).map(l => escHtml(l)).join(', ')}.`);
+  }
+  if (conflictingDestLabels.size > 0) {
+    messages.push(`Mapped to the same destination more than once: ${Array.from(conflictingDestLabels).map(l => escHtml(l)).join(', ')}. Each destination field can only receive one mapping.`);
+  }
+  if (messages.length > 0) {
     warningEl.style.display = 'flex';
-    warningEl.innerHTML = `${feather.icons['alert-triangle'].toSvg({width: 14, height: 14, style: 'flex-shrink:0;'})}<span>Mapped to the same destination more than once: ${Array.from(conflictingLabels).map(l => escHtml(l)).join(', ')}. Each destination field can only receive one mapping.</span>`;
+    warningEl.innerHTML = `${feather.icons['alert-triangle'].toSvg({width: 14, height: 14, style: 'flex-shrink:0;'})}<span>${messages.join(' ')}</span>`;
   } else {
     warningEl.style.display = 'none';
     warningEl.innerHTML = '';
   }
-  return conflictingLabels.size > 0;
+  return conflictingDestLabels.size > 0 || conflictingSourceLabels.size > 0;
 }
 
 let currentModalTarget = null;
@@ -4681,7 +4829,7 @@ function clearForm() {
   document.getElementById('form-id').value = '';
   fIntegrationId.value = '';
   fDescription.value = '';
-  fSyncType.value = 'Source_to_Dest';
+  applySyncDirectionOptions();
   fDeleteAfter.checked = false;
 
   fSourceConnection.value = '';
@@ -4908,7 +5056,7 @@ async function fillForm(cfg, opts = {}) {
   fIntegrationId.value = cfg.integrationId || '';
   fDescription.value = cfg.description || '';
   
-  fSyncType.value      = cfg.syncType || 'Source_to_Dest';
+  applySyncDirectionOptions(cfg.syncType || 'Source_to_Dest');
   fDeleteAfter.checked = cfg.deleteAfterSync === true;
 
 
@@ -5126,6 +5274,30 @@ async function saveConfig(e, isSubmit = false) {
     isSavingConfig = false;
     return;
   }
+  // Distinct from the check above — two DIFFERENT accounts on the SAME
+  // platform (e.g. two separate Notion connections) are still blocked.
+  // enforceDistinctPlatforms() already prevents picking this combination
+  // through the UI, but this is the same-config-integrity backstop for any
+  // path that bypasses that (stale cached state, a future entry point).
+  if (payload.platform1 && payload.platform2 && payload.platform1 === payload.platform2) {
+    showToast("Validation Error: Source and destination cannot both be the same platform.", 'error');
+    isSavingConfig = false;
+    return;
+  }
+  // Coming-soon check only applies to brand-new configs (see
+  // populateConnectionDropdowns' matching comment for why editing an
+  // existing one must stay exempt) — instant feedback here, the backend
+  // check on POST is what's actually authoritative.
+  if (!editingId && window.cachedPlatforms) {
+    const comingSoonPlat = [payload.platform1, payload.platform2]
+      .map(p => window.cachedPlatforms.find(cp => cp.id === p || cp.key === p))
+      .find(plat => plat && (plat.status || 'Active') === 'Coming Soon');
+    if (comingSoonPlat) {
+      showToast(`Validation Error: ${comingSoonPlat.name} is coming soon and can't be used in a sync yet.`, 'error');
+      isSavingConfig = false;
+      return;
+    }
+  }
 
   // Warn (don't block) if another config already syncs this exact same
   // connection pair — easy to end up with confusing/conflicting duplicates.
@@ -5146,11 +5318,28 @@ async function saveConfig(e, isSubmit = false) {
     }
   }
 
-  // Validate duplicate destination fields. checkMappingConflicts() has
-  // already been keeping the mapping rows visually flagged live as the
+  // Validate duplicate source AND destination fields. checkMappingConflicts()
+  // has already been keeping the mapping rows visually flagged live as the
   // user works (see addMappingRow) — reuse it here so a Submit clicked
   // from a later step still jumps back and highlights exactly which rows
   // collide, instead of leaving the user to hunt for a bare toast message.
+  const mappedSourceFields = new Set();
+  let duplicateSourceField = null;
+  for (const m of payload.fieldMappings) {
+    if (m.sourceField && mappedSourceFields.has(m.sourceField)) { duplicateSourceField = m.sourceField; break; }
+    if (m.sourceField) mappedSourceFields.add(m.sourceField);
+  }
+  if (duplicateSourceField) {
+    goToStep(2);
+    checkMappingConflicts();
+    mappingsContainer.querySelector('.mapping-row[style*="rose"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showToast(`Validation Error: Source field '${duplicateSourceField}' is used more than once.`, 'error');
+    isSavingConfig = false;
+    if (btnSave) btnSave.disabled = false;
+    if (btnSubmit) btnSubmit.disabled = false;
+    return;
+  }
+
   const mappedDestFields = new Set();
   let duplicateDestField = null;
   for (const m of payload.fieldMappings) {
@@ -5458,6 +5647,19 @@ function goToStep(n) {
 
   wizardStep = n;
 }
+
+// Clicking a step jumps straight to it, but only backward/to the current
+// step — a step you haven't reached yet hasn't passed the Next button's
+// validation (required fields, at least one mapping, etc.), so jumping
+// ahead to it would let a half-configured wizard reach Deploy.
+document.getElementById('wizard-stepper')?.addEventListener('click', (e) => {
+  const stepEl = e.target.closest('.wizard-step');
+  if (!stepEl) return;
+  const n = parseInt(stepEl.dataset.wizStep);
+  if (stepEl.classList.contains('completed') || stepEl.classList.contains('active')) {
+    goToStep(n);
+  }
+});
 
 document.getElementById('btn-step1-next')?.addEventListener('click', () => {
   const p1 = document.getElementById('f-source-connection')?.value;

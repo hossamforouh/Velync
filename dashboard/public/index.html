@@ -1197,6 +1197,7 @@
                       <th data-sort="name">Name</th>
                       <th data-sort="authType">Auth Type</th>
                       <th data-sort="tier">Tier</th>
+                      <th data-sort="status">Status</th>
                       <th data-sort="integrationCount">Integrations</th>
                       <th>Actions</th>
                     </tr>
@@ -1469,6 +1470,13 @@
                       <option value="premium">Premium</option>
                     </select>
                   </div>
+                  <div class="form-row">
+                    <label for="f-plat-status">Status *<span class="info-tip" tabindex="0" role="note" aria-label="Coming Soon hides this platform from Add New Connection and blocks it as a source/destination in the Config wizard, while still letting you finish setting it up here.">i<span class="info-tip-bubble">"Coming Soon" hides this platform from "Add New Connection" and blocks it as a source/destination in the Config wizard — use it while you're still setting the platform up, then flip to Active once it's ready for real users.</span></span></label>
+                    <select id="f-plat-status" required>
+                      <option value="Active">Active</option>
+                      <option value="Coming Soon">Coming Soon</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div class="form-section tab-pane" id="tab-auth" style="margin-bottom: 24px;">
@@ -1623,9 +1631,13 @@
   <div class="panel-overlay" id="panel-overlay"></div>
 
   <!-- ── Side panel ─────────────────────────────────────── -->
-  <aside class="side-panel" id="side-panel" tabindex="-1">
+  <aside class="side-panel side-panel--modal" id="side-panel" tabindex="-1">
     <div class="panel-header">
       <h2 id="panel-title">New Config</h2>
+      <div id="unsaved-indicator"
+        style="color: var(--warning); font-size: 0.82rem; display: none; align-items: center; gap: 6px; margin-left: auto; margin-right: 16px;">
+        <i data-feather="alert-circle" style="width:14px;height:14px;"></i> Unsaved changes
+      </div>
       <button class="panel-close" id="panel-close" aria-label="Close">✕</button>
     </div>
 
@@ -1767,6 +1779,11 @@
                 Add Field</button>
             </div>
             <div class="form-hint" style="margin-bottom: 0.75rem;">Map fields from the source platform to the destination platform properties.</div>
+            <div style="display: flex; gap: 1rem; align-items: center; padding: 0 1rem; margin-bottom: 0.5rem;">
+              <span id="mapping-header-source-label" style="flex: 1; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3);">Source Field</span>
+              <div style="width: 32px; flex-shrink: 0;"></div>
+              <span id="mapping-header-dest-label" style="flex: 1; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3);">Destination Field</span>
+            </div>
             <div id="mappings-container" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
             <div id="mapping-conflict-warning" class="mapping-conflict-warning" style="display:none;" role="alert"></div>
 
@@ -1873,13 +1890,6 @@
         </div>
 
       </form>
-    </div>
-
-    <div class="panel-footer" id="panel-footer">
-      <div id="unsaved-indicator"
-        style="color: var(--warning); font-size: 0.85rem; display: none; align-items: center; gap: 6px;">
-        <i data-feather="alert-circle" style="width:14px;height:14px;"></i> Unsaved changes
-      </div>
     </div>
   </aside>
 
@@ -2380,6 +2390,44 @@
             <select id="f-int-platform2" required>
               <option value="" disabled selected>Select Platform...</option>
             </select>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Sync Directionality</div>
+          <p class="field-hint" style="margin-bottom:12px;">
+            Controls which sync directions real users can pick when creating a <strong>new</strong> config
+            for this specific platform pair — turn each on once it's actually implemented and ready for
+            production. A pairing you haven't built Destination-to-Source or Bidirectional support for yet
+            can stay on Source-to-Destination only, independent of any other integration. An existing
+            config keeps working on whatever direction it was created with even if you turn that direction
+            back off here.
+          </p>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px;">
+              <span class="toggle">
+                <input type="checkbox" id="f-int-sync-dir-Source_to_Dest" />
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </span>
+              <span>Source to Destination</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px;">
+              <span class="toggle">
+                <input type="checkbox" id="f-int-sync-dir-Dest_to_Source" />
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </span>
+              <span>Destination to Source</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+              <span class="toggle">
+                <input type="checkbox" id="f-int-sync-dir-Bidirectional" />
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </span>
+              <span>Bidirectional (Two-way)</span>
+            </label>
           </div>
         </div>
 

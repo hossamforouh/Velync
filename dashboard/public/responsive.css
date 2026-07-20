@@ -323,6 +323,17 @@ html, body {
   /* ── Side panel ─── */
   /* Responsive: Side panel full-width on mobile */
   .side-panel { width: 100%; max-width: 100%; }
+  /* The centered-dialog treatment (style.css .side-panel--modal) doesn't
+     help on a small screen — go back to the old edge-to-edge full-screen
+     panel here, same as every other side panel at this breakpoint. */
+  .side-panel.side-panel--modal {
+    left: 0; right: 0; top: 0; bottom: 0;
+    width: 100%; max-width: 100%; height: 100%; max-height: 100%;
+    border-radius: 0;
+    transform: none;
+    opacity: 1;
+  }
+  .side-panel.side-panel--modal.open { transform: none; }
   .panel-header { padding: 16px; }
   .panel-body { padding: 16px; }
   .panel-actions { padding: 16px; flex-direction: column; gap: 8px; }

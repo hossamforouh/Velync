@@ -2122,6 +2122,44 @@ header.legacy-header {
   max-width: 560px;
 }
 
+/* The New/Edit Config wizard used to be the one panel that stayed full-
+   viewport (see the comment above) — a real form with a long scrollable
+   body still doesn't need the entire screen. Centered dialog instead,
+   same dimmed backdrop, capped so it reads like an intentional workspace
+   rather than an edge-to-edge takeover. Mobile still goes full-screen
+   (see the responsive.css override) since a fixed-width dialog doesn't
+   help on a small screen. */
+.side-panel.side-panel--modal {
+  left: 50%;
+  right: auto;
+  top: 50%;
+  bottom: auto;
+  width: 100%;
+  max-width: 840px;
+  height: 88vh;
+  max-height: 820px;
+  border-left: none;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  opacity: 0;
+  /* Unlike the base .side-panel, this variant is repositioned to sit in
+     the center of the screen even while "closed" (only opacity/scale
+     animate it in) — without this, the invisible-but-present panel would
+     sit on top of the middle of the page and silently swallow every
+     click underneath it, anywhere in the app. */
+  pointer-events: none;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -48%) scale(0.97);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+}
+
+.side-panel.side-panel--modal.open {
+  opacity: 1;
+  pointer-events: all;
+  transform: translate(-50%, -50%) scale(1);
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -2264,6 +2302,19 @@ header.legacy-header {
   align-items: center;
   gap: 6px;
   cursor: default;
+}
+
+/* Only completed/active steps are real navigation targets — jumping ahead
+   to a step you haven't reached yet would bypass the per-step validation
+   the Next buttons already enforce (e.g. field mappings must exist before
+   Deploy). Future steps stay cursor:default from the base rule above. */
+.wizard-step.completed,
+.wizard-step.active {
+  cursor: pointer;
+}
+
+.wizard-step.completed:hover .wiz-step-circle {
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.2);
 }
 
 .wiz-step-circle {

@@ -59,6 +59,14 @@ router.post('/oauth/exchange', verifyAuth, oauthExchangeLimiter, [
     if (!platformDoc.exists) return res.status(404).json({ error: 'Platform not found' });
     const platform = platformDoc.data();
 
+    // Backstop against a coming-soon platform's OAuth flow being reached at
+    // all (the frontend already excludes these from "Add New Connection") —
+    // refuses to persist the connection even if a request gets this far,
+    // after the third-party consent screen.
+    if ((platform.status || 'Active') === 'Coming Soon') {
+      return res.status(400).json({ error: `${platform.name || platformId} is coming soon and can't be connected yet.` });
+    }
+
     // Connector tier gating: check workspace plan before allowing connection
     const wsDoc = await db.collection('workspaces').doc(resolvedWsId).get();
     const wsData = wsDoc.data() || {};

@@ -526,7 +526,12 @@ window.addEventListener('open-add-connection', (e) => {
 });
 
 async function fetchPlatformSchemas() {
-  const platforms = (await fetchPlatformsCached()).map(p => ({ ...p }));
+  // Coming-soon platforms are visible in the admin panel (so the team can
+  // finish setting them up) but shouldn't be offered here — there's no
+  // real connector/OAuth flow ready for real users to connect to yet.
+  const platforms = (await fetchPlatformsCached())
+    .filter(p => (p.status || 'Active') !== 'Coming Soon')
+    .map(p => ({ ...p }));
 
   // Filter by workspace plan's connector tiers. GET /workspace/:id/plan
   // (not GET /billing/plan) since window.currentWorkspaceId can be a
