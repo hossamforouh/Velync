@@ -39,6 +39,20 @@ class Connector {
     throw new Error('getDataSource() must be implemented');
   }
 
+  /**
+   * Declares which fieldIds this connector's getDataSource() actually
+   * supports, so the admin Platform editor's "Data Source Function" picker
+   * (Sync Schema step, for Dynamic Dropdown fields) can be populated from
+   * the connector contract itself instead of needing at least one dynamic
+   * field to already exist somewhere to bootstrap the list — see
+   * GET /api/data-sources. Static (no credentials needed to enumerate what
+   * a connector CAN fetch, only to actually fetch it).
+   * @returns {Array<{id: string, name: string}>}
+   */
+  static getDataSources() {
+    return [];
+  }
+
   getEntityTypes() {
     return ['default'];
   }

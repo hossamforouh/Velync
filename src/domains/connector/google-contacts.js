@@ -71,6 +71,12 @@ class GoogleContactsConnector extends Connector {
     }
     return [];
   }
+
+  static getDataSources() {
+    return [
+      { id: 'contactGroups', name: 'Google Contact Groups' },
+    ];
+  }
 }
 
 register('google_contacts', GoogleContactsConnector);

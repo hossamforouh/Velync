@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { verifyAuth } = require('../middleware/auth');
 const { resolveConnectionTokens } = require('../../domains/connection/resolver');
-const { getConnector } = require('../../domains/connector/registry');
+const { getConnector, getRegisteredPlatforms } = require('../../domains/connector/registry');
 const { resolveConnectorKey } = require('../../core/platform');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
@@ -38,21 +38,29 @@ const validate = (req, res, next) => {
   next();
 };
 
+// Powers the admin Platform editor's "Data Source Function" picker (Sync
+// Schema step, for Dynamic Dropdown fields). Previously this scanned
+// existing platforms' configSchema for already-saved field.dataSource
+// values — a chicken-and-egg bug: the only choosable options were ones a
+// dynamic field had already been saved with somewhere, so the list was
+// empty on any fresh platform/deployment and could never be bootstrapped.
+// Reads the connector contract's declared getDataSources() instead — each
+// registered connector states its own real capabilities (see
+// Connector.getDataSources() in interface.js), so this is populated from
+// what a connector can ACTUALLY fetch, not from prior admin data entry.
+// Deduped by id since two connectors could in principle declare the same
+// canonical fieldId.
 router.get('/data-sources', verifyAuth, platformLimiter, async (req, res) => {
   try {
-    const platformsSnap = await db.collection('platforms').get();
-    const sources = [];
-    for (const doc of platformsSnap.docs) {
-      const plat = doc.data();
-      if (plat.configSchema) {
-        for (const field of plat.configSchema) {
-          if (field.dataSource) {
-            sources.push({ id: field.dataSource, name: `${plat.name}: ${field.label}` });
-          }
-        }
+    const seen = new Map();
+    for (const platformId of getRegisteredPlatforms()) {
+      const ConnectorClass = getConnector(platformId);
+      const declared = typeof ConnectorClass.getDataSources === 'function' ? ConnectorClass.getDataSources() : [];
+      for (const ds of declared) {
+        if (ds?.id && !seen.has(ds.id)) seen.set(ds.id, { id: ds.id, name: ds.name || ds.id });
       }
     }
-    res.json(sources);
+    res.json(Array.from(seen.values()));
   } catch (err) {
     logger.error('platform', 'Failed to fetch data-sources', { error: err.message });
     res.status(500).json([]);

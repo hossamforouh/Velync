@@ -380,18 +380,25 @@ export function initAdminPlatforms(dbInstance, authInstance) {
     form.style.display = 'none';
     loadingEl.style.display = 'flex';
 
-    if (!cachedDataSources) {
+    // Only cache a SUCCESSFUL, non-empty fetch — same reasoning as
+    // cachedConnectorKeys below: a transient failure must not permanently
+    // poison this for the rest of the page session, so retry on every open
+    // until it actually succeeds.
+    if (!cachedDataSources || cachedDataSources.length === 0) {
       try {
         const token = await auth.currentUser.getIdToken();
         const res = await fetch(`${API_URL}/api/data-sources`, {
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         });
-        if (res.ok) cachedDataSources = await res.json();
-        else { console.error("Failed to fetch data sources"); cachedDataSources = []; }
+        if (res.ok) {
+          const fetched = await res.json();
+          if (fetched.length > 0) cachedDataSources = fetched;
+        } else {
+          console.error("Failed to fetch data sources");
+        }
       } catch (err) {
         console.error("Error fetching data sources", err);
         showToast('Failed to load data sources: ' + err.message, 'error');
-        cachedDataSources = [];
       }
     }
     form.style.display = '';

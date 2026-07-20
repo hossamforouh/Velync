@@ -123,6 +123,13 @@ class NotionConnector extends Connector {
     return [];
   }
 
+  static getDataSources() {
+    return [
+      { id: 'databases', name: 'Notion Databases' },
+      { id: 'templates', name: 'Notion Page Templates' },
+    ];
+  }
+
   // ─── Webhook support (see WEBHOOK_SYNC_PLAN.md) ────────────────────
 
   static supportsWebhooks() {

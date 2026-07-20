@@ -120,6 +120,13 @@ class TickTickConnector extends Connector {
     }
     return [];
   }
+
+  static getDataSources() {
+    return [
+      { id: 'lists', name: 'TickTick Lists' },
+      { id: 'tags', name: 'TickTick Tags' },
+    ];
+  }
 }
 
 register('ticktick', TickTickConnector);
