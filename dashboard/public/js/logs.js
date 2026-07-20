@@ -15,8 +15,6 @@ let currentWorkspaceId = null;
 let currentAuth = null;
 let filterListenersAttached = false;
 let fetchRequestId = 0;
-let autoRefreshTimer = null;
-let autoRefreshEnabled = false;
 
 /* ── Init ───────────────────────────────────────────────────── */
 
@@ -42,23 +40,6 @@ export async function initLogs(db, workspaceId, authInstance) {
   }
 
   await fetchLogs(true);
-  startAutoRefresh();
-
-  // Visibility change: pause auto-refresh when tab hidden, resume when visible
-  if (!window._logsVisibilityWired) {
-    window._logsVisibilityWired = true;
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        stopAutoRefresh();
-      } else if (autoRefreshEnabled) {
-        // Refresh immediately on regaining focus (cheaper than a tight
-        // interval, and gives fresher data than waiting for the next tick)
-        // then resume the interval.
-        fetchLogs(true);
-        startAutoRefresh();
-      }
-    });
-  }
 }
 
 /* ── Filters ───────────────────────────────────────────────── */
@@ -643,38 +624,6 @@ async function exportLogsCSV() {
   URL.revokeObjectURL(url);
 }
 
-/* ── Auto-Refresh ──────────────────────────────────────────── */
-
-function startAutoRefresh() {
-  stopAutoRefresh();
-  const toggle = document.getElementById('logs-auto-refresh');
-  autoRefreshEnabled = toggle ? toggle.checked : false;
-  if (autoRefreshEnabled) {
-    autoRefreshTimer = setInterval(async () => {
-      const logsView = document.getElementById('view-logs');
-      if (logsView && logsView.style.display !== 'none') {
-        await fetchLogs(true);
-      }
-    }, 60000);
-  }
-}
-
-function stopAutoRefresh() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
-}
-
-function toggleAutoRefresh(checked) {
-  autoRefreshEnabled = checked;
-  if (checked) {
-    startAutoRefresh();
-  } else {
-    stopAutoRefresh();
-  }
-}
-
 /* ── Filter Listeners ──────────────────────────────────────── */
 
 function attachFilterListeners() {
@@ -686,7 +635,6 @@ function attachFilterListeners() {
   const dateTo = document.getElementById('logs-date-to');
   const loadMoreBtn = document.getElementById('logs-load-more-btn');
   const exportBtn = document.getElementById('logs-export-btn');
-  const autoRefreshToggle = document.getElementById('logs-auto-refresh');
 
   let searchTimer = null;
   if (searchInput) {
@@ -746,11 +694,5 @@ function attachFilterListeners() {
 
   if (exportBtn) {
     exportBtn.addEventListener('click', () => exportLogsCSV());
-  }
-
-  if (autoRefreshToggle) {
-    autoRefreshToggle.addEventListener('change', (e) => {
-      toggleAutoRefresh(e.target.checked);
-    });
   }
 }

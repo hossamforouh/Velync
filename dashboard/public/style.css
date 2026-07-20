@@ -4830,6 +4830,37 @@ input:-webkit-autofill {
   border-color: var(--violet);
 }
 
+/* Execution Logs toolbar — keep search, filter pills, date range, and the
+   action buttons on one row at desktop widths instead of wrapping to a
+   second line (removing the Auto-refresh checkbox freed enough space for
+   this without shrinking anything so far it's hard to use). Scoped to
+   #logs-toolbar specifically since .search-box/.logs-date-input are shared
+   with other pages (Activity Log, Client Errors) that don't need this.
+   overflow-x is a safety net, not the primary fix — nowrap only kicks in
+   above the existing 768px breakpoint where .grid-toolbar already stacks
+   into a column instead. */
+#logs-toolbar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+#logs-toolbar .toolbar-left {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+#logs-search {
+  width: 130px;
+}
+
+#logs-search:focus {
+  width: 160px;
+}
+
+#logs-toolbar .logs-date-input {
+  width: 115px;
+}
+
 .logs-date-input::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
   cursor: pointer;
@@ -6426,15 +6457,6 @@ input:-webkit-autofill {
 #logs-load-more-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* ── Auto-refresh Toggle ───────────────────────────────────── */
-.auto-refresh-toggle {
-  transition: opacity 0.2s;
-}
-
-.auto-refresh-toggle:hover {
-  opacity: 0.8;
 }
 
 /* ── Log Config Link ───────────────────────────────────────── */
