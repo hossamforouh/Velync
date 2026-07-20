@@ -327,6 +327,11 @@ html, body {
   .panel-body { padding: 16px; }
   .panel-actions { padding: 16px; flex-direction: column; gap: 8px; }
   .panel-actions .btn { width: 100%; justify-content: center; }
+  /* The wizard's sticky action bar (style.css) bleeds to .panel-body's
+     padding edges with negative margins — they must always equal the
+     padding set just above, or the bar overhangs the panel and forces
+     horizontal scrolling. */
+  .step-actions { padding: 14px 16px; margin: 24px -16px -16px; bottom: -16px; }
 
   /* ── Wizard steps ─── */
   /* Responsive: Wizard stepper compact on mobile */
@@ -584,6 +589,9 @@ html, body {
   .panel-header { padding: 12px; }
   .panel-body { padding: 12px; }
   .panel-actions { padding: 12px; }
+  /* Keep the sticky wizard action bar's bleed in lockstep with the
+     .panel-body padding above (see the ≤768px block). */
+  .step-actions { padding: 12px; margin: 24px -12px -12px; bottom: -12px; }
 
   /* Responsive: Toast on small phones */
   .toast { width: calc(100% - 16px); }

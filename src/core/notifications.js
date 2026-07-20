@@ -88,6 +88,53 @@ async function notifySyncFailure({ workspaceId, configId, configName, error, cur
 }
 
 /**
+ * Email workspace members when a connection flips into the needs-reauth
+ * state (expired/revoked refresh token). Distinct from notifySyncFailure:
+ * that one reports "a run failed" with a technical error, which for an auth
+ * problem reads as noise — this one tells the user the one thing that
+ * actually fixes it (reconnect the account). Callers only invoke this on
+ * the false→true transition, so a connection that stays broken doesn't
+ * re-email on every subsequent refresh attempt.
+ */
+async function notifyConnectionNeedsReauth({ workspaceId, provider, label }) {
+  try {
+    // Same preference key as sync-failure emails — to the user these are
+    // one category ("tell me when my syncs stop working"), and a separate
+    // toggle nobody has set yet would default-on anyway.
+    const emails = await getOptedInRecipientEmails(workspaceId, 'notif-sync-failure');
+    if (emails.length === 0) return;
+
+    const providerName = (provider || 'platform').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const connLabel = label || providerName;
+    const html = renderEmailHtml({
+      eyebrow: 'Action needed',
+      accent: 'warning',
+      heading: `Reconnect your ${escHtml(providerName)} account`,
+      bodyHtml:
+        p(`Velync lost access to <strong style="color:#E2E4F0;">${escHtml(connLabel)}</strong>. This usually happens when a password was changed or access was revoked on the other platform's side.`) +
+        p('Any syncs using this connection are paused from flowing until it is reconnected. Your data and settings are untouched — reconnecting picks up right where things left off.') +
+        p('Open Velync, go to <strong style="color:#E2E4F0;">Connections</strong>, and click <strong style="color:#E2E4F0;">Reconnect</strong> next to this account.'),
+      ctaText: 'Reconnect Now',
+      ctaUrl: 'https://velync.web.app/',
+    });
+    const text = `Velync lost access to your ${providerName} connection "${connLabel}".\n\nSyncs using it are paused until it's reconnected. Open Velync > Connections and click Reconnect.\n\nhttps://velync.web.app/`;
+    for (const to of emails) {
+      await db.collection('mail').add({
+        to,
+        message: {
+          subject: `[Velync] Action needed — reconnect your ${providerName} account`,
+          text,
+          html,
+        },
+      });
+    }
+    logger.info('notifications', `Sent reauth-needed email(s) for a ${provider} connection`, { recipients: emails.length });
+  } catch (err) {
+    logger.error('notifications', 'Failed to send reauth-needed email', { error: err.message });
+  }
+}
+
+/**
  * Email every superadmin. Used for failures that would otherwise be
  * invisible to everyone (e.g. a billing webhook handler throwing) — a log
  * line alone means nobody finds out until a user complains.
@@ -132,4 +179,4 @@ async function notifyAdmins(subject, text) {
   }
 }
 
-module.exports = { getOptedInRecipientEmails, notifySyncFailure, notifyAdmins };
+module.exports = { getOptedInRecipientEmails, notifySyncFailure, notifyConnectionNeedsReauth, notifyAdmins };

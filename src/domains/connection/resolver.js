@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { decrypt, encrypt } = require('../../../utils/encryption');
 const { ConnectionError } = require('../../core/errors');
+const { notifyConnectionNeedsReauth } = require('../../core/notifications');
 const db = require('../../core/db');
 const logger = require('../../core/logger');
 
@@ -99,13 +100,29 @@ async function refreshToken(uid, providerCreds, provider, connectionId) {
       error: err.response?.data || err.message,
     });
 
-    // Mark connection as needing reauthorization so the UI can show a prompt
+    // Mark connection as needing reauthorization so the UI can show a prompt.
+    // Reading the doc first (rather than a blind update) is what lets the
+    // email below fire only on the false→true transition — a connection
+    // that stays broken re-enters this catch on every scheduled sync, and
+    // without the transition check the owner would get this email every
+    // run interval for as long as they don't act on it.
     try {
-      await db.collection('connected_accounts').doc(connectionId).update({
+      const connRef = db.collection('connected_accounts').doc(connectionId);
+      const connSnap = await connRef.get();
+      const connData = connSnap.exists ? connSnap.data() : {};
+      await connRef.update({
         needsReauth: true,
         reauthReason: `Token refresh failed: ${err.response?.data?.error || err.message}`,
         updatedAt: new Date().toISOString(),
       });
+      if (!connData.needsReauth && connData.workspaceId) {
+        // Fire-and-forget: a mail hiccup must never fail the sync run itself.
+        notifyConnectionNeedsReauth({
+          workspaceId: connData.workspaceId,
+          provider: connData.provider || provider,
+          label: connData.label,
+        }).catch(() => {});
+      }
     } catch (updateErr) {
       logger.error('auth', 'Failed to mark connection as needing reauth', { error: updateErr.message });
     }

@@ -2961,6 +2961,33 @@ header.legacy-header {
   line-height: 1.4;
 }
 
+/* Mapping rows are built in JS with inline styles (display:flex, one line:
+   source select → arrow → dest select → remove button) — fine on desktop,
+   but at phone widths that single line is wider than the panel and forces
+   horizontal scrolling. The !important overrides are required specifically
+   because the styles being beaten are inline. Stacks each row vertically:
+   both selects full-width, the decorative arrow hidden (the top-to-bottom
+   reading order already conveys source→destination). */
+@media (max-width: 600px) {
+  .mapping-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .mapping-row .map-source,
+  .mapping-row .map-dest,
+  .mapping-row .map-ticktick,
+  .mapping-row .map-notion {
+    flex: 1 1 100% !important;
+    min-width: 0;
+  }
+  .mapping-row > div:not(.mapping-reasoning-badge) {
+    display: none !important;
+  }
+  .mapping-row .btn-remove-mapping {
+    margin-left: auto;
+  }
+}
+
 /* Live field-mapping conflict banner — shown as soon as two rows point at
    the same destination field, instead of only being caught at Save/Submit
    time. */
@@ -3362,6 +3389,11 @@ header.legacy-header {
     padding: 16px 20px;
     padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
+
+  /* NOTE: .step-actions' mobile bleed overrides live in responsive.css,
+     right next to the .panel-body padding rules they must stay in sync
+     with — responsive.css loads after this file and owns the actual
+     panel padding values at small widths (16px ≤768px, 12px ≤480px). */
 
   .form-row input,
   .form-row select {
