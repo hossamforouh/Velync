@@ -3707,6 +3707,28 @@ async function loadConfigSchemas(cfg, connectionsCache) {
 // from an existing config — same data-loading pipeline as editing that
 // config, just not editing it.
 async function openPanel(id = null, { duplicateFromId = null } = {}) {
+  // Confirm an existing config actually still exists BEFORE opening
+  // anything — most commonly reached by clicking an Execution Logs entry
+  // whose sync config has since been deleted. Checking this first (rather
+  // than opening the panel and closing it again on failure) avoids a
+  // jarring open-then-immediately-close flash; the user just sees the
+  // error, full stop.
+  if (id) {
+    let cfg = configs.find(c => c.id === id);
+    if (!cfg) {
+      try {
+        cfg = await fetchSyncConfig(id);
+      } catch (err) {
+        console.warn('[openPanel] Config fetch failed:', err);
+      }
+    }
+    if (!cfg) {
+      showToast('This sync config could not be found — it may have been deleted.', 'error');
+      return;
+    }
+    if (!configs.some(c => c.id === id)) configs.push(cfg);
+  }
+
   editingId = id;
   window.currentConfigId = id || null;
   clearForm();
@@ -3825,6 +3847,16 @@ async function openPanel(id = null, { duplicateFromId = null } = {}) {
       await loadConfigSchemas(cfg, _connectionsCache);
       // Clear dirty flag — fillForm/restoreFieldMappings may fire change events
       window.resetConfigDirty();
+    } else {
+      // Shouldn't normally happen — the existence check at the top of
+      // openPanel() already confirmed `id` resolves to a real config and
+      // pushed it into `configs` before any of this ran. Kept as a safety
+      // net in case a real-time configs listener removes it out from under
+      // us in the brief window between that check and here (e.g. someone
+      // else deletes it right as this panel is opening).
+      showToast('This sync config could not be found — it may have been deleted.', 'error');
+      await closePanel();
+      return;
     }
   } else if (duplicateFromId) {
     panelTitle.innerHTML = feather.icons['copy'].toSvg({width: 18, height: 18, style: 'margin-right: 6px; vertical-align: text-bottom;'}) + ' Duplicate Config';

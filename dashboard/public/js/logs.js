@@ -1,4 +1,3 @@
-import { navigateTo } from './navigation.js';
 import { showToast } from './toast.js';
 import { setButtonLoading, getEmptyStateRowHTML } from './loading-components.js';
 import {
@@ -547,14 +546,16 @@ async function retrySync(configId, btn) {
   }
 }
 
+// Opens the config edit panel directly on top of whatever page the user is
+// currently on (it's a global overlay, not scoped to the Active Flows view)
+// instead of navigating to Active Flows first — clicking a log entry to
+// check its config shouldn't also yank the user off the Execution Logs page
+// they were just reading.
 function navigateToConfig(configId) {
   if (!configId) return;
-  navigateTo('flows');
-  setTimeout(() => {
-    if (typeof window.openPanel === 'function') {
-      window.openPanel(configId);
-    }
-  }, 300);
+  if (typeof window.openPanel === 'function') {
+    window.openPanel(configId);
+  }
 }
 
 /* ── CSV Export ────────────────────────────────────────────── */
