@@ -6559,6 +6559,210 @@ input:-webkit-autofill {
   word-break: break-word;
 }
 
+/* ── Audit Log diff rows (Audit Log entry detail panel) ─────── */
+.audit-diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.audit-diff-row {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 12px 14px;
+}
+
+.audit-diff-field {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+
+.audit-diff-values {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.audit-diff-before,
+.audit-diff-after {
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.audit-diff-before {
+  background: rgba(251, 113, 133, 0.1);
+  color: var(--rose);
+}
+
+.audit-diff-after {
+  background: rgba(74, 222, 128, 0.1);
+  color: var(--green);
+}
+
+.audit-diff-arrow {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+/* Structural array diff: one card per item that actually changed —
+   Added / Removed / Modified — skipping items that didn't change at all.
+   This replaces an earlier version that stacked the ENTIRE before array on
+   top of the entire after array and left the admin to compare them by eye;
+   now only the deltas are shown. */
+.audit-diff-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.audit-diff-item-card {
+  background: rgba(0, 0, 0, 0.12);
+  border-left: 3px solid var(--border);
+  border-radius: calc(var(--radius-xs) - 2px);
+  overflow: hidden;
+}
+
+.audit-diff-item-added {
+  border-left-color: var(--green);
+}
+
+.audit-diff-item-removed {
+  border-left-color: var(--rose);
+}
+
+.audit-diff-item-modified {
+  border-left-color: var(--amber, #fbbf24);
+}
+
+.audit-diff-item-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 6px 10px 4px;
+  color: var(--text-1);
+}
+
+.audit-diff-item-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.audit-diff-item-added .audit-diff-item-badge {
+  color: var(--green);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.audit-diff-item-removed .audit-diff-item-badge {
+  color: var(--rose);
+  background: rgba(251, 113, 133, 0.12);
+}
+
+.audit-diff-item-modified .audit-diff-item-badge {
+  color: var(--amber, #fbbf24);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+/* Changed-fields-only list — used both for a modified array item and for a
+   plain (non-array) nested object diff. Each row is a small before → after
+   pill pair, same visual language as a top-level scalar change, so the
+   admin never has to eyeball two full snapshots to spot what moved. */
+.audit-diff-subrows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px 8px;
+}
+
+.audit-diff-subrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.audit-diff-subfield {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-3);
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.audit-diff-subvalues {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.audit-diff-subvalues .audit-diff-before,
+.audit-diff-subvalues .audit-diff-after {
+  font-size: 0.76rem;
+  padding: 2px 8px;
+}
+
+.audit-diff-unchanged {
+  padding: 10px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 0.78rem;
+}
+
+.audit-table-wrap {
+  overflow-x: auto;
+}
+
+.audit-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  table-layout: fixed;
+}
+
+.audit-diff-table td {
+  padding: 5px 10px;
+  text-align: left;
+  color: var(--text-1);
+  white-space: normal;
+  overflow-wrap: break-word;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: top;
+}
+
+.audit-diff-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Field/Value tables (both the per-item cards and a plain-object diff
+   value): a narrow fixed label column keeps the value column as wide as
+   possible, since values (not key names) are what's usually long. */
+.audit-diff-table-kv td.audit-kv-key {
+  width: 84px;
+  color: var(--text-3);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: normal;
+}
+
 /* ── Skeleton Loading ──────────────────────────────────────── */
 .skeleton-line {
   height: 14px;

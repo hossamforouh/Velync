@@ -210,6 +210,11 @@ export function initAdminIntegrations(db, auth) {
 
     modalOverlay.classList.add('open');
     sidePanel.classList.add('open');
+
+    // Catch a legacy integration doc that already has platform1.id === platform2.id
+    // (predates this validation, or came in via Import) right when the admin opens
+    // it — not silently, at some later unrelated moment (see excludeSamePlatform).
+    excludeSamePlatform();
   };
 
   _closeModal = function() {
@@ -232,6 +237,14 @@ export function initAdminIntegrations(db, auth) {
   // removes) the matching option in the OTHER select so the list doesn't
   // jump around, and clears+warns if the other side's current pick just
   // became invalid.
+  //
+  // This also re-runs on every `platforms` collection change (see the
+  // onSnapshot listener above) so the dropdown stays in sync if a platform
+  // is renamed/added/removed while this form happens to be sitting open —
+  // but that means it fires even when the Add/Edit Integration panel is
+  // closed and the admin is doing something unrelated (e.g. just adding a
+  // new platform). The toast must only surface while the panel is actually
+  // visible, or it reads as a mysterious, unexplained error.
   function excludeSamePlatform() {
     const p1Select = document.getElementById('f-int-platform1');
     const p2Select = document.getElementById('f-int-platform2');
@@ -252,7 +265,7 @@ export function initAdminIntegrations(db, auth) {
 
     const clearedP2 = disableMatching(p2Select, p1Select.value);
     const clearedP1 = disableMatching(p1Select, p2Select.value);
-    if (clearedP2 || clearedP1) {
+    if ((clearedP2 || clearedP1) && sidePanel.classList.contains('open')) {
       showToast('Platform 1 and Platform 2 cannot be the same platform.', 'error');
     }
   }
@@ -956,7 +969,7 @@ async function loadActivityLog(reset = false) {
   if (reset) {
     activityLastVisible = null;
     activityHasMore = false;
-    tbody.innerHTML = getSkeletonTableHTML(6, 4);
+    tbody.innerHTML = getSkeletonTableHTML(4, 4);
     if (emptyMsg) emptyMsg.style.display = 'none';
   }
 
@@ -1013,24 +1026,19 @@ async function loadActivityLog(reset = false) {
 
       const ts = d.timestamp?.toDate?.() || new Date();
       const tr = document.createElement('tr');
-      const actionBadge = d.action === 'delete' ? 'badge-danger'
-        : d.action === 'create' ? 'badge-success'
-        : d.action === 'restore' || d.action === 'activate' ? 'badge-warning'
-        : d.action === 'deactivate' ? 'badge-danger'
-        : 'badge-info';
-      const changesSummary = d.changes
-        ? Object.entries(d.changes).map(([field, { before, after }]) =>
-            `<div><strong>${escHtml(field)}:</strong> ${escHtml(String(before ?? '—'))} → ${escHtml(String(after ?? '—'))}</div>`
-          ).join('')
-        : '<span style="color:var(--text-3);">—</span>';
+      const actionBadge = auditActionBadgeClass(d.action);
+      // Full details (changes diff, free-text summary, ids) live in the
+      // side panel now, not the table — clicking any row opens it. Keeping
+      // the row itself scannable (Timestamp/User/Action/Target only) is
+      // what let the "Changes"/"Details" columns get dropped below.
+      tr.style.cursor = 'pointer';
       tr.innerHTML = `
         <td data-label="Timestamp" style="font-size:0.82rem;color:var(--text-2);white-space:nowrap;">${ts.toLocaleString()}</td>
         <td data-label="User" style="font-size:0.85rem;">${escHtml(d.userDisplayName || d.userEmail || d.userId || '—')}</td>
         <td data-label="Action"><span class="badge ${actionBadge}">${escHtml(d.action)}</span></td>
         <td data-label="Target" style="font-size:0.85rem;">${escHtml(d.targetType)}: ${escHtml(d.targetName || d.targetId || '')}</td>
-        <td data-label="Changes" style="font-size:0.78rem;color:var(--text-2);max-width:280px;">${changesSummary}</td>
-        <td data-label="Details" style="font-size:0.82rem;color:var(--text-3);">${escHtml(d.details || '')}</td>
       `;
+      tr.addEventListener('click', () => openAuditDetail({ ...d, timestamp: ts }));
       tbody.appendChild(tr);
       rowCount++;
     });
@@ -1044,7 +1052,7 @@ async function loadActivityLog(reset = false) {
     if (rowCount === 0) {
       if (reset && !activityLastVisible) {
         tbody.innerHTML = getEmptyStateRowHTML({
-          colspan: 6,
+          colspan: 4,
           iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
           title: 'No audit entries recorded yet',
           message: 'Admin actions will show up here as they happen.',
@@ -1060,6 +1068,275 @@ async function loadActivityLog(reset = false) {
   } finally {
     activityLoading = false;
   }
+}
+
+function auditActionBadgeClass(action) {
+  return action === 'delete' ? 'badge-danger'
+    : action === 'create' ? 'badge-success'
+    : action === 'restore' || action === 'activate' ? 'badge-warning'
+    : action === 'deactivate' ? 'badge-danger'
+    : 'badge-info';
+}
+
+// "connectorTiers" -> "Connector Tiers" — field names come straight from
+// each admin route's own field list (see e.g. INTEGRATION_FIELDS,
+// PLATFORM_FIELDS), which are all camelCase, so a single generic splitter
+// covers every targetType without needing a per-field label map.
+function humanizeFieldName(key) {
+  return String(key)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/^./, c => c.toUpperCase());
+}
+
+// Renders one scalar cell inside an audit-diff-table (never itself HTML —
+// callers are responsible for escaping).
+function renderCellText(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (Array.isArray(v)) return v.map(renderCellText).join(', ') || '—';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+// A single object's own keys as a compact 2-column Field/Value table —
+// only the keys THAT object actually has (not a global union), so a field
+// with fewer properties (e.g. a Toggle vs. a Dynamic Dropdown) doesn't show
+// a row of "—" padding for options it was never going to have.
+function renderKeyValueTable(obj) {
+  const rows = Object.entries(obj).map(([k, val]) =>
+    `<tr><td class="audit-kv-key">${escHtml(humanizeFieldName(k))}</td><td>${escHtml(renderCellText(val))}</td></tr>`
+  ).join('');
+  return `<div class="audit-table-wrap"><table class="audit-diff-table audit-diff-table-kv"><tbody>${rows}</tbody></table></div>`;
+}
+
+function isPlainObj(x) {
+  return x !== null && typeof x === 'object' && !Array.isArray(x);
+}
+
+// A row of small before→after pills for each key that actually differs —
+// the same visual language as a top-level scalar diff (Field: A → B), just
+// reused for the changed properties inside a modified array item or a
+// whole nested settings object. Deliberately does NOT re-list unchanged
+// keys — the point of this whole view is showing only what moved.
+function renderChangedFieldsHtml(changes) {
+  const entries = Object.entries(changes);
+  if (!entries.length) return `<div class="audit-diff-unchanged">No field-level changes.</div>`;
+  return `<div class="audit-diff-subrows">${entries.map(([k, { before, after }]) => `
+    <div class="audit-diff-subrow">
+      <span class="audit-diff-subfield">${escHtml(humanizeFieldName(k))}</span>
+      <span class="audit-diff-subvalues">
+        <span class="audit-diff-before">${escHtml(renderCellText(before))}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="audit-diff-arrow"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        <span class="audit-diff-after">${escHtml(renderCellText(after))}</span>
+      </span>
+    </div>`).join('')}</div>`;
+}
+
+// Shallow field-level diff between two plain objects — same idea as
+// computeChanges() in src/core/activityLog.js, done client-side so it can
+// also run on the individual items INSIDE an array diff (see
+// diffObjectArrays below), not just the top-level change value.
+function diffPlainObjects(before, after) {
+  const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+  const changes = {};
+  for (const k of keys) {
+    const bv = before ? before[k] : undefined;
+    const av = after ? after[k] : undefined;
+    const equal = bv === av || JSON.stringify(bv ?? null) === JSON.stringify(av ?? null);
+    if (!equal) changes[k] = { before: bv, after: av };
+  }
+  return changes;
+}
+
+// A stable per-item identity key (id/key/name) IF every item on both sides
+// has one — lets diffObjectArrays() recognize "this is the same field,
+// just edited" instead of only ever seeing "array changed" as a whole.
+// Falls back to positional index when nothing qualifies (still gives a
+// correct, if less precise, added/removed/modified breakdown).
+function findArrayItemIdentityKey(beforeArr, afterArr) {
+  const all = [...beforeArr, ...afterArr];
+  for (const key of ['id', 'key', 'name']) {
+    if (all.every(item => item && item[key] !== undefined && item[key] !== null && item[key] !== '')) return key;
+  }
+  return null;
+}
+
+function arrayItemHeading(item) {
+  return item.label || item.name || item.id || item.key || null;
+}
+
+// The core of "make this understandable": a real structural diff between
+// two arrays of objects (e.g. a platform's configSchema before/after an
+// edit), classifying each item as added / removed / modified — and
+// SKIPPING items that didn't actually change, rather than the previous
+// approach of dumping the entire before list and the entire after list for
+// the admin to visually compare field-by-field themselves.
+function diffObjectArrays(beforeArr, afterArr) {
+  const identityKey = findArrayItemIdentityKey(beforeArr, afterArr);
+  const keyOf = identityKey ? (item, i) => String(item[identityKey]) : (item, i) => String(i);
+  const beforeMap = new Map(beforeArr.map((item, i) => [keyOf(item, i), item]));
+  const afterMap = new Map(afterArr.map((item, i) => [keyOf(item, i), item]));
+
+  const orderedIds = [];
+  for (const item of beforeArr) { const id = keyOf(item, beforeArr.indexOf(item)); if (!orderedIds.includes(id)) orderedIds.push(id); }
+  for (const item of afterArr) { const id = keyOf(item, afterArr.indexOf(item)); if (!orderedIds.includes(id)) orderedIds.push(id); }
+
+  const results = [];
+  for (const id of orderedIds) {
+    const b = beforeMap.get(id);
+    const a = afterMap.get(id);
+    if (b && !a) results.push({ status: 'removed', item: b, heading: arrayItemHeading(b) });
+    else if (!b && a) results.push({ status: 'added', item: a, heading: arrayItemHeading(a) });
+    else {
+      const fieldChanges = diffPlainObjects(b, a);
+      if (Object.keys(fieldChanges).length === 0) continue; // unchanged — deliberately not shown
+      results.push({ status: 'modified', changes: fieldChanges, heading: arrayItemHeading(a) });
+    }
+  }
+  return results;
+}
+
+function renderArrayDiffResult(r) {
+  if (r.status === 'added' || r.status === 'removed') {
+    const statusClass = r.status === 'added' ? 'audit-diff-item-added' : 'audit-diff-item-removed';
+    const badgeText = r.status === 'added' ? 'Added' : 'Removed';
+    return `
+      <div class="audit-diff-item-card ${statusClass}">
+        <div class="audit-diff-item-heading">
+          <span>${escHtml(r.heading || (r.status === 'added' ? 'New item' : 'Removed item'))}</span>
+          <span class="audit-diff-item-badge">${badgeText}</span>
+        </div>
+        ${renderKeyValueTable(r.item)}
+      </div>`;
+  }
+  return `
+    <div class="audit-diff-item-card audit-diff-item-modified">
+      <div class="audit-diff-item-heading">
+        <span>${escHtml(r.heading || 'Item')}</span>
+        <span class="audit-diff-item-badge">Modified</span>
+      </div>
+      ${renderChangedFieldsHtml(r.changes)}
+    </div>`;
+}
+
+function renderArrayDiffHtml(beforeArr, afterArr) {
+  const results = diffObjectArrays(beforeArr, afterArr);
+  if (!results.length) return `<div class="audit-diff-unchanged">No items changed.</div>`;
+  return `<div class="audit-diff-item-list">${results.map(renderArrayDiffResult).join('')}</div>`;
+}
+
+// Builds one full "Field: ..." row for the Changes section. Dispatches on
+// shape: an array of objects on either side (e.g. configSchema) gets the
+// full structural Added/Removed/Modified diff; a plain nested object gets
+// a changed-fields-only diff; anything else (numbers, strings, booleans)
+// is a simple before → after pill, same as always.
+function renderChangeRow(field, before, after) {
+  const beforeIsObjArr = Array.isArray(before) && before.length > 0 && before.every(isPlainObj);
+  const afterIsObjArr = Array.isArray(after) && after.length > 0 && after.every(isPlainObj);
+
+  if (beforeIsObjArr || afterIsObjArr) {
+    return `
+      <div class="audit-diff-row">
+        <div class="audit-diff-field">${escHtml(humanizeFieldName(field))}</div>
+        ${renderArrayDiffHtml(beforeIsObjArr ? before : [], afterIsObjArr ? after : [])}
+      </div>`;
+  }
+
+  if (isPlainObj(before) || isPlainObj(after)) {
+    const changes = diffPlainObjects(before || {}, after || {});
+    return `
+      <div class="audit-diff-row">
+        <div class="audit-diff-field">${escHtml(humanizeFieldName(field))}</div>
+        ${renderChangedFieldsHtml(changes)}
+      </div>`;
+  }
+
+  return `
+    <div class="audit-diff-row">
+      <div class="audit-diff-field">${escHtml(humanizeFieldName(field))}</div>
+      <div class="audit-diff-values">
+        <span class="audit-diff-before">${escHtml(renderCellText(before))}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="audit-diff-arrow"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        <span class="audit-diff-after">${escHtml(renderCellText(after))}</span>
+      </div>
+    </div>`;
+}
+
+// Opens the Audit Log entry's detail panel — same compact side-panel
+// pattern already used for Execution Logs (log-detail-panel) and Client
+// Errors, so this reads as the same component instead of a one-off. Shows
+// the full field-level before/after diff (computeChanges() output) that the
+// table row itself no longer has room for.
+function openAuditDetail(entry) {
+  const overlay = document.getElementById('audit-detail-overlay');
+  const panel = document.getElementById('audit-detail-panel');
+  if (!overlay || !panel) return;
+
+  const ts = entry.timestamp instanceof Date ? entry.timestamp : new Date(entry.timestamp);
+  const actionBadge = auditActionBadgeClass(entry.action);
+  const changeEntries = entry.changes ? Object.entries(entry.changes) : [];
+
+  const diffHtml = changeEntries.length
+    ? changeEntries.map(([field, diff]) => renderChangeRow(field, diff?.before, diff?.after)).join('')
+    : `<div style="padding:14px;text-align:center;color:var(--text-3);font-size:0.82rem;background:var(--bg-3);border-radius:var(--radius-xs);border:1px solid var(--border);">No field-level changes recorded for this action.</div>`;
+
+  panel.innerHTML = `
+    <div class="panel-header">
+      <h2 id="audit-detail-title" style="font-size:1.1rem;font-weight:700;">Audit Log Entry</h2>
+      <button class="panel-close" id="audit-detail-close" aria-label="Close"><i data-feather="x"></i></button>
+    </div>
+    <div class="panel-body">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding:16px;background:var(--bg-3);border-radius:var(--radius-xs);border:1px solid var(--border);">
+        <span class="badge ${actionBadge}" style="text-transform:capitalize;">${escHtml(entry.action)}</span>
+        <span style="font-size:0.95rem;font-weight:600;color:var(--text-1);">${escHtml(entry.targetType)}: ${escHtml(entry.targetName || entry.targetId || '—')}</span>
+      </div>
+
+      <div class="log-detail-grid">
+        <div class="log-detail-item">
+          <span class="log-detail-label">Timestamp</span>
+          <span class="log-detail-value">${ts.toLocaleString()}</span>
+        </div>
+        <div class="log-detail-item">
+          <span class="log-detail-label">Performed By</span>
+          <span class="log-detail-value">${escHtml(entry.userDisplayName || entry.userEmail || entry.userId || '—')}</span>
+        </div>
+        <div class="log-detail-item">
+          <span class="log-detail-label">Target Type</span>
+          <span class="log-detail-value">${escHtml(entry.targetType || '—')}</span>
+        </div>
+        <div class="log-detail-item">
+          <span class="log-detail-label">Target ID</span>
+          <span class="log-detail-value" style="font-family:monospace;font-size:0.8rem;color:var(--text-3);">${escHtml(entry.targetId || '—')}</span>
+        </div>
+      </div>
+
+      ${entry.details ? `
+      <div style="margin-top:20px;padding:16px;background:var(--bg-3);border-radius:var(--radius-xs);border:1px solid var(--border);">
+        <h3 style="font-size:0.85rem;font-weight:600;color:var(--text-2);margin-bottom:8px;">Summary</h3>
+        <p style="font-size:0.85rem;color:var(--text-2);margin:0;line-height:1.5;">${escHtml(entry.details)}</p>
+      </div>` : ''}
+
+      <div style="margin-top:20px;">
+        <h3 style="font-size:0.85rem;font-weight:600;color:var(--text-2);margin-bottom:12px;">Changes${changeEntries.length ? ` (${changeEntries.length})` : ''}</h3>
+        <div class="audit-diff-list">${diffHtml}</div>
+      </div>
+    </div>
+  `;
+
+  if (window.feather) window.feather.replace();
+
+  const closeBtn = panel.querySelector('#audit-detail-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeAuditDetail);
+
+  overlay.classList.add('open');
+  panel.classList.add('open');
+}
+
+function closeAuditDetail() {
+  const overlay = document.getElementById('audit-detail-overlay');
+  const panel = document.getElementById('audit-detail-panel');
+  if (overlay) overlay.classList.remove('open');
+  if (panel) panel.classList.remove('open');
 }
 
 // Wire activity log controls
@@ -1088,6 +1365,9 @@ async function loadActivityLog(reset = false) {
       activitySearchTimer = setTimeout(() => loadActivityLog(true), 300);
     });
   }
+
+  const detailOverlay = document.getElementById('audit-detail-overlay');
+  if (detailOverlay) detailOverlay.addEventListener('click', closeAuditDetail);
 })();
 
 // ─── Utilities ──────────────────────────────────────────────

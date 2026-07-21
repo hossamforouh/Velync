@@ -1371,13 +1371,11 @@
                       <th>User</th>
                       <th>Action</th>
                       <th>Target</th>
-                      <th>Changes</th>
-                      <th>Details</th>
                     </tr>
                   </thead>
                   <tbody id="admin-activity-tbody">
                     <tr>
-                      <td colspan="6" style="text-align:center;padding:20px;">No audit entries recorded yet.</td>
+                      <td colspan="4" style="text-align:center;padding:20px;">No audit entries recorded yet.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1925,6 +1923,11 @@
   <div class="panel-overlay" id="log-detail-overlay"></div>
   <aside class="side-panel side-panel--compact log-detail-panel" id="log-detail-panel">
     <!-- Populated by logs.js -->
+  </aside>
+
+  <div class="panel-overlay" id="audit-detail-overlay"></div>
+  <aside class="side-panel side-panel--compact log-detail-panel" id="audit-detail-panel" role="dialog" aria-modal="true" aria-labelledby="audit-detail-title">
+    <!-- Populated by admin-integrations.js (loadActivityLog) -->
   </aside>
 
   <!-- ── Node Config Modal ────────────────────────────── -->
