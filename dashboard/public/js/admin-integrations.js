@@ -69,6 +69,7 @@ let cachedPlatforms = [];
 // Module-level references to closured functions (set by initAdminIntegrations)
 let _openModal = null;
 let _closeModal = null;
+let excludeSamePlatform = null;
 
 let _platformsUnsub = null;
 
@@ -108,7 +109,7 @@ export function initAdminIntegrations(db, auth) {
       if (p2Val) p2Select.value = p2Val;
       else p2Select.value = '';
 
-      excludeSamePlatform();
+      excludeSamePlatform?.();
     },
     (err) => {
       console.warn('[admin-integrations] Platforms listener error:', err);
@@ -116,231 +117,244 @@ export function initAdminIntegrations(db, auth) {
       showToast('Failed to load platforms', 'error');
     });
 
-  // Setup Tab Switching Logic
-  const tabs = document.querySelectorAll('.admin-tab');
-  const panes = document.querySelectorAll('.admin-pane');
+  // All DOM event-listener wiring below (tabs, modal, form submit) must only
+  // ever run ONCE per page load — initAdminIntegrations() can legitimately
+  // run again (e.g. a second onAuthStateChanged firing), and re-running
+  // addEventListener() on the same static elements without removing the
+  // prior listener stacks a duplicate. For most of these that's just wasted
+  // work, but for the form's 'submit' listener it meant every extra init
+  // added another full save request — one click of "Save" fired N POSTs
+  // and created N identical integration records (the reported cause of
+  // "TickTick <-> Notion" showing up twice after adding a single one).
+  if (!adminIntegrationsWired) {
+    adminIntegrationsWired = true;
 
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      panes.forEach(p => p.style.display = 'none');
+    // Setup Tab Switching Logic
+    const tabs = document.querySelectorAll('.admin-tab');
+    const panes = document.querySelectorAll('.admin-pane');
 
-      tab.classList.add('active');
-      const targetId = tab.getAttribute('data-target');
-      const targetPane = document.getElementById(targetId);
-      if (targetPane) targetPane.style.display = 'block';
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        panes.forEach(p => p.style.display = 'none');
 
-      // Map pane ID to cache key
-      const cacheKey = targetId === 'admin-pane-overview' ? 'overview'
-        : targetId === 'admin-pane-marketplace' ? 'marketplace'
-        : targetId === 'admin-pane-activity' ? 'activity'
-        : null;
+        tab.classList.add('active');
+        const targetId = tab.getAttribute('data-target');
+        const targetPane = document.getElementById(targetId);
+        if (targetPane) targetPane.style.display = 'block';
 
-      const cached = cacheKey ? _getCached(cacheKey) : null;
-      if (cached) {
-        if (cacheKey === 'overview') {
-          _overviewCache = cached;
-          renderOverviewFromCache();
-        } else if (cacheKey === 'marketplace') {
-          allIntegrationsCache = cached;
-          renderAdminTable();
+        // Map pane ID to cache key
+        const cacheKey = targetId === 'admin-pane-overview' ? 'overview'
+          : targetId === 'admin-pane-marketplace' ? 'marketplace'
+          : targetId === 'admin-pane-activity' ? 'activity'
+          : null;
+
+        const cached = cacheKey ? _getCached(cacheKey) : null;
+        if (cached) {
+          if (cacheKey === 'overview') {
+            _overviewCache = cached;
+            renderOverviewFromCache();
+          } else if (cacheKey === 'marketplace') {
+            allIntegrationsCache = cached;
+            renderAdminTable();
+          }
+          return;
         }
-        return;
-      }
 
-      if (targetId === 'admin-pane-marketplace') {
-        loadIntegrationsPage(true);
-      } else if (targetId === 'admin-pane-overview') {
-        loadAdminOverview();
-      } else if (targetId === 'admin-pane-activity') {
-        loadActivityLog(true);
-      } else if (targetId === 'admin-pane-platforms') {
-        // platforms are loaded by admin-platforms.js
-      }
+        if (targetId === 'admin-pane-marketplace') {
+          loadIntegrationsPage(true);
+        } else if (targetId === 'admin-pane-overview') {
+          loadAdminOverview();
+        } else if (targetId === 'admin-pane-activity') {
+          loadActivityLog(true);
+        } else if (targetId === 'admin-pane-platforms') {
+          // platforms are loaded by admin-platforms.js
+        }
+      });
     });
-  });
 
-  // Setup Modal UI elements
-  const modalOverlay = document.getElementById('integration-modal-overlay');
-  const sidePanel = document.getElementById('integration-side-panel');
-  const btnAdd = document.getElementById('btn-admin-add-integration');
-  const btnClose = document.getElementById('integration-panel-close');
-  const btnCancel = document.getElementById('btn-int-cancel');
-  const form = document.getElementById('integration-form');
+    // Setup Modal UI elements
+    const modalOverlay = document.getElementById('integration-modal-overlay');
+    const sidePanel = document.getElementById('integration-side-panel');
+    const btnAdd = document.getElementById('btn-admin-add-integration');
+    const btnClose = document.getElementById('integration-panel-close');
+    const btnCancel = document.getElementById('btn-int-cancel');
+    const form = document.getElementById('integration-form');
 
-  // Create inline form error container
-  const formErrorEl = document.createElement('div');
-  formErrorEl.id = 'form-error-message';
-  formErrorEl.style.cssText = 'color: var(--danger); margin-top: 12px; display: none; font-size: 0.9rem;';
-  form.appendChild(formErrorEl);
+    // Create inline form error container
+    const formErrorEl = document.createElement('div');
+    formErrorEl.id = 'form-error-message';
+    formErrorEl.style.cssText = 'color: var(--danger); margin-top: 12px; display: none; font-size: 0.9rem;';
+    form.appendChild(formErrorEl);
 
-  _openModal = function(integration = null) {
-    if (integration) {
-      document.getElementById('integration-panel-title').textContent = 'Edit Integration';
-      document.getElementById('f-int-doc-id').value = integration.id || integration._id;
-      document.getElementById('f-int-name').value = integration.name || '';
-      document.getElementById('f-int-desc').value = integration.description || '';
-      document.getElementById('f-int-status').value = integration.status || 'Active';
-      document.getElementById('f-int-tags').value = (integration.tags || []).join(', ');
+    _openModal = function(integration = null) {
+      if (integration) {
+        document.getElementById('integration-panel-title').textContent = 'Edit Integration';
+        document.getElementById('f-int-doc-id').value = integration.id || integration._id;
+        document.getElementById('f-int-name').value = integration.name || '';
+        document.getElementById('f-int-desc').value = integration.description || '';
+        document.getElementById('f-int-status').value = integration.status || 'Active';
+        document.getElementById('f-int-tags').value = (integration.tags || []).join(', ');
 
-      document.getElementById('f-int-platform1').value = integration.platform1?.id || integration.platform1?.key || '';
-      document.getElementById('f-int-platform2').value = integration.platform2?.id || integration.platform2?.key || '';
+        document.getElementById('f-int-platform1').value = integration.platform1?.id || integration.platform1?.key || '';
+        document.getElementById('f-int-platform2').value = integration.platform2?.id || integration.platform2?.key || '';
 
-      const enabledDirs = integration.enabledSyncDirections || ['Source_to_Dest'];
-      SYNC_DIRECTIONS.forEach(v => {
-        const cb = document.getElementById('f-int-sync-dir-' + v);
-        if (cb) cb.checked = enabledDirs.includes(v);
-      });
-    } else {
-      document.getElementById('integration-panel-title').textContent = 'Add Integration';
-      document.getElementById('f-int-doc-id').value = '';
-      document.getElementById('f-int-name').value = '';
-      document.getElementById('f-int-desc').value = '';
-      document.getElementById('f-int-status').value = 'Active';
-      document.getElementById('f-int-tags').value = '';
+        const enabledDirs = integration.enabledSyncDirections || ['Source_to_Dest'];
+        SYNC_DIRECTIONS.forEach(v => {
+          const cb = document.getElementById('f-int-sync-dir-' + v);
+          if (cb) cb.checked = enabledDirs.includes(v);
+        });
+      } else {
+        document.getElementById('integration-panel-title').textContent = 'Add Integration';
+        document.getElementById('f-int-doc-id').value = '';
+        document.getElementById('f-int-name').value = '';
+        document.getElementById('f-int-desc').value = '';
+        document.getElementById('f-int-status').value = 'Active';
+        document.getElementById('f-int-tags').value = '';
 
-      document.getElementById('f-int-platform1').value = '';
-      document.getElementById('f-int-platform2').value = '';
+        document.getElementById('f-int-platform1').value = '';
+        document.getElementById('f-int-platform2').value = '';
 
-      SYNC_DIRECTIONS.forEach(v => {
-        const cb = document.getElementById('f-int-sync-dir-' + v);
-        if (cb) cb.checked = v === 'Source_to_Dest';
-      });
-    }
-
-    modalOverlay.classList.add('open');
-    sidePanel.classList.add('open');
-
-    // Catch a legacy integration doc that already has platform1.id === platform2.id
-    // (predates this validation, or came in via Import) right when the admin opens
-    // it — not silently, at some later unrelated moment (see excludeSamePlatform).
-    excludeSamePlatform();
-  };
-
-  _closeModal = function() {
-    sidePanel.classList.remove('open');
-    modalOverlay.classList.remove('open');
-    setTimeout(() => {
-      form.reset();
-      const fe = document.getElementById('form-error-message');
-      if (fe) fe.style.display = 'none';
-    }, 300);
-  };
-
-  btnAdd.addEventListener('click', () => _openModal(null));
-  btnClose.addEventListener('click', _closeModal);
-  btnCancel.addEventListener('click', _closeModal);
-  modalOverlay.addEventListener('click', _closeModal);
-
-  // A Marketplace integration pairing a platform with itself isn't a real
-  // integration — block it at selection, not just on Save. Disables (not
-  // removes) the matching option in the OTHER select so the list doesn't
-  // jump around, and clears+warns if the other side's current pick just
-  // became invalid.
-  //
-  // This also re-runs on every `platforms` collection change (see the
-  // onSnapshot listener above) so the dropdown stays in sync if a platform
-  // is renamed/added/removed while this form happens to be sitting open —
-  // but that means it fires even when the Add/Edit Integration panel is
-  // closed and the admin is doing something unrelated (e.g. just adding a
-  // new platform). The toast must only surface while the panel is actually
-  // visible, or it reads as a mysterious, unexplained error.
-  function excludeSamePlatform() {
-    const p1Select = document.getElementById('f-int-platform1');
-    const p2Select = document.getElementById('f-int-platform2');
-    if (!p1Select || !p2Select) return;
-
-    const disableMatching = (select, blockedId) => {
-      let hadToClear = false;
-      for (const opt of select.options) {
-        if (!opt.value) continue;
-        const matches = !!blockedId && opt.value === blockedId;
-        opt.disabled = matches;
-        opt.hidden = matches;
-        if (matches && select.value === opt.value) hadToClear = true;
+        SYNC_DIRECTIONS.forEach(v => {
+          const cb = document.getElementById('f-int-sync-dir-' + v);
+          if (cb) cb.checked = v === 'Source_to_Dest';
+        });
       }
-      if (hadToClear) select.value = '';
-      return hadToClear;
+
+      modalOverlay.classList.add('open');
+      sidePanel.classList.add('open');
+
+      // Catch a legacy integration doc that already has platform1.id === platform2.id
+      // (predates this validation, or came in via Import) right when the admin opens
+      // it — not silently, at some later unrelated moment (see excludeSamePlatform).
+      excludeSamePlatform();
     };
 
-    const clearedP2 = disableMatching(p2Select, p1Select.value);
-    const clearedP1 = disableMatching(p1Select, p2Select.value);
-    if ((clearedP2 || clearedP1) && sidePanel.classList.contains('open')) {
-      showToast('Platform 1 and Platform 2 cannot be the same platform.', 'error');
-    }
-  }
-  document.getElementById('f-int-platform1')?.addEventListener('change', excludeSamePlatform);
-  document.getElementById('f-int-platform2')?.addEventListener('change', excludeSamePlatform);
+    _closeModal = function() {
+      sidePanel.classList.remove('open');
+      modalOverlay.classList.remove('open');
+      setTimeout(() => {
+        form.reset();
+        const fe = document.getElementById('form-error-message');
+        if (fe) fe.style.display = 'none';
+      }, 300);
+    };
 
-  // Form Submit (Save)
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btnSave = document.getElementById('btn-int-save');
-    setButtonLoading(btnSave, true);
+    btnAdd.addEventListener('click', () => _openModal(null));
+    btnClose.addEventListener('click', _closeModal);
+    btnCancel.addEventListener('click', _closeModal);
+    modalOverlay.addEventListener('click', _closeModal);
 
-    try {
-      const docId = document.getElementById('f-int-doc-id').value;
+    // A Marketplace integration pairing a platform with itself isn't a real
+    // integration — block it at selection, not just on Save. Disables (not
+    // removes) the matching option in the OTHER select so the list doesn't
+    // jump around, and clears+warns if the other side's current pick just
+    // became invalid.
+    //
+    // This also re-runs on every `platforms` collection change (see the
+    // onSnapshot listener above) so the dropdown stays in sync if a platform
+    // is renamed/added/removed while this form happens to be sitting open —
+    // but that means it fires even when the Add/Edit Integration panel is
+    // closed and the admin is doing something unrelated (e.g. just adding a
+    // new platform). The toast must only surface while the panel is actually
+    // visible, or it reads as a mysterious, unexplained error.
+    excludeSamePlatform = function() {
+      const p1Select = document.getElementById('f-int-platform1');
+      const p2Select = document.getElementById('f-int-platform2');
+      if (!p1Select || !p2Select) return;
 
-      const rawTags = document.getElementById('f-int-tags').value;
-      const tagsArray = rawTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
-
-      const integrationData = {
-        name: document.getElementById('f-int-name').value.trim(),
-        description: document.getElementById('f-int-desc').value.trim(),
-        status: document.getElementById('f-int-status').value,
-        tags: tagsArray,
-        enabledSyncDirections: SYNC_DIRECTIONS.filter(
-          v => document.getElementById('f-int-sync-dir-' + v)?.checked
-        ),
+      const disableMatching = (select, blockedId) => {
+        let hadToClear = false;
+        for (const opt of select.options) {
+          if (!opt.value) continue;
+          const matches = !!blockedId && opt.value === blockedId;
+          opt.disabled = matches;
+          opt.hidden = matches;
+          if (matches && select.value === opt.value) hadToClear = true;
+        }
+        if (hadToClear) select.value = '';
+        return hadToClear;
       };
 
-      const p1Id = document.getElementById('f-int-platform1').value;
-      const p1Obj = cachedPlatforms.find(p => p.id === p1Id);
-      if (p1Obj) {
-        integrationData.platform1 = {
-          id: p1Obj.id,
-          name: p1Obj.name
-        };
-      }
-
-      const p2Id = document.getElementById('f-int-platform2').value;
-      const p2Obj = cachedPlatforms.find(p => p.id === p2Id);
-      if (p2Obj) {
-        integrationData.platform2 = {
-          id: p2Obj.id,
-          name: p2Obj.name
-        };
-      }
-
-      if (integrationData.platform1?.id && integrationData.platform2?.id
-          && integrationData.platform1.id === integrationData.platform2.id) {
+      const clearedP2 = disableMatching(p2Select, p1Select.value);
+      const clearedP1 = disableMatching(p1Select, p2Select.value);
+      if ((clearedP2 || clearedP1) && sidePanel.classList.contains('open')) {
         showToast('Platform 1 and Platform 2 cannot be the same platform.', 'error');
+      }
+    };
+    document.getElementById('f-int-platform1')?.addEventListener('change', excludeSamePlatform);
+    document.getElementById('f-int-platform2')?.addEventListener('change', excludeSamePlatform);
+
+    // Form Submit (Save)
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btnSave = document.getElementById('btn-int-save');
+      setButtonLoading(btnSave, true);
+
+      try {
+        const docId = document.getElementById('f-int-doc-id').value;
+
+        const rawTags = document.getElementById('f-int-tags').value;
+        const tagsArray = rawTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+        const integrationData = {
+          name: document.getElementById('f-int-name').value.trim(),
+          description: document.getElementById('f-int-desc').value.trim(),
+          status: document.getElementById('f-int-status').value,
+          tags: tagsArray,
+          enabledSyncDirections: SYNC_DIRECTIONS.filter(
+            v => document.getElementById('f-int-sync-dir-' + v)?.checked
+          ),
+        };
+
+        const p1Id = document.getElementById('f-int-platform1').value;
+        const p1Obj = cachedPlatforms.find(p => p.id === p1Id);
+        if (p1Obj) {
+          integrationData.platform1 = {
+            id: p1Obj.id,
+            name: p1Obj.name
+          };
+        }
+
+        const p2Id = document.getElementById('f-int-platform2').value;
+        const p2Obj = cachedPlatforms.find(p => p.id === p2Id);
+        if (p2Obj) {
+          integrationData.platform2 = {
+            id: p2Obj.id,
+            name: p2Obj.name
+          };
+        }
+
+        if (integrationData.platform1?.id && integrationData.platform2?.id
+            && integrationData.platform1.id === integrationData.platform2.id) {
+          showToast('Platform 1 and Platform 2 cannot be the same platform.', 'error');
+          setButtonLoading(btnSave, false);
+          return;
+        }
+
+        if (docId) {
+          await apiRequest(`/api/admin/integrations/${docId}`, { method: 'PUT', body: JSON.stringify(integrationData) });
+        } else {
+          await apiRequest('/api/admin/integrations', { method: 'POST', body: JSON.stringify(integrationData) });
+        }
+
+        const fe = document.getElementById('form-error-message');
+        if (fe) fe.style.display = 'none';
+        _closeModal();
+        loadIntegrationsPage(true);
+      } catch (err) {
+        console.error("Failed to save integration", err);
+        showToast("Error saving integration: " + err.message, 'error');
+        const fe = document.getElementById('form-error-message');
+        if (fe) {
+          fe.textContent = "Error saving integration: " + err.message;
+          fe.style.display = 'block';
+        }
+      } finally {
         setButtonLoading(btnSave, false);
-        return;
       }
-
-      if (docId) {
-        await apiRequest(`/api/admin/integrations/${docId}`, { method: 'PUT', body: JSON.stringify(integrationData) });
-      } else {
-        await apiRequest('/api/admin/integrations', { method: 'POST', body: JSON.stringify(integrationData) });
-      }
-
-      const fe = document.getElementById('form-error-message');
-      if (fe) fe.style.display = 'none';
-      _closeModal();
-      loadIntegrationsPage(true);
-    } catch (err) {
-      console.error("Failed to save integration", err);
-      showToast("Error saving integration: " + err.message, 'error');
-      const fe = document.getElementById('form-error-message');
-      if (fe) {
-        fe.textContent = "Error saving integration: " + err.message;
-        fe.style.display = 'block';
-      }
-    } finally {
-      setButtonLoading(btnSave, false);
-    }
-  });
+    });
+  }
 
   // Wire admin search, sorting, bulk, refresh, load more
   wireAdminControls();
