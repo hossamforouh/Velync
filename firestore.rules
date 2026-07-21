@@ -99,7 +99,7 @@ service cloud.firestore {
       // app.js), with planId pinned to 'free' — any other plan can only be
       // reached through the real billing flow (server-side, Admin SDK).
       allow create: if request.auth != null
-        && request.resource.data.keys().hasOnly(['id', 'name', 'ownerId', 'members', 'invitedEmails', 'planId'])
+        && request.resource.data.keys().hasOnly(['id', 'name', 'ownerId', 'members', 'invitedEmails', 'planId', 'createdAt'])
         && request.resource.data.keys().hasAny(['name'])
         && request.auth.uid == request.resource.data.ownerId
         && request.resource.data.members == [request.auth.uid]

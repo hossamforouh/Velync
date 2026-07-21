@@ -67,10 +67,16 @@ export function initAdminWorkspaces(authInstance) {
   if (planModalOverlay) planModalOverlay.addEventListener('click', (e) => { if (e.target === planModalOverlay) closePlanModal(); });
   if (planModalConfirm) planModalConfirm.addEventListener('click', confirmPlanChange);
 
+  const detailsModalOverlay = document.getElementById('ws-details-modal-overlay');
+  const detailsModalClose = document.getElementById('ws-details-modal-close');
+  if (detailsModalClose) detailsModalClose.addEventListener('click', closeDetailsModal);
+  if (detailsModalOverlay) detailsModalOverlay.addEventListener('click', (e) => { if (e.target === detailsModalOverlay) closeDetailsModal(); });
+
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     closeUsageModal();
     closePlanModal();
+    closeDetailsModal();
   });
 }
 
@@ -277,6 +283,42 @@ function closeUsageModal() {
   if (overlay) overlay.classList.remove('open');
 }
 
+// "View Details" action — a quick read-only summary of everything already
+// on the row (plus the workspace name, which no longer has its own column),
+// so an admin doesn't have to widen the table or hunt through raw IDs to
+// confirm who owns a workspace.
+function openDetailsModal(workspace) {
+  const overlay = document.getElementById('ws-details-modal-overlay');
+  const title = document.getElementById('ws-details-modal-title');
+  const body = document.getElementById('ws-details-modal-body');
+  if (!overlay || !body) return;
+
+  title.textContent = workspace.name || 'Workspace Details';
+  const row = (label, value) => `
+    <div class="log-detail-item">
+      <span class="log-detail-label">${esc(label)}</span>
+      <span class="log-detail-value">${value}</span>
+    </div>`;
+
+  body.innerHTML = [
+    row('Workspace Name', esc(workspace.name || '—')),
+    row('Workspace ID', `<code style="font-size:0.8rem;">${esc(workspace.id)}</code>`),
+    row('Owner Email', esc(workspace.ownerEmail || '—')),
+    row('Owner ID', `<code style="font-size:0.8rem;">${esc(workspace.ownerId || '—')}</code>`),
+    row('Plan', esc(workspace.planId)),
+    row('Members', String(Number(workspace.memberCount) || 0)),
+    row('Est. Cost (mo)', esc(fmtCost(workspace.estimatedCostUsd ?? 0))),
+    row('Created', workspace.createdAt ? esc(new Date(workspace.createdAt).toLocaleString()) : '—'),
+  ].join('');
+
+  overlay.classList.add('open');
+}
+
+function closeDetailsModal() {
+  const overlay = document.getElementById('ws-details-modal-overlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
 async function loadAll() {
   hasLoaded = true;
   await Promise.all([loadStats(), loadReconciliation(), loadWorkspaces(true)]);
@@ -304,7 +346,7 @@ async function loadWorkspaces(reset) {
   if (reset) {
     cursor = null;
     rowsShown = 0;
-    if (tbody) tbody.innerHTML = getSkeletonTableHTML(7, 5);
+    if (tbody) tbody.innerHTML = getSkeletonTableHTML(6, 5);
   }
 
   try {
@@ -315,7 +357,7 @@ async function loadWorkspaces(reset) {
 
     if (reset && items.length === 0) {
       if (tbody) tbody.innerHTML = getEmptyStateRowHTML({
-        colspan: 7,
+        colspan: 6,
         iconSvg: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--violet);"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
         title: searchTerm ? 'No matching workspaces' : 'No workspaces yet',
         message: searchTerm
@@ -330,16 +372,19 @@ async function loadWorkspaces(reset) {
       for (const w of items) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td data-label="Name"><strong>${esc(w.name || '—')}</strong></td>
-          <td data-label="Owner"><code style="font-size:0.82rem;">${esc(w.ownerId || '—')}</code></td>
+          <td data-label="ID"><code style="font-size:0.82rem;">${esc(w.id)}</code></td>
+          <td data-label="Owner">${esc(w.ownerEmail || w.ownerId || '—')}</td>
           <td data-label="Plan"><span class="badge badge-info plan-display">${esc(w.planId)}</span></td>
           <td data-label="Members">${Number(w.memberCount) || 0}</td>
           <td data-label="Est. Cost (mo)"><button class="row-action-btn btn-ws-usage" type="button" title="View usage breakdown" style="width:auto;padding:2px 8px;font-size:0.82rem;">${esc(fmtCost(w.estimatedCostUsd ?? 0))}</button></td>
-          <td data-label="ID"><code style="font-size:0.82rem;">${esc(w.id)}</code></td>
           <td data-label="Actions">
             <div class="row-actions-dropdown">
               <button class="row-action-btn btn-row-more" type="button" title="More actions">⋮</button>
               <div class="row-actions-menu">
+                <button class="row-action-menu-item btn-ws-details" type="button">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                  View Details
+                </button>
                 <button class="row-action-menu-item btn-change-plan" type="button">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                   Change Plan
@@ -348,6 +393,7 @@ async function loadWorkspaces(reset) {
             </div>
           </td>`;
         tbody.appendChild(tr);
+        tr.querySelector('.btn-ws-details').addEventListener('click', () => openDetailsModal(w));
         tr.querySelector('.btn-change-plan').addEventListener('click', () => openPlanEditor(tr, w));
         tr.querySelector('.btn-ws-usage').addEventListener('click', () => openUsageModal(w));
       }

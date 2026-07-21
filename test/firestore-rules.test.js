@@ -328,7 +328,7 @@ describe('/workspaces/{workspaceId}', () => {
 
   it('any authed user can create a workspace matching the real signup payload', async () => {
     await assertSucceeds(ctx.stranger().firestore().collection('workspaces').doc('stranger-new-wsid').set({
-      id: 'stranger-new-wsid', name: 'New WS', ownerId: 'stranger-uid', members: ['stranger-uid'], invitedEmails: [], planId: 'free',
+      id: 'stranger-new-wsid', name: 'New WS', ownerId: 'stranger-uid', members: ['stranger-uid'], invitedEmails: [], planId: 'free', createdAt: new Date().toISOString(),
     }));
   });
 

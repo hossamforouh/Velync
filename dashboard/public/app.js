@@ -1546,7 +1546,8 @@ onAuthStateChanged(auth, async (user) => {
             ownerId: user.uid,
             members: [user.uid],
             invitedEmails: [],
-            planId: 'free'
+            planId: 'free',
+            createdAt: new Date().toISOString()
           });
           reportUsageEvent(user, 'workspace_created');
         }

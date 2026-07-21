@@ -997,10 +997,10 @@
             <div class="connections-table-wrap">
               <table class="connections-table" id="admin-ws-table">
                 <thead>
-                  <tr><th>Name</th><th>Owner</th><th>Plan</th><th>Members</th><th>Est. Cost (mo)<span class="info-tip" tabindex="0" role="note" aria-label="Estimated monthly cost for this workspace — a model based on tracked usage times configured rates. Covers syncs, AI suggestions, and database operations; excludes fixed infrastructure and dashboard browsing. Click a value for the breakdown.">i<span class="info-tip-bubble">Estimated monthly cost — usage × configured rate, covering syncs, AI suggestions, and database operations. Excludes fixed infrastructure and dashboard browsing, so treat it as a comparative signal, not an invoice. Click any value for the full breakdown.</span></span></th><th>ID</th><th>Actions</th></tr>
+                  <tr><th>ID</th><th>Owner</th><th>Plan</th><th>Members</th><th>Est. Cost (mo)<span class="info-tip" tabindex="0" role="note" aria-label="Estimated monthly cost for this workspace — a model based on tracked usage times configured rates. Covers syncs, AI suggestions, and database operations; excludes fixed infrastructure and dashboard browsing. Click a value for the breakdown.">i<span class="info-tip-bubble">Estimated monthly cost — usage × configured rate, covering syncs, AI suggestions, and database operations. Excludes fixed infrastructure and dashboard browsing, so treat it as a comparative signal, not an invoice. Click any value for the full breakdown.</span></span></th><th>Actions</th></tr>
                 </thead>
                 <tbody id="admin-ws-tbody">
-                  <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
+                  <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">Loading…</td></tr>
                 </tbody>
               </table>
             </div>
@@ -2588,6 +2588,17 @@
         <button class="btn btn-secondary" id="ws-plan-modal-cancel">Cancel</button>
         <button class="btn btn-primary" id="ws-plan-modal-confirm">Save</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Workspace Details Modal ──────────────────────────────── -->
+  <div class="modal-overlay" id="ws-details-modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ws-details-modal-title">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h3 id="ws-details-modal-title" style="margin:0;">Workspace Details</h3>
+        <button class="panel-close" id="ws-details-modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="log-detail-grid" id="ws-details-modal-body"></div>
     </div>
   </div>
 

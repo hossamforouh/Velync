@@ -96,6 +96,20 @@ async function listWorkspaces({ limit = 50, startAfter = null, search = null } =
     });
   }
 
+  // Join the owner's email the same way — the Workspaces table shows this
+  // instead of a raw uid, since an admin recognizes a customer by email, not
+  // by their Firebase Auth ID.
+  const ownerIds = [...new Set(items.map(w => w.ownerId).filter(Boolean))];
+  if (ownerIds.length > 0) {
+    const ownerRefs = ownerIds.map(id => db.collection('users').doc(id));
+    const ownerDocs = await db.getAll(...ownerRefs);
+    const emailByOwnerId = {};
+    ownerDocs.forEach(doc => { emailByOwnerId[doc.id] = doc.exists ? (doc.data().email || null) : null; });
+    items.forEach(w => { w.ownerEmail = w.ownerId ? (emailByOwnerId[w.ownerId] || null) : null; });
+  } else {
+    items.forEach(w => { w.ownerEmail = null; });
+  }
+
   const nextCursor = snap.size === limit
     ? (search ? snap.docs[snap.docs.length - 1].data().name : snap.docs[snap.docs.length - 1].id)
     : null;
