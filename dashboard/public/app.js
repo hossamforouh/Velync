@@ -580,7 +580,8 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
       if (inputEl) {
         inputEl.addEventListener('change', (e) => {
           if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
-          
+          if (typeof updateNodeStatuses === 'function') updateNodeStatuses();
+
           const changedId = field.id;
           const newVal = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
           
@@ -617,6 +618,7 @@ window.renderSchemaForPlatform = async function(platformId, containerId, prefix,
         
         inputEl.addEventListener('input', () => {
           if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+          if (typeof updateNodeStatuses === 'function') updateNodeStatuses();
         });
       }
     }, 0);
@@ -660,6 +662,7 @@ window.updateMsHidden = function(container) {
   const checked = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
   hidden.value = JSON.stringify(checked);
   if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+  if (typeof updateNodeStatuses === 'function') updateNodeStatuses();
 };
 
 window.harvestDynamicFields = function(containerId) {
@@ -3805,11 +3808,15 @@ async function openPanel(id = null, { duplicateFromId = null } = {}) {
   // nothing was stopping a fast click from hitting the validation gate
   // while a duplicated/edited config's platform settings were still
   // loading, which read as "please finish configuring" data that was
-  // actually already there. Uses setButtonLoading (not a bare .disabled)
-  // so it's visibly a transient loading state rather than looking stuck.
+  // actually already there. A bare .disabled (not setButtonLoading) on
+  // purpose: this is the panel's own passive data-fetch, not something the
+  // user clicked — a "Loading…" spinner here reads as an action already in
+  // progress. The actual click-triggered work (saveConfig's own
+  // Saving.../Submitting... spinner; btn-step1-next's validation, which is
+  // synchronous) already has its own real loading treatment.
   const btnStep1Next = document.getElementById('btn-step1-next');
   const btnStep1Save = document.getElementById('btn-step1-save');
-  if (btnStep1Next) setButtonLoading(btnStep1Next, true, 'Next Step →', 'Loading…');
+  if (btnStep1Next) btnStep1Next.disabled = true;
   if (btnStep1Save) btnStep1Save.disabled = true;
 
   const loadKey = 'openPanel';
@@ -3937,8 +3944,11 @@ async function openPanel(id = null, { duplicateFromId = null } = {}) {
 
   } finally {
     endLoad(loadKey);
-    if (btnStep1Next) setButtonLoading(btnStep1Next, false, 'Next Step →');
-    if (btnStep1Save) btnStep1Save.disabled = false;
+    // Re-derive from the actual form state (not a blind re-enable) — by now
+    // loadConfigSchemas() has rendered any platform-specific required
+    // fields, so this is the first point where isSectionValid() reflects
+    // the real, final picture for edit/duplicate too.
+    updateStep1ActionButtons();
   }
 
   goToStep(1);
@@ -6368,8 +6378,26 @@ function updateNodeStatuses() {
       nodeP2Status.className = 'node-status-icon warning';
     }
   }
-  
+
   if (window.feather) window.feather.replace();
+
+  updateStep1ActionButtons();
+}
+
+// "Next Step"/"Save" on the Connect step shouldn't be clickable until both
+// platforms are actually fully set up (connection picked + any required
+// platform-specific settings, e.g. which Notion database) — previously
+// these buttons stayed clickable the whole time and only complained with a
+// toast after the click, which reads as "why didn't that work" instead of
+// showing upfront that something's still missing. Piggybacks on the same
+// isSectionValid() check that already drives the node status icons, so the
+// two stay in sync automatically.
+function updateStep1ActionButtons() {
+  const btnStep1Next = document.getElementById('btn-step1-next');
+  const btnStep1Save = document.getElementById('btn-step1-save');
+  const ready = isSectionValid('section-source') && isSectionValid('section-dest');
+  if (btnStep1Next) btnStep1Next.disabled = !ready;
+  if (btnStep1Save) btnStep1Save.disabled = !ready;
 }
 
 function saveNodeModal() {
