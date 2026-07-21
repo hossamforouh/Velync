@@ -73,6 +73,16 @@ let excludeSamePlatform = null;
 
 let _platformsUnsub = null;
 
+// The `platforms` onSnapshot listener below stays attached until explicitly
+// unsubscribed — app.js must call this on sign-out, or the listener keeps
+// running against a now-invalid auth token. Firestore then denies it under
+// the security rules (isSuperAdmin() requires a signed-in user) and its
+// error callback fires a "Failed to load platforms" toast on whatever
+// screen happens to be showing next — the login page, right after logout.
+export function teardownAdminIntegrations() {
+  if (_platformsUnsub) { _platformsUnsub(); _platformsUnsub = null; }
+}
+
 export function initAdminIntegrations(db, auth) {
   firestoreDb = db;
   authInstance = auth;

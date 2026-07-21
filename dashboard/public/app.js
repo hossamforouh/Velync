@@ -9,7 +9,7 @@ import { getFirestore, collection, getDocs, getDoc, doc, setDoc, addDoc, updateD
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app-check.js";
 import { initLogs } from "./js/logs.js";
 import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
-import { bindNavEvents, navigateTo } from './js/navigation.js';
+import { bindNavEvents, navigateTo, resetToDefaultView } from './js/navigation.js';
 import { renderHubView } from './js/hub.js';
 import { connections, loadConnections, renderConnectionsView, renderConnectionsSkeleton, initiateDirectOAuthFlow } from './js/connections.js';
 import { initBilling } from './js/billing.js';
@@ -1225,6 +1225,15 @@ setInterval(async () => {
 
 // ─── State ────────────────────────────────────────────────────
 let configs = [];
+// Guards renderCards()'s "no configs" branch — flips true only once loadConfigs()
+// has actually heard back from the server. Without this, any renderCards() call
+// that happens to run before the first fetch resolves (configs is still its
+// initial []) would show the onboarding wizard, then a moment later the real
+// loading skeleton, then (once the real fetch resolves) potentially the
+// wizard again — a "Welcome to Velync" flash before the page has even
+// determined whether the workspace has flows. Now that decision is deferred
+// until the first load genuinely completes.
+let hasLoadedConfigsOnce = false;
 let pendingDeleteId = null;
 let editingId = null;
 let selectedConfigIds = new Set();
@@ -1408,6 +1417,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // Cloud Run API endpoint
 const API_URL = window.VELYNC_CONFIG.apiBase.replace(/\/$/, '') + '/api';
 let currentProjects = [];
+
+// Set once admin-integrations.js is lazy-loaded (superadmin only) — called on
+// sign-out so its live `platforms` onSnapshot listener doesn't keep running
+// against a now-signed-out session (see teardownAdminIntegrations()).
+let _adminIntegrationsTeardown = null;
 
 // ─── Avatar Dropdown (module-level so handlers are ready immediately) ───
 const avatarBtn = document.getElementById('user-avatar');
@@ -1603,7 +1617,7 @@ onAuthStateChanged(auth, async (user) => {
         // before we even know if they're logged in — was pure waste for the
         // vast majority of users who are never superadmins.
         const [
-          { initAdminIntegrations },
+          { initAdminIntegrations, teardownAdminIntegrations },
           { initAdminPlatforms },
           { initAdminPlans },
           { initAdminWorkspaces },
@@ -1619,6 +1633,7 @@ onAuthStateChanged(auth, async (user) => {
           import('./js/admin-client-errors.js'),
           import('./js/admin-data.js'),
         ]);
+        _adminIntegrationsTeardown = teardownAdminIntegrations;
         initAdminIntegrations(db, auth);
         initAdminPlatforms(db, auth);
         initAdminPlans(db, auth);
@@ -2632,6 +2647,43 @@ onAuthStateChanged(auth, async (user) => {
       });
     }
   } else {
+    // Stop the admin `platforms` listener before it has a chance to error
+    // out against the now-signed-out session (see teardownAdminIntegrations).
+    if (_adminIntegrationsTeardown) {
+      _adminIntegrationsTeardown();
+      _adminIntegrationsTeardown = null;
+    }
+
+    // Reset which view-panel is showing back to the default NOW, on
+    // sign-out — not later, whenever the next sign-in's own navigateTo('flows')
+    // call happens to run. appContainer is hidden either way while signed
+    // out, but a same-tab sign-in (no page reload) reveals appContainer
+    // immediately while the rest of the login flow is still awaiting
+    // several network round-trips; without this, whatever view-panel was
+    // left visible from the PREVIOUS session flashes on screen for that
+    // whole stretch before finally snapping to Flows.
+    resetToDefaultView();
+
+    // Same reasoning for the Active Flows data itself: without this, a
+    // second sign-in in the same tab would start with hasLoadedConfigsOnce
+    // still true from the PREVIOUS session, so the "no configs yet" guard in
+    // renderCards() would no longer hold back a premature onboarding-wizard
+    // flash while the new session's own loadConfigs() is still in flight.
+    configs = [];
+    hasLoadedConfigsOnce = false;
+
+    // And the table's own DOM content: if the previous session's workspace
+    // was empty, #table-body is still literally holding the rendered
+    // onboarding-wizard markup from before logout (renderCards() never gets
+    // a reason to overwrite it while signed out). appContainer becoming
+    // visible again on the next same-tab sign-in reveals that stale markup
+    // immediately — before loadConfigs() has even run once — which is
+    // exactly the premature "Welcome to Velync" flash reported (empty
+    // wizard, then the real loading skeleton, then the wizard again once
+    // the still-empty workspace's load genuinely finishes). Resetting to
+    // the plain loading skeleton here removes anything stale to reveal.
+    if (tableBody) tableBody.innerHTML = getSyncConfigsSkeletonRowHTML().repeat(4);
+
     authOverlay.style.display = 'flex';
     appContainer.style.display = 'none';
     if (userEmailSpan) userEmailSpan.textContent = '';
@@ -3345,8 +3397,12 @@ function renderCards() {
     selectAllCheckbox.checked = sortedConfigs.length > 0 && sortedConfigs.every(cfg => selectedConfigIds.has(cfg.id));
   }
 
-  // If no configs
+  // If no configs — but only actually show the onboarding wizard once the
+  // first loadConfigs() has genuinely come back, not on a render triggered
+  // before that (configs still holds its initial empty value then). Until
+  // it has, leave whatever loading UI is already on screen alone.
   if (configs.length === 0) {
+    if (!hasLoadedConfigsOnce) return;
     initOnboarding(db, auth, () => {
       window.currentOnboardingStep = null;
       loadConfigs();
@@ -3591,6 +3647,7 @@ async function loadConfigs(silent = false) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
     configs = data.items;
+    hasLoadedConfigsOnce = true;
     renderCards();
   } catch (err) {
     tableBody.innerHTML = `

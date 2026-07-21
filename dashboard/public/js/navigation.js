@@ -90,6 +90,25 @@ export function getCurrentView() {
 }
 
 /**
+ * Force the view state back to the default ('flows') without going through
+ * navigateTo()'s unsaved-changes confirmation or view-left cleanup — those
+ * are for a user *choosing* to navigate away, not appropriate mid
+ * onAuthStateChanged. Call this on sign-out so the next sign-in (in the same
+ * tab, no page reload) doesn't briefly flash whatever view-panel was left
+ * visible from the previous session before the login flow's own
+ * navigateTo('flows') call gets around to running.
+ */
+export function resetToDefaultView() {
+  currentView = 'flows';
+  VIEWS.forEach(v => {
+    const panel = document.getElementById(`view-${v}`);
+    if (panel) panel.style.display = (v === 'flows') ? '' : 'none';
+    const navItem = document.getElementById(`nav-${v}`);
+    if (navItem) navItem.classList.toggle('active', v === 'flows');
+  });
+}
+
+/**
  * Bind click events to all sidebar nav items.
  * Call once after DOM is ready.
  */
