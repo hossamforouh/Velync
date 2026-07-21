@@ -1587,60 +1587,92 @@
         <div class="panel-body" style="padding: 0; overflow-y: visible;">
           <div id="plan-editor-id-display" style="display:none;color:var(--text-3);font-size:0.82rem;margin-bottom:16px;"></div>
           <form id="plan-editor-form">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-              <div class="form-row">
-                <label for="f-plan-name">Plan Name *</label>
-                <input id="f-plan-name" type="text" class="admin-input" required />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-desc">Description</label>
-                <input id="f-plan-desc" type="text" class="admin-input" />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-price-monthly">Monthly Price ($)</label>
-                <input id="f-plan-price-monthly" type="number" class="admin-input" step="0.01" min="0" />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-max-configs">Max Active Configs</label>
-                <input id="f-plan-max-configs" type="number" class="admin-input" min="1" />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-min-interval">Min Sync Interval (minutes)</label>
-                <input id="f-plan-min-interval" type="number" class="admin-input" min="1" />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-max-items">Max Items Per Run</label>
-                <input id="f-plan-max-items" type="number" class="admin-input" min="1" />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-log-retention">Log Retention (days)</label>
-                <input id="f-plan-log-retention" type="number" class="admin-input" min="1" />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-connector-tiers">Connector Tiers (comma-separated)</label>
-                <input id="f-plan-connector-tiers" type="text" class="admin-input" placeholder="basic, premium" />
-              </div>
-              <div class="form-row">
-                <label for="f-plan-ls-monthly">Lemon Squeezy Variant ID<span class="info-tip" tabindex="0" role="note" aria-label="Doesn't affect existing subscribers. Changing this ID has no effect on current subscribers' billing. Create a new Variant in Lemon Squeezy first, then paste its ID here — it only applies to new signups going forward.">i<span class="info-tip-bubble">Doesn't affect existing subscribers. Changing this ID has no effect on current subscribers' billing. Create a new Variant in Lemon Squeezy first, then paste its ID here — it only applies to new signups going forward.</span></span></label>
-                <input id="f-plan-ls-monthly" type="text" class="admin-input" placeholder="123456" />
-              </div>
-              <div class="form-row" style="display:flex;align-items:center;gap:12px;">
-                <label class="toggle">
-                  <input type="checkbox" id="f-plan-is-default" />
-                  <span class="toggle-track"></span>
-                  <span class="toggle-thumb"></span>
-                </label>
-                <span>Default plan for new workspaces</span>
-              </div>
-              <div class="form-row" style="display:flex;align-items:center;gap:12px;">
-                <label class="toggle">
-                  <input type="checkbox" id="f-plan-webhook-sync" />
-                  <span class="toggle-track"></span>
-                  <span class="toggle-thumb"></span>
-                </label>
-                <span>Real-time (webhook) sync for Notion-sourced configs<span class="info-tip" tabindex="0" role="note" aria-label="Only affects configs whose Notion side changes — Notion is the only connected platform with push support today. TickTick/Google Contacts always stay on the polling interval above regardless of this setting.">i<span class="info-tip-bubble">Only affects configs whose Notion side changes — Notion is the only connected platform with push support today. TickTick/Google Contacts always stay on the polling interval above regardless of this setting.</span></span></span>
+            <div class="form-section">
+              <div class="form-section-title">Plan Details</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-row">
+                  <label for="f-plan-name">Plan Name *</label>
+                  <input id="f-plan-name" type="text" class="admin-input" required />
+                </div>
+                <div class="form-row">
+                  <label for="f-plan-desc">Description</label>
+                  <input id="f-plan-desc" type="text" class="admin-input" />
+                </div>
+                <div class="form-row">
+                  <label for="f-plan-price-monthly">Monthly Price ($)</label>
+                  <input id="f-plan-price-monthly" type="number" class="admin-input" step="0.01" min="0" />
+                </div>
               </div>
             </div>
+
+            <div class="form-section">
+              <div class="form-section-title">Limits</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-row">
+                  <label for="f-plan-max-configs">Max Active Configs</label>
+                  <input id="f-plan-max-configs" type="number" class="admin-input" min="1" />
+                </div>
+                <div class="form-row">
+                  <label for="f-plan-min-interval">Min Sync Interval (minutes)</label>
+                  <input id="f-plan-min-interval" type="number" class="admin-input" min="1" />
+                </div>
+                <div class="form-row">
+                  <label for="f-plan-max-items">Max Items Per Run</label>
+                  <input id="f-plan-max-items" type="number" class="admin-input" min="1" />
+                </div>
+                <div class="form-row">
+                  <label for="f-plan-log-retention">Log Retention (days)</label>
+                  <input id="f-plan-log-retention" type="number" class="admin-input" min="1" />
+                </div>
+                <div class="form-row">
+                  <label>Connector Tiers<span class="info-tip" tabindex="0" role="note" aria-label="Which platforms this plan can connect to. A platform is only usable by this plan if the platform's own Plan Tier (Admin -> Platforms) is checked here.">i<span class="info-tip-bubble">Which platforms this plan can connect to — a platform is only usable by this plan if the platform's own "Plan Tier" (Admin → Platforms) is checked here.</span></span></label>
+                  <div style="display:flex;gap:16px;align-items:center;min-height:38px;">
+                    <label style="display:flex;align-items:center;gap:6px;font-weight:400;">
+                      <input type="checkbox" id="f-plan-tier-basic" value="basic" /> Basic
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;font-weight:400;">
+                      <input type="checkbox" id="f-plan-tier-premium" value="premium" /> Premium
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">Billing</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-row">
+                  <label for="f-plan-ls-monthly">Lemon Squeezy Variant ID<span class="info-tip" tabindex="0" role="note" aria-label="Doesn't affect existing subscribers. Changing this ID has no effect on current subscribers' billing. Create a new Variant in Lemon Squeezy first, then paste its ID here — it only applies to new signups going forward.">i<span class="info-tip-bubble">Doesn't affect existing subscribers. Changing this ID has no effect on current subscribers' billing. Create a new Variant in Lemon Squeezy first, then paste its ID here — it only applies to new signups going forward.</span></span></label>
+                  <input id="f-plan-ls-monthly" type="text" class="admin-input" placeholder="123456" />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">Features</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-row">
+                  <div style="display:flex;align-items:center;gap:12px;">
+                    <label class="toggle">
+                      <input type="checkbox" id="f-plan-is-default" />
+                      <span class="toggle-track"></span>
+                      <span class="toggle-thumb"></span>
+                    </label>
+                    <span>Default plan for new workspaces</span>
+                  </div>
+                  <div id="f-plan-default-warning" style="display:none;color:var(--amber, #fbbf24);font-size:0.78rem;margin-top:6px;"></div>
+                </div>
+                <div class="form-row" style="display:flex;align-items:center;gap:12px;">
+                  <label class="toggle">
+                    <input type="checkbox" id="f-plan-webhook-sync" />
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </label>
+                  <span>Real-time (webhook) sync<span class="info-tip" tabindex="0" role="note" aria-label="Only affects configs whose Notion side changes — Notion is the only connected platform with push support today. TickTick/Google Contacts always stay on the polling interval above regardless of this setting.">i<span class="info-tip-bubble">Only affects configs whose Notion side changes — Notion is the only connected platform with push support today. TickTick/Google Contacts always stay on the polling interval above regardless of this setting.</span></span></span>
+                </div>
+              </div>
+            </div>
+
             <div class="panel-actions" style="display: flex; gap: 8px; margin-top: 24px;">
               <button type="button" class="btn btn-secondary" id="btn-plan-cancel">Cancel</button>
               <button type="submit" class="btn btn-primary" id="btn-plan-save" style="margin-left: auto;">Save</button>

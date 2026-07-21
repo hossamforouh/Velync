@@ -38,6 +38,16 @@ export function initAdminPlans(dbInstance, authInstance) {
   if (btnCancel && !btnCancel.dataset.wired) { btnCancel.dataset.wired = 'true'; btnCancel.addEventListener('click', closePlanEditor); }
   if (form && !form.dataset.wired) { form.dataset.wired = 'true'; form.addEventListener('submit', onSavePlan); }
 
+  // Checking this silently un-defaults whichever OTHER plan currently holds
+  // isDefault (see unsetOtherDefaults() server-side) — warn in-context so
+  // the admin isn't surprised later by a plan that quietly stopped being
+  // the default.
+  const cbDefault = document.getElementById('f-plan-is-default');
+  if (cbDefault && !cbDefault.dataset.wired) {
+    cbDefault.dataset.wired = 'true';
+    cbDefault.addEventListener('change', updateDefaultPlanWarning);
+  }
+
   loadPlans();
 }
 
@@ -108,7 +118,7 @@ function renderPlans() {
     const toggleColor = p.isActive ? 'var(--rose)' : 'var(--green)';
     tr.innerHTML = `
       <td data-label="Name"><strong>${escHtml(p.name)}</strong></td>
-      <td data-label="Price">${p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}/mo`}</td>
+      <td data-label="Price">$${p.priceMonthly}/mo</td>
       <td data-label="Configs">${p.maxActiveConfigs}</td>
       <td data-label="Interval">${p.minSyncIntervalMinutes} min</td>
       <td data-label="Items">${p.maxItemsPerRun}</td>
@@ -163,12 +173,35 @@ function openPlanEditor(plan) {
   document.getElementById('f-plan-min-interval').value = plan ? plan.minSyncIntervalMinutes : 30;
   document.getElementById('f-plan-max-items').value = plan ? plan.maxItemsPerRun : 100;
   document.getElementById('f-plan-log-retention').value = plan ? plan.logRetentionDays : 7;
-  document.getElementById('f-plan-connector-tiers').value = plan ? (plan.connectorTiers || ['basic']).join(', ') : 'basic';
+
+  const tiers = plan ? (plan.connectorTiers || []) : ['basic'];
+  document.getElementById('f-plan-tier-basic').checked = tiers.includes('basic');
+  document.getElementById('f-plan-tier-premium').checked = tiers.includes('premium');
+
   document.getElementById('f-plan-is-default').checked = plan ? !!plan.isDefault : false;
   document.getElementById('f-plan-webhook-sync').checked = plan ? !!plan.webhookSyncEnabled : false;
+  updateDefaultPlanWarning();
 
   navigateTo('admin-plan-editor');
   window.scrollTo(0, 0);
+}
+
+// Shows which other plan will lose its "Default" status if this one is
+// saved with the toggle checked — the unset happens silently server-side
+// (unsetOtherDefaults), so this is the only place the admin finds out.
+function updateDefaultPlanWarning() {
+  const warningEl = document.getElementById('f-plan-default-warning');
+  if (!warningEl) return;
+
+  const checked = document.getElementById('f-plan-is-default').checked;
+  const currentDefault = allPlans.find(p => p.isDefault && (!editingPlan || p.id !== editingPlan.id));
+
+  if (checked && currentDefault) {
+    warningEl.textContent = `"${currentDefault.name}" is currently the default plan — saving will remove its default status.`;
+    warningEl.style.display = 'block';
+  } else {
+    warningEl.style.display = 'none';
+  }
 }
 
 function closePlanEditor() {
@@ -190,7 +223,7 @@ async function onSavePlan(e) {
     minSyncIntervalMinutes: parseInt(document.getElementById('f-plan-min-interval').value) || 30,
     maxItemsPerRun: parseInt(document.getElementById('f-plan-max-items').value) || 100,
     logRetentionDays: parseInt(document.getElementById('f-plan-log-retention').value) || 7,
-    connectorTiers: document.getElementById('f-plan-connector-tiers').value.split(',').map(s => s.trim()).filter(Boolean),
+    connectorTiers: ['basic', 'premium'].filter(t => document.getElementById(`f-plan-tier-${t}`).checked),
     isDefault: document.getElementById('f-plan-is-default').checked,
     webhookSyncEnabled: document.getElementById('f-plan-webhook-sync').checked,
   };
